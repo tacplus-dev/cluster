@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Tests ci/gitlab-project.gitlab-ci.yml and ci/pin.sh: the file parses; every job runs on the project's runner (tag
-# cluster); render and validate run on every push and merge request; plan, apply, delete-deployment and drift run
-# on main only, never from a merge request, each with its id_token; apply and delete-deployment are manual, in the
-# protected environment cluster, and run what they say; drift runs only on a schedule and never applies; plan is
-# not on a schedule. ci/pin.sh sets CLUSTER_COMMIT and nothing else, --check accepts its output and refuses any
-# other change, and the jobs refuse an empty CLUSTER_COMMIT. Needs bash and yq.
+# cluster). The pipelines GitLab makes of it, by its workflow and its jobs' rules (pipeline, below): render and
+# validate in every pipeline, so every push and merge request; plan, apply and drift on main only, never from a merge
+# request; a push, a merge request, a schedule or a plain run has no deletion job; a deletion pipeline (web or API, on
+# main, DELETE_DEPLOYMENT set and DELETE_CONFIRM equal to it) has it, manual, and no apply; the cluster jobs have
+# their id_token; apply and the deletion job are manual, in the protected environment cluster, and run what they
+# say; drift runs only on a schedule and never applies. ci/pin.sh sets CLUSTER_COMMIT and nothing else, --check
+# accepts its output and refuses any other change, and the jobs refuse an empty CLUSTER_COMMIT. Needs bash and yq.
 #
 #   tests/ci_test.sh
 set -uo pipefail
@@ -21,52 +23,112 @@ ok() { echo "ok   $*"; }
 q() { yq -r "$1" "$ci"; }
 
 yq -e '.' "$ci" >/dev/null 2>&1 && ok "the CI file parses" || { echo "FAIL the CI file does not parse"; exit 1; }
-jobs=$(q 'keys | .[] | select(test("^(stages|variables|workflow|default)$|^\\.") | not)')
-[ "$(echo $jobs)" = "render validate plan apply delete-deployment drift" ] && ok "the jobs: $(echo $jobs)" || fail "the jobs are: $(echo $jobs)"
+del='DELETE deployment: removes tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)'
+mapfile -t jobs < <(q 'keys | .[] | select(test("^(stages|variables|workflow|default)$|^\\.") | not)')
+[ "$(printf '%s,' "${jobs[@]}")" = "render,validate,plan,apply,$del,drift," ] && ok "the jobs: ${jobs[*]}" || fail "the jobs are: ${jobs[*]}"
 stages=" $(q '.stages | join(" ")') "
-for j in $jobs; do
-  [[ $stages == *" $(q ".\"$j\".stage") "* ]] || fail "$j: its stage $(q ".\"$j\".stage") is not in stages"
-  [ "$(q ".\"$j\".tags // \"\"")" = "" ] || fail "$j: sets its own tags"
+for j in "${jobs[@]}"; do
+  [[ $stages == *" $(q ".[\"$j\"].stage") "* ]] || fail "$j: its stage $(q ".[\"$j\"].stage") is not in stages"
+  [ "$(q ".[\"$j\"].tags // \"\"")" = "" ] || fail "$j: sets its own tags"
 done
 [ "$(q '.default.tags | join(",")')" = cluster ] && ok "every job runs on the runner tagged cluster" || fail "default tags: $(q '.default.tags')"
 
-# The workflow: merge requests, and pushes, web, API and schedules on a branch.
-[ "$(q '.workflow.rules[0].if')" = '$CI_PIPELINE_SOURCE == "merge_request_event"' ] &&
-  [[ $(q '.workflow.rules[2].if') == *push*schedule* ]] && ok "pipelines run for merge requests and pushes" || fail "workflow rules: $(q '.workflow.rules')"
-for j in render validate; do
-  [ "$(q ".\"$j\".rules // \"none\"")" = none ] && ok "$j: on every pipeline, so every push and merge request" || fail "$j has rules"
-done
+# cond EXPR: whether the rules:if expression EXPR holds under the variables set: clauses joined by &&, each $VAR
+# (set and not empty), $VAR == "string", $VAR == $VAR or $VAR =~ /regex/, the forms the file uses. Any other
+# form fails the test, so that one the file starts using is added here first.
+cond() {
+  local rest=$1 c re_var='^\$([A-Z_]+)$' re_str='^\$([A-Z_]+) == "([^"]*)"$' re_eq='^\$([A-Z_]+) == \$([A-Z_]+)$' re_m='^\$([A-Z_]+) =~ /(.*)/$'
+  while [ -n "$rest" ]; do
+    c=${rest%% && *}
+    [ "$c" = "$rest" ] && rest= || rest=${rest#* && }
+    if [[ $c =~ $re_var ]]; then [ -n "${!BASH_REMATCH[1]:-}" ] || return 1
+    elif [[ $c =~ $re_str ]]; then [ "${!BASH_REMATCH[1]:-}" = "${BASH_REMATCH[2]}" ] || return 1
+    elif [[ $c =~ $re_eq ]]; then [ "${!BASH_REMATCH[1]:-}" = "${!BASH_REMATCH[2]:-}" ] || return 1
+    elif [[ $c =~ $re_m ]]; then [[ ${!BASH_REMATCH[1]:-} =~ ${BASH_REMATCH[2]} ]] || return 1
+    else echo "cond: an expression this test cannot evaluate: [$c]" >&2; return 2; fi
+  done
+}
+# when PATH: the when of the first of PATH's rules that holds ("never" if none does), on_success if it has no rules.
+when() {
+  local n i r
+  n=$(q "$1.rules | length")
+  [ "$n" = 0 ] && { echo on_success; return; }
+  for ((i = 0; i < n; i++)); do
+    r=0
+    [ "$(q "$1.rules[$i].if // \"\"")" = "" ] || { cond "$(q "$1.rules[$i].if")"; r=$?; }
+    [ "$r" = 2 ] && return 2
+    [ "$r" = 0 ] && { q "$1.rules[$i].when // \"on_success\""; return; }
+  done
+  echo never
+}
+# pipeline SOURCE BRANCH [VAR=VALUE...]: the jobs of the pipeline GitLab makes for SOURCE on BRANCH with those
+# variables, "JOB:WHEN" each, comma-separated; "none" when the workflow makes no pipeline.
+pipeline() {
+  (
+    unset DELETE_DEPLOYMENT DELETE_CONFIRM CI_OPEN_MERGE_REQUESTS
+    export CI_PIPELINE_SOURCE=$1 CI_COMMIT_BRANCH=$2; shift 2
+    [ "$CI_PIPELINE_SOURCE" = merge_request_event ] && CI_COMMIT_BRANCH=
+    for v in "$@"; do export "$v"; done
+    [ "$(when .workflow)" = never ] && { echo none; exit; }
+    out=
+    for j in "${jobs[@]}"; do
+      w=$(when ".[\"$j\"]") || exit 1
+      [ "$w" = never ] || out+="$j:$w,"
+    done
+    echo "$out"
+  )
+}
+expect() { # expect WHAT GOT WANT
+  [ "$2" = "$3" ] && ok "$1: ${3//"$del"/the deletion job}" || fail "$1: the jobs are [$2], not [$3]"
+}
+normal="render:on_success,validate:on_success,plan:on_success,apply:manual,"
+deletion="render:on_success,validate:on_success,plan:on_success,$del:manual,"
+expect "a push to main" "$(pipeline push main)" "$normal"
+expect "a web pipeline on main" "$(pipeline web main)" "$normal"
+expect "an API pipeline on main" "$(pipeline api main)" "$normal"
+expect "the schedule" "$(pipeline schedule main)" "render:on_success,validate:on_success,drift:on_success,"
+expect "a merge request" "$(pipeline merge_request_event "")" "render:on_success,validate:on_success,"
+expect "a push to another branch" "$(pipeline push topic)" "render:on_success,validate:on_success,"
+expect "a deletion pipeline (web)" "$(pipeline web main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "$deletion"
+expect "a deletion pipeline (API)" "$(pipeline api main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "$deletion"
+nodel="render:on_success,validate:on_success,plan:on_success,"
+expect "DELETE_DEPLOYMENT without DELETE_CONFIRM" "$(pipeline web main DELETE_DEPLOYMENT=beta-2)" "$nodel"
+expect "a DELETE_CONFIRM that differs" "$(pipeline web main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta)" "$nodel"
+expect "DELETE_CONFIRM alone" "$(pipeline web main DELETE_CONFIRM=beta-2)" "$normal"
+expect "both on a push" "$(pipeline push main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "$nodel"
+expect "both on the schedule" "$(pipeline schedule main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "render:on_success,validate:on_success,drift:on_success,"
+expect "both on another branch" "$(pipeline web topic DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "render:on_success,validate:on_success,"
+expect "both on a merge request" "$(pipeline merge_request_event "" DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "render:on_success,validate:on_success,"
+# The same of the copy ci/pin.sh makes, the file the GitLab project runs.
+c=0123456789abcdef0123456789abcdef01234567
+ci_src=$ci ci=$work/rendered
+"$here/ci/pin.sh" "$c" > "$ci" || fail "ci/pin.sh $c"
+expect "the project's copy, a push to main" "$(pipeline push main)" "$normal"
+expect "the project's copy, a deletion pipeline" "$(pipeline web main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "$deletion"
+ci=$ci_src
 
-main_only() { # main_only JOB SOURCES: the job's one rule is main, from SOURCES only
-  [ "$(q ".\"$1\".rules | length")" = 1 ] && [ "$(q ".\"$1\".rules[0].if")" = "\$CI_COMMIT_BRANCH == \"main\" && \$CI_PIPELINE_SOURCE $2" ]
-}
 cluster_job() { # cluster_job JOB: extends .cluster, which has the id_token
-  [ "$(q ".\"$1\".extends")" = .cluster ] && [ "$(q '.".cluster".id_tokens.GCP_ID_TOKEN.aud')" = 'https://iam.googleapis.com/$GCP_WIF_PROVIDER' ]
+  [ "$(q ".[\"$1\"].extends")" = .cluster ] && [ "$(q '.".cluster".id_tokens.GCP_ID_TOKEN.aud')" = 'https://iam.googleapis.com/$GCP_WIF_PROVIDER' ]
 }
-main_only plan '=~ /^(push|web|api)$/' && cluster_job plan && [ "$(q '.plan.rules[0].when // "on_success"')" = on_success ] &&
-  [[ $(q '.plan.script[0]') == *"ci_gcp && ci_kube && ci/plan.sh out" ]] &&
-  ok "plan: on main (never a merge request or the schedule), automatic, ci/plan.sh" || fail "plan: $(q '.plan')"
-for j in apply delete-deployment; do
-  main_only "$j" '=~ /^(push|web|api)$/' && cluster_job "$j" && [ "$(q ".\"$j\".rules[0].when")" = manual ] &&
-    [ "$(q ".\"$j\".environment.name")" = cluster ] && [ "$(q ".\"$j\".resource_group")" = cluster ] &&
-    ok "$j: manual, on main only, in the protected environment cluster" || fail "$j: $(q ".\"$j\"")"
+for j in plan apply "$del" drift; do
+  cluster_job "$j" || fail "$j: does not extend .cluster"
+done
+[[ $(q '.plan.script[0]') == *"ci_gcp && ci_kube && ci/plan.sh out" ]] && ok "plan: ci/plan.sh" || fail "plan runs: $(q '.plan.script')"
+for j in apply "$del"; do
+  [ "$(q ".[\"$j\"].environment.name")" = cluster ] && [ "$(q ".[\"$j\"].resource_group")" = cluster ] &&
+    ok "${j//"$del"/the deletion job}: in the protected environment cluster" || fail "$j: $(q ".[\"$j\"]")"
 done
 [[ $(q '.apply.script[0]') == *"ci_gcp && ci_kube && ci/apply.sh out" ]] && [ "$(q '.apply.needs | join(",")')" = render,plan ] &&
   ok "apply: ci/apply.sh, after plan" || fail "apply runs: $(q '.apply.script')"
-[[ $(q '."delete-deployment".script[0]') == *"ci/delete-deployment.sh deployments.yaml" ]] && ok "delete-deployment: ci/delete-deployment.sh" ||
-  fail "delete-deployment runs: $(q '."delete-deployment".script')"
+[[ $(q ".[\"$del\"].script[0]") == *"ci/delete-deployment.sh deployments.yaml" ]] && ok "the deletion job: ci/delete-deployment.sh" ||
+  fail "the deletion job runs: $(q ".[\"$del\"].script")"
 for j in render validate plan drift; do
-  [ "$(q ".\"$j\".environment // \"none\"")" = none ] && [ "$(q ".\"$j\".rules[0].when // \"\"")" != manual ] ||
-    fail "$j: manual or in an environment"
+  [ "$(q ".[\"$j\"].environment // \"none\"")" = none ] || fail "$j: in an environment"
 done
-main_only drift '== "schedule"' && cluster_job drift && [[ $(q '.drift.script[0]') == *"ci/drift.sh out" ]] &&
-  ! q '.drift.script[]' | grep -qE 'apply|delete' && ok "drift: on the schedule only, ci/drift.sh, never apply or delete" || fail "drift: $(q '.drift')"
-for j in apply delete-deployment plan drift; do
-  [[ $(q ".\"$j\".rules[0].if") != *merge_request* ]] || fail "$j runs on merge requests"
-done
+[[ $(q '.drift.script[0]') == *"ci/drift.sh out" ]] && ! q '.drift.script[]' | grep -qE 'apply|delete' &&
+  ok "drift: ci/drift.sh, never apply or delete" || fail "drift: $(q '.drift')"
 
 # The pin.
-c=0123456789abcdef0123456789abcdef01234567
 "$here/ci/pin.sh" "$c" > "$work/pinned" || fail "ci/pin.sh $c"
 [ "$(diff "$ci" "$work/pinned" | grep -c '^[<>]')" = 2 ] && grep -qx "  CLUSTER_COMMIT: \"$c\"" "$work/pinned" &&
   [ "$(yq -r '.variables.CLUSTER_COMMIT' "$work/pinned")" = "$c" ] && ok "ci/pin.sh sets CLUSTER_COMMIT and nothing else" || fail "ci/pin.sh: $(diff "$ci" "$work/pinned")"

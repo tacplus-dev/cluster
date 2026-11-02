@@ -54,8 +54,8 @@ that commit (it is public: no credential).
 | `render` | every push and merge request | Builds yq and kubeconform (`ci/tools.sh`), checks the project's `.gitlab-ci.yml` is this repository's with only `CLUSTER_COMMIT` set (`ci/pin.sh --check`), renders into `out/`. |
 | `validate` | every push and merge request | kubeconform and `ci/policy.sh` on `out/`, `deploymentproxy/release` against its release (`fetch.sh --check`), the tests. |
 | `plan` | main (push, web, API) | `kubectl diff` against `tacplus`, then per unit (deploymentproxy, each deployment) what is added, changed or removed; a deployment whose entry is gone is listed as kept. |
-| `apply` | main, **manual**, protected environment `cluster` (Jody only) | Plans again, then applies server-side. Never deletes or prunes. |
-| `delete-deployment` | main, **manual**, protected environment `cluster` (Jody only) | Deletes the deployment `DELETE_DEPLOYMENT`: `tac-<name>` and its tenant namespaces. |
+| `apply` | main, **manual**, protected environment `cluster` (Jody only); not in a deletion pipeline | Plans again, then applies server-side. Never deletes or prunes. |
+| `DELETE deployment: removes tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)` | a deletion pipeline only (below), **manual**, protected environment `cluster` (Jody only) | Deletes the deployment `DELETE_DEPLOYMENT`: `tac-<name>` and its tenant namespaces (`ci/delete-deployment.sh`). |
 | `drift` | the nightly schedule | `plan`; if anything differs, an issue here (one open at a time; a new drift is a comment). Never applies. |
 
 The cluster jobs run only on main, because Workload Identity Federation admits only this project's protected main:
@@ -87,10 +87,29 @@ fleet's setup, not this pipeline's.
 
 ### Deleting a deployment
 
-Removing its entry deletes nothing: `plan` lists it as removed and kept. To delete it, and its tenants' data with
-it, Jody runs `delete-deployment` with `DELETE_DEPLOYMENT=<name>`: as the manual job's variable when it is played, or,
-if the project refuses job variables, as a protected project variable scoped to the environment `cluster`, removed
-afterwards. It refuses a deployment `deployments.yaml` still lists, and a namespace not labelled as that deployment's.
+Removing its entry deletes nothing: `plan` lists it as removed and kept. Deleting it, and its tenants' data with it,
+takes a pipeline of its own, a **deletion pipeline**: no push, merge request, schedule or plain run has the deletion
+job, and a deletion pipeline has no `apply`.
+
+1. The entry removed from `deployments.yaml`, the pin, and Jody's `apply` of it (the job refuses a deployment
+   `deployments.yaml` still lists: the next apply would recreate it).
+2. Jody runs a pipeline on `main` with two variables, both the deployment's name: `DELETE_DEPLOYMENT=<name>` and
+   `DELETE_CONFIRM=<name>`, the second typed again to confirm. From the web form (Build > Pipelines > Run pipeline,
+   branch `main`, the two variables), or the API:
+
+   ```sh
+   glab api -X POST projects/88422580/pipeline -f ref=main \
+     -f 'variables[][key]=DELETE_DEPLOYMENT' -f 'variables[][value]=<name>' \
+     -f 'variables[][key]=DELETE_CONFIRM' -f 'variables[][value]=<name>'
+   ```
+
+3. That pipeline runs `render`, `validate` and `plan`, and has the manual job `DELETE deployment: removes
+   tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)`, in the protected environment `cluster`. With
+   `DELETE_CONFIRM` missing or different, it has no such job. Jody plays it: it deletes `tac-<name>`, then whatever
+   tenant namespace of it deploymentproxy left.
+
+`ci/delete-deployment.sh` checks again that `DELETE_CONFIRM` is `DELETE_DEPLOYMENT`, and refuses a namespace not
+labelled as that deployment's. Never set either variable as a project or group variable.
 
 ### Bumping deploymentproxy
 
@@ -105,7 +124,8 @@ Before the first pipeline:
 1. **The runner:** a project runner registered to `tacplus-dev/cluster` only, tag `cluster`, VMs used once, with
    no Google account; group runners off on the project.
 2. **The project:** `main` protected; the protected environment `cluster`, deployable by Jody only; pipeline
-   variables forbidden, as in the group; `.gitlab-ci.yml` from `ci/pin.sh <commit of main>`.
+   variables allowed to the Owner role only (Settings > CI/CD > Variables, "Minimum role to use pipeline
+   variables"), for a deletion pipeline's two; `.gitlab-ci.yml` from `ci/pin.sh <commit of main>`.
 3. **Its variables** (protected, never group variables): `GCP_WIF_PROVIDER` (the provider of the pool
    `gitlab-tacplus-dev`), and for `drift`, `TACPLUS_READER_APP_ID` and `TACPLUS_READER_INSTALLATION_ID`.
 4. **The cluster grant:** `cluster-admin-pipeline` may get the cluster's credentials (IAM
@@ -138,6 +158,7 @@ ci/checks.sh                                # the tests
 - Deploys a fleet's workloads.
 - Touches letsencrypt's certificates, or restarts it.
 - Holds tenant data.
-- Deletes a deployment namespace when an entry is removed. That is a separate manual job, Jody's, named as such.
+- Deletes a deployment namespace when an entry is removed. That is a separate manual job, Jody's, named as such, in
+  a deletion pipeline only.
 
 Work arrives as issues; see github.com/tacplus-dev/looper.

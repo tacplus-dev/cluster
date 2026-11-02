@@ -19,5 +19,10 @@ the looper then marks it `promoted` or `declined` here with the date.
 - **`plan` on merge requests** (2026-11-02, #1): a merge request gets `render` and `validate` only, since WIF
   admits protected main alone. With the read-only identity above, a binding for merge request pipelines would show
   the plan before the merge.
+- **GitLab's own lint of the pipelines** (2026-11-02, #2): `tests/ci_test.sh` evaluates the jobs' `rules` itself,
+  for the expression forms the file uses, to show which jobs each pipeline has (no deletion job but in a deletion
+  pipeline). GitLab's CI Lint API with `dry_run` (`POST /projects/88422580/ci/lint`, per ref) would check the same
+  against GitLab's own evaluator, but needs a GitLab token the agents do not hold; a job in the project itself could
+  run it with its CI_JOB_TOKEN, if that token may call it.
 
 ## Promoted / declined

@@ -10,14 +10,18 @@
 #   render             the tools (ci/tools.sh), the copy checked (ci/pin.sh --check), ./render.sh into out/
 #   validate           kubeconform and ci/policy.sh on out/, deploymentproxy's release checked, the tests (ci/checks.sh)
 #   plan               main: kubectl diff against the cluster tacplus, and what each deployment gains or loses
-#   apply              main, manual, in the protected environment cluster (Jody only): never deletes
-#   delete-deployment  main, manual, in the protected environment cluster: deletes the deployment DELETE_DEPLOYMENT
+#   apply              main, manual, in the protected environment cluster (Jody only): never deletes; not in a
+#                      deletion pipeline
+#   DELETE deployment  a deletion pipeline only, manual, in the protected environment cluster: deletes the
+#                      deployment DELETE_DEPLOYMENT
 #   drift              the nightly schedule: plan, and an issue on github.com/tacplus-dev/cluster if it differs; never applies
 #
 # render and validate run on every push and merge request. The cluster jobs run on main only, where Workload
 # Identity Federation admits this project (its provider's condition: protected main) as cluster-admin-pipeline,
 # the only holder of cluster-admin on tacplus. No key file and no GitHub token is stored: the id_token is exchanged
-# for each job. Nothing is passed as a pipeline variable. Every job runs on the project's own runner (tag
+# for each job. The only pipeline variables are a deletion pipeline's: DELETE_DEPLOYMENT and DELETE_CONFIRM, both
+# the deployment's name, set when Jody runs the pipeline on main from the web form or the API (README, Deleting a
+# deployment); no other pipeline has the deletion job. Every job runs on the project's own runner (tag
 # `cluster`: a VM used once, with no Google account of its own), never on the agents' runner.
 stages: [render, validate, plan, apply]
 
@@ -89,12 +93,15 @@ plan:
     - cd src && export PATH=$PWD/bin:$PATH && source ci/lib.sh && ci_gcp && ci_kube && ci/plan.sh out
 
 # The apply: manual, in the protected environment cluster, whose only deployer is Jody. It applies the render the
-# plan above showed, after planning it again on the cluster as it is now; it never deletes.
+# plan above showed, after planning it again on the cluster as it is now; it never deletes. A deletion pipeline has
+# no apply, so that the two are never side by side.
 apply:
   extends: .cluster
   stage: apply
   needs: [render, plan]
   rules:
+    - if: $DELETE_DEPLOYMENT
+      when: never
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(push|web|api)$/
       when: manual
   allow_failure: true
@@ -103,15 +110,17 @@ apply:
   script:
     - cd src && export PATH=$PWD/bin:$PATH && source ci/lib.sh && ci_gcp && ci_kube && ci/apply.sh out
 
-# Deletes one deployment's namespaces, and its tenants' data with them: manual, in the protected environment
-# cluster (Jody only), for the deployment named by DELETE_DEPLOYMENT, set when the job is run (README). It refuses a
-# deployment deployments.yaml still lists.
-delete-deployment:
+# Deletes one deployment's namespaces, and its tenants' data with them. Only in a deletion pipeline: on main, run
+# from the web form or the API with DELETE_DEPLOYMENT set to the deployment and DELETE_CONFIRM to the same name
+# (README, Deleting a deployment); a push, merge request or schedule pipeline never has it. Manual, in the protected
+# environment cluster (Jody only). ci/delete-deployment.sh checks both variables again, and refuses a deployment
+# deployments.yaml still lists.
+"DELETE deployment: removes tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)":
   extends: .cluster
   stage: apply
   needs: [render, validate]
   rules:
-    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(push|web|api)$/
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(web|api)$/ && $DELETE_DEPLOYMENT && $DELETE_CONFIRM == $DELETE_DEPLOYMENT
       when: manual
   allow_failure: true
   environment: { name: cluster, action: start }

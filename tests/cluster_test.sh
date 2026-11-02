@@ -9,8 +9,8 @@
 #   - on an empty cluster, plan lists every unit as added; apply applies it; the plan after is empty;
 #   - a changed render is a change, by object, with its diff;
 #   - a removed entry: plan lists it as removed and kept; apply runs no delete and no prune, and the namespace stays;
-#   - delete-deployment refuses no name, a bad name, a listed deployment, an unlabelled namespace; it deletes the
-#     deployment's namespace and its tenant namespaces, and nothing else;
+#   - delete-deployment refuses no name, no DELETE_CONFIRM or one that differs, a bad name, a listed deployment, an
+#     unlabelled namespace; it deletes the deployment's namespace and its tenant namespaces, and nothing else;
 #   - drift: nothing when in sync; an issue when it differs; a comment for a new drift; nothing for the same one;
 #     it never applies.
 #
@@ -89,14 +89,16 @@ else ok "a removed entry: apply runs no delete and no prune, and tac-beta-2 stay
 ! grep -v '^ *#' "$here/ci/apply.sh" | grep -qE 'delete|prune' && ok "ci/apply.sh holds no delete or prune" || fail "ci/apply.sh mentions delete or prune"
 
 # delete-deployment.
-refused() { # refused WHAT NAME WANT [DEPLOYMENTS]
+refused() { # refused WHAT NAME WANT [DEPLOYMENTS [CONFIRM]]: CONFIRM is NAME by default
   : > "$KSTUB/log"
-  if run delete env DELETE_DEPLOYMENT="$2" "$here/ci/delete-deployment.sh" "${4:-$fixtures/removed.yaml}"; then fail "delete-deployment $1: ran"
+  if run delete env DELETE_DEPLOYMENT="$2" DELETE_CONFIRM="${5-$2}" "$here/ci/delete-deployment.sh" "${4:-$fixtures/removed.yaml}"; then fail "delete-deployment $1: ran"
   elif ! grep -q -- "$3" "$work/delete"; then fail "delete-deployment $1: does not say [$3]: $(cat "$work/delete")"
   elif grep -q '^kubectl delete' "$KSTUB/log"; then fail "delete-deployment $1: deleted something"
   else ok "delete-deployment refuses $1"; fi
 }
 refused "no name" "" "no DELETE_DEPLOYMENT"
+refused "no confirmation" "beta-2" "DELETE_CONFIRM is not beta-2" "" ""
+refused "a confirmation that differs" "beta-2" "DELETE_CONFIRM is not beta-2" "" "beta"
 refused "a bad name" "kube-system/x" "not a deployment name"
 refused "a deployment still listed" "alpha" "alpha is still in deployments.yaml"
 echo '{}' > "$KSTUB/ns/tac-other"
@@ -108,7 +110,7 @@ echo yes > "$KSTUB/grant"
 touch "$KSTUB/keep-tenants"
 echo '{"deploymentproxy.tacplus.dev/deployment": "alpha"}' > "$KSTUB/ns/tac-alpha-b7654321"
 : > "$KSTUB/log"
-if run delete env DELETE_DEPLOYMENT=beta-2 "$here/ci/delete-deployment.sh" "$fixtures/removed.yaml"; then
+if run delete env DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2 "$here/ci/delete-deployment.sh" "$fixtures/removed.yaml"; then
   left=$(ls "$KSTUB/ns" | tr '\n' ' ')
   [ "$left" = "deploymentproxy kube-system letsencrypt tac-alpha tac-alpha-b7654321 tac-other " ] &&
     grep -qx 'kubectl delete namespace tac-beta-2 --wait=true --timeout=15m' "$KSTUB/log" &&

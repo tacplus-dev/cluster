@@ -2,13 +2,14 @@
 # Copyright (c) 2026 Jody Scott
 # SPDX-License-Identifier: Apache-2.0
 #
-# Deletes one deployment from the cluster `tacplus`, with its tenants' data (the delete-deployment job, Jody's
-# only): the namespace tac-<name>, then whatever tenant namespace of it deploymentproxy has not deleted already
+# Deletes one deployment from the cluster `tacplus`, with its tenants' data (the deletion job, Jody's only, in a
+# deletion pipeline: README, Deleting a deployment): the namespace tac-<name>, then whatever tenant namespace of it deploymentproxy has not deleted already
 # (labelled deploymentproxy.tacplus.dev/deployment=<name>). It refuses a deployment deployments.yaml still lists
-# (remove the entry and apply first, or the next apply recreates it), and a namespace that is not that
-# deployment's (no tacplus.dev/deployment=<name> label). Nothing else is ever deleted.
+# (remove the entry and apply first, or the next apply recreates it), a DELETE_CONFIRM that is not the same name
+# (the pipeline shows the job only then: this is the second guard), and a namespace that is not that deployment's
+# (no tacplus.dev/deployment=<name> label). Nothing else is ever deleted.
 #
-#   DELETE_DEPLOYMENT=<name> ci/delete-deployment.sh [DEPLOYMENTS]   # deployments.yaml by default
+#   DELETE_DEPLOYMENT=<name> DELETE_CONFIRM=<name> ci/delete-deployment.sh [DEPLOYMENTS]   # deployments.yaml by default
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 deployments=${1:-$here/../deployments.yaml}
@@ -16,7 +17,10 @@ d=${DELETE_DEPLOYMENT:-}
 source "$here/kube.sh"
 die() { echo "delete-deployment: $*" >&2; exit 1; }
 
-[ -n "$d" ] || die "no DELETE_DEPLOYMENT: set it to the deployment to delete when you run the job (README, Deleting a deployment)"
+[ -n "$d" ] || die "no DELETE_DEPLOYMENT: set it to the deployment to delete when you run the pipeline (README, Deleting a deployment)"
+[ "${DELETE_CONFIRM:-}" = "$d" ] ||
+  die "DELETE_CONFIRM is not $d: set it to the deployment's name too, to confirm (README, Deleting a deployment)"
+echo "delete-deployment: DELETE deployment $d: removes tac-$d and every tenant namespace (data loss)"
 [[ $d =~ ^[a-z][a-z0-9-]{0,15}$ ]] || die "[$d] is not a deployment name"
 ! yq -e ".deployments[] | select(.name == \"$d\")" "$deployments" >/dev/null 2>&1 ||
   die "$d is still in deployments.yaml: remove its entry and apply first, or the next apply recreates it"
