@@ -1,0 +1,217 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: deploymentproxy
+---
+# The contract with every deployment's operator. Written by hand; the Go types are in api/v1.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: tenantnamespaces.deploymentproxy.tacplus.dev
+spec:
+  group: deploymentproxy.tacplus.dev
+  scope: Namespaced
+  names:
+    kind: TenantNamespace
+    listKind: TenantNamespaceList
+    plural: tenantnamespaces
+    singular: tenantnamespace
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Tid
+          type: string
+          jsonPath: .spec.tid
+        - name: Namespace
+          type: string
+          jsonPath: .status.namespace
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Reason
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [tid]
+              properties:
+                tid:
+                  description: >-
+                    The tenant id: exactly 8 characters of [0-9a-z], immutable. An all-digit tid is reserved
+                    for the platform and accepted only for the reserved ids deploymentproxy is configured with.
+                  type: string
+                  pattern: '^[0-9a-z]{8}$'
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: tid is immutable
+            status:
+              type: object
+              properties:
+                namespace:
+                  description: The tenant namespace, tac-<deployment>-<tid>, once deploymentproxy has it in place.
+                  type: string
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [type]
+                  items:
+                    type: object
+                    required: [type, status, lastTransitionTime, reason, message]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deploymentproxy
+  namespace: deploymentproxy
+---
+# deploymentproxy's only rights, and nothing else. RBAC cannot scope by label, so the grants on namespaces and on
+# the objects inside them are cluster-wide; deploymentproxy itself touches only namespaces carrying its owner label.
+# Nothing here grants creating TenantNamespace objects: that is a Role in each deployment namespace
+# (config/deployment-namespace). This ClusterRole is not aggregated into admin, edit or view.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: deploymentproxy
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [resourcequotas]
+    verbs: [get, list, watch, create, update, patch, delete]
+  # The one ClusterRole it binds, in a tenant namespace, to the deployment's operator.
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    verbs: [bind]
+    resourceNames: [admin]
+  - apiGroups: [deploymentproxy.tacplus.dev]
+    resources: [tenantnamespaces]
+    verbs: [get, list, watch]
+  - apiGroups: [deploymentproxy.tacplus.dev]
+    resources: [tenantnamespaces/status]
+    verbs: [get, update, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: deploymentproxy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: deploymentproxy
+subjects:
+  - kind: ServiceAccount
+    name: deploymentproxy
+    namespace: deploymentproxy
+---
+# reservedTids: the all-digit tids accepted (all others are refused); people is 00000001, restore 00000002.
+# sharedTids: reserved tids whose tenant namespace every tenant namespace of the same deployment may reach
+# (and which accepts them); never across deployments. people is not shared: the deployment namespace calls it.
+# quota.default: every tenant namespace's ResourceQuota; quota.deployments.<name>: merged over it for that
+# deployment. services.loadbalancers and services.nodeports are always 0, whatever is set here.
+# Read on every reconcile; a change reaches existing namespaces within the resync period (10 minutes).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deploymentproxy
+  namespace: deploymentproxy
+data:
+  config.yaml: |
+    reservedTids: ["00000001", "00000002"]
+    sharedTids: ["00000002"]
+    quota:
+      default:
+        pods: "100"
+        requests.cpu: "8"
+        requests.memory: 16Gi
+        limits.memory: 32Gi
+        persistentvolumeclaims: "20"
+        requests.storage: 200Gi
+      deployments:
+        beta-2:
+          pods: "20"
+          requests.cpu: "2"
+---
+# One per cluster, deployed by the top pipeline. No listener: no Service, no probes, no metrics port.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploymentproxy
+  namespace: deploymentproxy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: deploymentproxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: deploymentproxy
+    spec:
+      serviceAccountName: deploymentproxy
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: deploymentproxy
+          image: ghcr.io/tacplus-dev/deploymentproxy:0.2.0@sha256:d68d2b636a223adcd90ad9336a210646cfeee3904dd2b7df7a81f78029f79133
+          args: [--config=/etc/deploymentproxy/config.yaml]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/deploymentproxy
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: deploymentproxy

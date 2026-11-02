@@ -1,0 +1,18 @@
+# The deployments on the cluster `tacplus`, one entry each (README, Adding a deployment). For each, the pipeline
+# applies the namespace tac-<name> labelled tacplus.dev/deployment=<name>, deploymentproxy's Role for its operator
+# account, and its deploy account's Role and RoleBinding in tac-<name> only (render.sh).
+#
+#   name           the deployment: at most 16 characters of [a-z0-9-], starting with a letter
+#   deployAccount  the Google service account the fleet's pipeline deploys as
+#   operator       the service account of the deployment's operator, in tac-<name>, that asks deploymentproxy for
+#                  tenant namespaces
+#   gitlabProject  the GitLab project whose pipeline deploys it (an annotation on the namespace)
+#   quota          its tenant namespaces' ResourceQuota, merged over deploymentproxy's default; {} is the default
+#
+# Removing an entry deletes nothing: the delete-deployment job does, and only Jody runs it.
+deployments:
+  - name: seatrials
+    deployAccount: seatrials-deploy@jody1-328023.iam.gserviceaccount.com
+    operator: operator
+    gitlabProject: tacplus-dev/fleet-seatrials
+    quota: {}

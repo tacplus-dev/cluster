@@ -1,0 +1,19 @@
+# deploymentproxy's release this cluster runs, on the line 0.2 (tacplus-dev/deploymentproxy README; fleets pin X.Y).
+# A bump: change tag, commit and image together, then run deploymentproxy/fetch.sh, which refuses a tag that does
+# not name the commit or an image tag that does not have the digest, and rewrites release/ and its SHA256SUMS.
+repository: tacplus-dev/deploymentproxy
+line: "0.2"
+tag: v0.2.0
+commit: 7f55164ef3856ec2c7dfd14ca83838cf0f196775
+image: ghcr.io/tacplus-dev/deploymentproxy:0.2.0@sha256:d68d2b636a223adcd90ad9336a210646cfeee3904dd2b7df7a81f78029f79133
+# The release's manifests, applied in this order (render.sh). config/deployment-namespace is applied once per
+# deployment, in tac-<deployment>.
+files:
+  - config/manager/namespace.yaml
+  - config/crd/tenantnamespaces.yaml
+  - config/rbac/service_account.yaml
+  - config/rbac/cluster_role.yaml
+  - config/rbac/cluster_role_binding.yaml
+  - config/manager/configmap.yaml
+  - config/manager/deployment.yaml
+  - config/deployment-namespace/operator.yaml

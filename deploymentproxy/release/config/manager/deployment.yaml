@@ -1,0 +1,46 @@
+# One per cluster, deployed by the top pipeline. No listener: no Service, no probes, no metrics port.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploymentproxy
+  namespace: deploymentproxy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: deploymentproxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: deploymentproxy
+    spec:
+      serviceAccountName: deploymentproxy
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: deploymentproxy
+          image: ghcr.io/tacplus-dev/deploymentproxy:0.2
+          args: [--config=/etc/deploymentproxy/config.yaml]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/deploymentproxy
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: deploymentproxy

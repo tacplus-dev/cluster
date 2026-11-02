@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Jody Scott
+# SPDX-License-Identifier: Apache-2.0
+#
+# A stub gcloud for the tests: Workload Identity Federation always admits the job.
+case "$1 ${2:-}" in
+  "iam workload-identity-pools") for a in "$@"; do case "$a" in --output-file=*) echo '{}' > "${a#*=}" ;; esac; done ;;
+  "auth print-access-token") echo ya29.stub ;;
+  "config get") echo cluster-admin-pipeline@jody1-328023.iam.gserviceaccount.com ;;
+esac
+exit 0

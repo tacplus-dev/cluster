@@ -1,0 +1,14 @@
+# Two entries: alpha on the default quota, beta with its own operator account and quota.
+deployments:
+  - name: alpha
+    deployAccount: alpha-deploy@example-project.iam.gserviceaccount.com
+    operator: operator
+    gitlabProject: tacplus-dev/fleet-alpha
+    quota: {}
+  - name: beta-2
+    deployAccount: beta-deploy@example-project.iam.gserviceaccount.com
+    operator: beta-operator
+    gitlabProject: tacplus-dev/fleet-beta
+    quota:
+      pods: "20"
+      requests.cpu: "2"

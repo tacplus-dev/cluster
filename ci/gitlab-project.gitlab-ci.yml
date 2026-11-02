@@ -1,0 +1,130 @@
+# Copyright (c) 2026 Jody Scott
+# SPDX-License-Identifier: Apache-2.0
+#
+# The .gitlab-ci.yml of the GitLab project gitlab.com/tacplus-dev/cluster, kept here
+# (github.com/tacplus-dev/cluster ci/gitlab-project.gitlab-ci.yml) and copied into that project with CLUSTER_COMMIT
+# set, and nothing else changed: `ci/pin.sh <commit>` prints it, and the render job refuses a copy that differs
+# (the fleet-seatrials pattern; tacplus-dev/roadmap decisions/cluster-pipeline-2026-11-02.md). Every job checks
+# this repository out at that commit: it is public, so with no credential. Runbook: README.
+#
+#   render             the tools (ci/tools.sh), the copy checked (ci/pin.sh --check), ./render.sh into out/
+#   validate           kubeconform and ci/policy.sh on out/, deploymentproxy's release checked, the tests (ci/checks.sh)
+#   plan               main: kubectl diff against the cluster tacplus, and what each deployment gains or loses
+#   apply              main, manual, in the protected environment cluster (Jody only): never deletes
+#   delete-deployment  main, manual, in the protected environment cluster: deletes the deployment DELETE_DEPLOYMENT
+#   drift              the nightly schedule: plan, and an issue on github.com/tacplus-dev/cluster if it differs; never applies
+#
+# render and validate run on every push and merge request. The cluster jobs run on main only, where Workload
+# Identity Federation admits this project (its provider's condition: protected main) as cluster-admin-pipeline,
+# the only holder of cluster-admin on tacplus. No key file and no GitHub token is stored: the id_token is exchanged
+# for each job. Nothing is passed as a pipeline variable. Every job runs on the project's own runner (tag
+# `cluster`: a VM used once, with no Google account of its own), never on the agents' runner.
+stages: [render, validate, plan, apply]
+
+variables:
+  # The commit of github.com/tacplus-dev/cluster this pipeline renders and applies; empty in the repository,
+  # set in the GitLab project's copy (ci/pin.sh).
+  CLUSTER_COMMIT: ""
+  GCP_PROJECT: jody1-328023
+  GCP_DEPLOY_SA: cluster-admin-pipeline@jody1-328023.iam.gserviceaccount.com
+  CLUSTER: tacplus
+  ZONE: us-central1-a
+  # The tacplus-reader app's key, in Cloud KMS (github_app_token in ci/lib.sh): the drift job files its issue with it.
+  TACPLUS_READER_KMS_KEY: projects/jody1-328023/locations/us/keyRings/looper/cryptoKeys/tacplus-reader
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
+      when: never
+    - if: $CI_COMMIT_BRANCH && $CI_PIPELINE_SOURCE =~ /^(push|web|api|schedule)$/
+
+default:
+  image: ghcr.io/tacplus-dev/tacplus/build:2.5
+  tags: [cluster]
+  interruptible: false
+  before_script:
+    # This repository at CLUSTER_COMMIT, in src/ (where the render job's bin/ and out/ artifacts land).
+    - |
+      set -euo pipefail
+      [[ "$CLUSTER_COMMIT" =~ ^[0-9a-f]{40}$ ]] ||
+        { echo "CLUSTER_COMMIT is not a full commit hash: [$CLUSTER_COMMIT]: the project's .gitlab-ci.yml is made with ci/pin.sh <commit> (README)" >&2; exit 1; }
+      git init -q src
+      git -C src fetch -q --depth 1 https://github.com/tacplus-dev/cluster.git "$CLUSTER_COMMIT"
+      git -C src checkout -q FETCH_HEAD
+      echo "tacplus-dev/cluster at $CLUSTER_COMMIT: $(git -C src log -1 --format=%s)"
+
+# The jobs that reach the cluster: main only, never from a merge request, and each with its id_token.
+.cluster:
+  id_tokens:
+    GCP_ID_TOKEN:
+      aud: https://iam.googleapis.com/$GCP_WIF_PROVIDER
+
+render:
+  stage: render
+  needs: []
+  script:
+    - |
+      cd src
+      ci/pin.sh --check "$CI_PROJECT_DIR/.gitlab-ci.yml"
+      ci/tools.sh
+      PATH=$PWD/bin:$PATH ./render.sh deployments.yaml out
+  artifacts:
+    paths: [src/bin/, src/out/]
+    expire_in: 1 week
+
+validate:
+  stage: validate
+  needs: [render]
+  script:
+    - cd src && export PATH=$PWD/bin:$PATH && ci/validate.sh out && ci/checks.sh
+
+plan:
+  extends: .cluster
+  stage: plan
+  needs: [render, validate]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(push|web|api)$/
+  script:
+    - cd src && export PATH=$PWD/bin:$PATH && source ci/lib.sh && ci_gcp && ci_kube && ci/plan.sh out
+
+# The apply: manual, in the protected environment cluster, whose only deployer is Jody. It applies the render the
+# plan above showed, after planning it again on the cluster as it is now; it never deletes.
+apply:
+  extends: .cluster
+  stage: apply
+  needs: [render, plan]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(push|web|api)$/
+      when: manual
+  allow_failure: true
+  environment: { name: cluster, action: start }
+  resource_group: cluster
+  script:
+    - cd src && export PATH=$PWD/bin:$PATH && source ci/lib.sh && ci_gcp && ci_kube && ci/apply.sh out
+
+# Deletes one deployment's namespaces, and its tenants' data with them: manual, in the protected environment
+# cluster (Jody only), for the deployment named by DELETE_DEPLOYMENT, set when the job is run (README). It refuses a
+# deployment deployments.yaml still lists.
+delete-deployment:
+  extends: .cluster
+  stage: apply
+  needs: [render, validate]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(push|web|api)$/
+      when: manual
+  allow_failure: true
+  environment: { name: cluster, action: start }
+  resource_group: cluster
+  script:
+    - cd src && export PATH=$PWD/bin:$PATH && source ci/lib.sh && ci_gcp && ci_kube && ci/delete-deployment.sh deployments.yaml
+
+# The nightly drift check: the plan, and an issue here when it differs. It never applies.
+drift:
+  extends: .cluster
+  stage: plan
+  needs: [render, validate]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "schedule"
+  script:
+    - cd src && export PATH=$PWD/bin:$PATH && source ci/lib.sh && ci_gcp && ci_kube && ci/drift.sh out

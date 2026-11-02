@@ -1,0 +1,99 @@
+# The deployment beta-2 (deployments.yaml): its namespace, deploymentproxy's Role for its operator, and its
+# deploy account's Role, in tac-beta-2 only. Rendered by render.sh; never edited.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tac-beta-2
+  labels:
+    tacplus.dev/deployment: beta-2
+  annotations:
+    tacplus.dev/gitlab-project: tacplus-dev/fleet-beta
+---
+# Applied by the top pipeline in each deployment namespace, after labelling it tacplus.dev/deployment:
+#   NAMESPACE=tac-<deployment> envsubst '$NAMESPACE' < operator.yaml | kubectl apply -f -
+# It lets the deployment's operator, and no other service account, ask deploymentproxy for tenant namespaces.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deploymentproxy-tenantnamespaces
+  namespace: tac-beta-2
+rules:
+  - apiGroups: [deploymentproxy.tacplus.dev]
+    resources: [tenantnamespaces]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deploymentproxy-tenantnamespaces
+  namespace: tac-beta-2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deploymentproxy-tenantnamespaces
+subjects:
+  - kind: ServiceAccount
+    name: beta-operator
+    namespace: tac-beta-2
+---
+# What the fleet's helm release needs inside tac-beta-2, and nothing cluster-scoped: no namespaces, no cluster RBAC, no
+# CRDs; no quota or limit changes; no exec, attach or port-forward. Every verb is named. Kubernetes' escalation
+# check means the Roles the release creates can grant no more than this.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fleet-deploy
+  namespace: tac-beta-2
+rules:
+  # Helm keeps its release state in Secrets.
+  - apiGroups: [""]
+    resources: [configmaps, secrets, services, serviceaccounts, persistentvolumeclaims]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch, delete]
+  - apiGroups: [""]
+    resources: [pods/log, endpoints, resourcequotas, limitranges]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [get, list, watch, create, patch]
+  - apiGroups: [events.k8s.io]
+    resources: [events]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [replicasets, controllerrevisions]
+    verbs: [get, list, watch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fleet-deploy
+  namespace: tac-beta-2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fleet-deploy
+subjects:
+  # GKE names a Google service account by its email.
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: beta-deploy@example-project.iam.gserviceaccount.com

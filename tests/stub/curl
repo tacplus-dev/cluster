@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Jody Scott
+# SPDX-License-Identifier: Apache-2.0
+#
+# A stub curl for the tests: Cloud KMS at KMS_API signs anything; GitHub at GITHUB_API mints an installation token
+# when GSTUB/allow exists (each request's body logged to GSTUB/token-requests), and keeps tacplus-dev/cluster's
+# issues in GSTUB/issues (N, a JSON issue; N.comments, its comments' JSON, one per line), answering only to that token.
+set -uo pipefail
+g=${GSTUB:?GSTUB is not set}
+out=/dev/stdout method=GET data= auth= url=
+while [ $# -gt 0 ]; do
+  case $1 in
+    -o) out=$2; shift ;;
+    -w) shift ;;
+    -X) method=$2; shift ;;
+    -H) case $2 in @*) h=$(cat "${2#@}") ;; *) h=$2 ;; esac
+        case $h in Authorization:*) auth=${h#Authorization: } ;; esac; shift ;;
+    -d|--data-binary) case $2 in @*) data=$(cat "${2#@}") ;; *) data=$2 ;; esac; shift ;;
+    -*) ;;
+    *) url=$1 ;;
+  esac
+  shift
+done
+answer() { printf '%s' "$2" > "$out"; printf '%s' "$1"; }
+repo=${GITHUB_API:-}/repos/tacplus-dev/cluster
+case "$method $url" in
+  "POST ${KMS_API:-}/v1/"*":asymmetricSign") answer 200 "{\"signature\": \"$(printf sig | openssl base64 -A)\"}" ;;
+  "POST ${GITHUB_API:-}/app/installations/"*"/access_tokens")
+    echo "$data" >> "$g/token-requests"
+    if [ -e "$g/allow" ]; then answer 201 '{"token": "ghs_stub"}'
+    else answer 403 '{"message": "Resource not accessible by integration"}'; fi ;;
+  *)
+    [ "$auth" = "Bearer ghs_stub" ] || { answer 401 '{"message": "Bad credentials"}'; exit 0; }
+    path=${url#"$repo"}; path=${path%%\?*}
+    case "$method $path" in
+      "GET /issues") answer 200 "$(for f in $(ls "$g/issues" | grep -v comments); do cat "$g/issues/$f"; done | jq -s .)" ;;
+      "POST /issues")
+        n=$(( $(ls "$g/issues" | grep -vc comments) + 1 ))
+        jq --argjson n "$n" '. + {number: $n}' <<<"$data" > "$g/issues/$n"
+        answer 201 "$(cat "$g/issues/$n")" ;;
+      "GET /issues/"*/comments) n=${path#/issues/}; n=${n%/comments}
+        answer 200 "$(cat "$g/issues/$n.comments" 2>/dev/null | jq -s .)" ;;
+      "POST /issues/"*/comments) n=${path#/issues/}; n=${n%/comments}
+        jq -c . <<<"$data" >> "$g/issues/$n.comments"; answer 201 '{}' ;;
+      "GET /issues/"*) answer 200 "$(cat "$g/issues/${path#/issues/}")" ;;
+      *) answer 404 '{"message": "Not Found"}' ;;
+    esac ;;
+esac
+exit 0

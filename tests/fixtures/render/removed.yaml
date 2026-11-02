@@ -1,0 +1,7 @@
+# deployments.yaml with beta-2 removed: alpha only.
+deployments:
+  - name: alpha
+    deployAccount: alpha-deploy@example-project.iam.gserviceaccount.com
+    operator: operator
+    gitlabProject: tacplus-dev/fleet-alpha
+    quota: {}

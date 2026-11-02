@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Jody Scott
+# SPDX-License-Identifier: Apache-2.0
+#
+# A stub kubectl for the tests: a cluster kept in the directory KSTUB, and every call logged to KSTUB/log.
+#
+#   KSTUB/context        the current context
+#   KSTUB/grant          `yes` when the account is cluster-admin
+#   KSTUB/ns/<name>      a namespace, holding its labels as a JSON object
+#   KSTUB/live/<object>  an object as applied, named as kubectl diff names it (group.version.Kind.namespace.name)
+#   KSTUB/keep-tenants   when present, deleting a deployment namespace leaves its tenant namespaces (deploymentproxy
+#                        deletes them otherwise)
+#
+# It answers what the pipeline's scripts ask: config current-context, auth can-i/whoami, get namespace(s) -o json
+# [-l KEY[=VALUE]], diff -f (through KUBECTL_EXTERNAL_DIFF), apply -f, delete namespace, rollout status.
+set -uo pipefail
+k=${KSTUB:?KSTUB is not set}
+echo "kubectl $*" >> "$k/log"
+mkdir -p "$k/ns" "$k/live"
+
+file() { local a; for a in "$@"; do [ "${prev:-}" = -f ] && echo "$a"; prev=$a; done; }
+selector() { local a prev=; for a in "$@"; do [ "$prev" = -l ] && echo "$a"; prev=$a; done; }
+ns_json() { # ns_json NAME
+  jq -n --arg n "$1" --argjson l "$(cat "$k/ns/$1")" '{metadata: {name: $n, labels: $l}}'
+}
+# objects FILE DIR: each object of FILE into DIR, named as kubectl names it.
+objects() {
+  local i=0 name
+  while read -r name; do
+    yq "select(document_index == $i)" "$1" > "$2/$name"
+    i=$((i + 1))
+  done < <(yq -N '(.apiVersion | sub("/", ".")) + "." + .kind + "." + (.metadata.namespace // "") + "." + .metadata.name' "$1")
+}
+
+case "$1 ${2:-}" in
+  "config current-context") cat "$k/context" ;;
+  "auth can-i") if [ "$(cat "$k/grant" 2>/dev/null)" = yes ]; then echo yes; else echo no; exit 1; fi ;;
+  "auth whoami") echo "cluster-admin-pipeline@jody1-328023.iam.gserviceaccount.com" ;;
+  "get namespaces")
+    sel=$(selector "$@")
+    for n in $(ls "$k/ns"); do
+      if [ -z "$sel" ]; then ns_json "$n"
+      elif [[ $sel == *=* ]]; then [ "$(jq -r --arg key "${sel%%=*}" '.[$key] // ""' "$k/ns/$n")" = "${sel#*=}" ] && ns_json "$n"
+      else jq -e --arg key "$sel" 'has($key)' "$k/ns/$n" >/dev/null && ns_json "$n"
+      fi || true
+    done | jq -s '{items: .}' ;;
+  "get namespace")
+    [ -e "$k/ns/$3" ] || { echo "Error from server (NotFound): namespaces \"$3\" not found" >&2; exit 1; }
+    ns_json "$3" ;;
+  "diff "*)
+    f=$(file "$@")
+    t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
+    mkdir -p "$t/LIVE" "$t/MERGED"
+    objects "$f" "$t/MERGED"
+    for o in $(ls "$t/MERGED"); do [ -e "$k/live/$o" ] && cp "$k/live/$o" "$t/LIVE/$o"; done
+    "${KUBECTL_EXTERNAL_DIFF:?}" "$t/LIVE" "$t/MERGED" ;;
+  "apply "*)
+    f=$(file "$@")
+    objects "$f" "$k/live"
+    while IFS='|' read -r n labels; do echo "$labels" > "$k/ns/$n"; done < <(yq -N 'select(.kind == "Namespace") | .metadata.name + "|" + (.metadata.labels // {} | to_json(0))' "$f")
+    echo "applied $f" ;;
+  "delete namespace")
+    shift 2
+    for n in "$@"; do
+      case $n in -*) continue ;; esac
+      [ -e "$k/ns/$n" ] || { echo "Error from server (NotFound): namespaces \"$n\" not found" >&2; exit 1; }
+      d=$(jq -r '.["tacplus.dev/deployment"] // ""' "$k/ns/$n")
+      rm -f "$k/ns/$n"
+      if [ -n "$d" ] && [ ! -e "$k/keep-tenants" ]; then
+        for t in $(ls "$k/ns"); do
+          [ "$(jq -r '.["deploymentproxy.tacplus.dev/deployment"] // ""' "$k/ns/$t")" = "$d" ] && rm -f "$k/ns/$t"
+        done
+      fi
+      echo "namespace \"$n\" deleted"
+    done ;;
+  "rollout status"|"-n deploymentproxy") echo "deployment \"deploymentproxy\" successfully rolled out" ;;
+  *) echo "stub kubectl: not stubbed: $*" >&2; exit 2 ;;
+esac
