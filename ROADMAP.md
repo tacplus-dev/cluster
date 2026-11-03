@@ -7,6 +7,7 @@ Nothing built yet. The design is approved (tacplus-dev/roadmap#1, 2026-11-02).
 
 ## Next
 - The cluster pipeline: manifests for deploymentproxy and `deployments.yaml`, GitLab CI with `plan` on every change, `apply` as Jody's protected manual job, and a nightly drift check; first entry `seatrials` (#1). Agent, at Jody's request, 2026-11-02 (`tacplus-dev/roadmap:decisions/cluster-pipeline-2026-11-02.md`).
+- Apply automatically on main after a successful plan; outside production nothing waits for a person (#3). Agent, at Jody's request, 2026-11-02 (`tacplus-dev/roadmap:decisions/deterministic-deployments-2026-11-02.md`).
 
 ## Later
 - A reconciler (GKE Config Sync or Argo CD) instead of a manual apply, if standing privilege becomes acceptable (roadmap#1, alternative ii).
