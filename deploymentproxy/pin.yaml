@@ -1,6 +1,6 @@
 # deploymentproxy's release this cluster runs, on the line 0.2 (tacplus-dev/deploymentproxy README; fleets pin X.Y).
-# A bump: change tag, commit and image together, then run deploymentproxy/fetch.sh, which refuses a tag that does
-# not name the commit or an image tag that does not have the digest, and rewrites release/ and its SHA256SUMS.
+# A bump: deploymentproxy/bump.sh <tag>, which resolves the commit and the image digest from the tag, rewrites tag,
+# commit and image here, runs deploymentproxy/fetch.sh and regenerates the render fixture. Not by hand.
 repository: tacplus-dev/deploymentproxy
 line: "0.2"
 tag: v0.2.1

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # The repository's tests, every tests/*_test.sh: the validate job's tests and the local gate. Need bash, git, jq,
-# yq (ci/tools.sh builds it into bin/), openssl, sha256sum.
+# yq (ci/tools.sh builds it into bin/), openssl, sha256sum, tar.
 #
 #   ci/checks.sh
 set -uo pipefail

@@ -32,6 +32,7 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `deployments.yaml` | The deployments, one entry each. |
 | `deploymentproxy/pin.yaml` | deploymentproxy's release: line `0.2`, tag, commit, image by digest, the manifests it applies. |
 | `deploymentproxy/release/` | Those manifests as fetched (`deploymentproxy/fetch.sh`), with their `SHA256SUMS`. Never edited. |
+| `deploymentproxy/bump.sh` | A bump to a release of the line, from its tag: the pin, the release, the render fixture. |
 | `render.sh` | The render: `out/00-deploymentproxy.yaml` and `out/10-deployment-<name>.yaml` for each entry. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
 | `ci/*.sh` | The jobs' scripts: `policy`, `validate`, `plan`, `apply`, `delete-deployment`, `drift`; `lib.sh` (credentials). |
@@ -119,9 +120,13 @@ labelled as that deployment's. Never set either variable as a project or group v
 
 ### Bumping deploymentproxy
 
-Change `tag`, `commit` and `image` in `deploymentproxy/pin.yaml` together, then run `deploymentproxy/fetch.sh`: it
-refuses a tag that does not name the commit, or an image tag without that digest, and rewrites `release/` and its
-`SHA256SUMS`. Run the checks and review the release's diff.
+Run `deploymentproxy/bump.sh <tag>` (a release of the pinned line, e.g. `v0.2.2`), and nothing else. From the tag
+alone it resolves the commit and the image's digest, refuses an image not built from that commit (its
+`org.opencontainers.image.revision` and `version` labels), rewrites `tag`, `commit` and `image` in `pin.yaml`, runs
+`deploymentproxy/fetch.sh` (which checks both again and rewrites `release/` and its `SHA256SUMS`) and regenerates
+the render fixture (`tests/fixtures/render/out`), which has the release's manifests in it. On any refusal it leaves
+the tree as it was. Its diff (`pin.yaml`, `release/`, the fixture) is the pull request; review it there, where the
+checks run as its gates (`tests/bump_test.sh` tests the script against a fixture release).
 
 ### What the hub does
 

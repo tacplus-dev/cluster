@@ -7,7 +7,8 @@
 # deploymentproxy/release/SHA256SUMS. Nothing here edits them: render.sh pins the image by digest and sets the
 # per-deployment values at render time.
 #
-#   deploymentproxy/fetch.sh            # after a change to pin.yaml: fetch, check the tag's commit, write the sums
+#   deploymentproxy/fetch.sh            # after a change to pin.yaml (deploymentproxy/bump.sh runs it): fetch, check
+#                                       # the tag's commit, write the sums
 #   deploymentproxy/fetch.sh --check    # the files and sums here are the release's, byte for byte (validate job)
 #
 # The tag must still name pin.yaml's commit, and the image tag pin.yaml names must still have its digest:

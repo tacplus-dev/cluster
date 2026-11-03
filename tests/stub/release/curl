@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Jody Scott
+# SPDX-License-Identifier: Apache-2.0
+#
+# A stub curl for tests/bump_test.sh: a fixture release of GitHub and the image registry, as files. A URL answers
+# with the file RSTUB/<the URL without its scheme> (each request logged to RSTUB.log), its headers with -I from
+# RSTUB/<...>.headers; no file is curl -f's failure (exit 22).
+set -uo pipefail
+r=${RSTUB:?RSTUB is not set}
+out=/dev/stdout head= url=
+while [ $# -gt 0 ]; do
+  case $1 in
+    -o) out=$2; shift ;;
+    -H|-w|-X|-d) shift ;;
+    -I) head=1 ;;
+    -*) [[ $1 == -*I* ]] && head=1 ;;
+    *) url=$1 ;;
+  esac
+  shift
+done
+echo "$url" >> "$r.log"
+f=$r/${url#*://}
+[ -n "$head" ] && f=$f.headers
+[ -f "$f" ] || exit 22
+cat "$f" > "$out"
