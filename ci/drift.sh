@@ -30,7 +30,7 @@ mark="drift-sha256:$(sha256sum < "$tmp/summary" | cut -c1-16)"
   cat "$tmp/summary"
   echo '```'
   echo
-  echo "Pipeline: ${CI_PIPELINE_URL:-unknown}. The drift job never applies: look at the plan, then fix the cluster or this repository; the apply is Jody's (README)."
+  echo "Pipeline: ${CI_PIPELINE_URL:-unknown}. The drift job never applies: look at the plan, then fix the cluster or this repository: a pipeline on main applies the render (README)."
   echo
   echo "<!-- $mark -->"
 } > "$tmp/body"

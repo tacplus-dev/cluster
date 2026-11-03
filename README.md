@@ -53,13 +53,13 @@ that commit (it is public: no credential).
 |---|---|---|
 | `render` | every push and merge request | Builds yq and kubeconform (`ci/tools.sh`), checks the project's `.gitlab-ci.yml` is this repository's with only `CLUSTER_COMMIT` set (`ci/pin.sh --check`), renders into `out/`. |
 | `validate` | every push and merge request | kubeconform and `ci/policy.sh` on `out/`, `deploymentproxy/release` against its release (`fetch.sh --check`), the tests. |
-| `plan` | main (push, web, API) | `kubectl diff` against `tacplus`, then per unit (deploymentproxy, each deployment) what is added, changed or removed; a deployment whose entry is gone is listed as kept. |
-| `apply` | main, **manual**, protected environment `cluster` (Jody only); not in a deletion pipeline | Plans again, then applies server-side. Never deletes or prunes. |
+| `plan` | main (push, web, API) | `kubectl diff` against `tacplus`, then per unit (deploymentproxy, each deployment) what is added, changed or removed; a deployment whose entry is gone is listed as kept. Saves the render it diffed and its summary (`plan.txt`). |
+| `apply` | main, **automatically** once `plan` succeeds, protected environment `cluster`; not in a deletion pipeline | Applies the render `plan` saved: plans again, then applies server-side. Never deletes or prunes. A failed apply fails the pipeline. |
 | `DELETE deployment: removes tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)` | a deletion pipeline only (below), **manual**, protected environment `cluster` (Jody only) | Deletes the deployment `DELETE_DEPLOYMENT`: `tac-<name>` and its tenant namespaces (`ci/delete-deployment.sh`). |
 | `drift` | the nightly schedule | `plan`; if anything differs, an issue here (one open at a time; a new drift is a comment). Never applies. |
 
 The cluster jobs run only on main, because Workload Identity Federation admits only this project's protected main:
-a merge request gets `render` and `validate`, and its `plan` runs once it is merged, before anyone plays `apply`.
+a merge request gets `render` and `validate`, and its `plan`, then `apply`, run once it is merged.
 Until the hub's steps below are done, `plan` stops with `kube: no cluster grant yet` (or GCP's refusal, saying so).
 
 ### How a change reaches the cluster
@@ -67,7 +67,13 @@ Until the hub's steps below are done, `plan` stops with `kube: no cluster grant 
 1. A pull request here (to `deployments.yaml`, the pin, the render); the tests run as its gates.
 2. Once it is merged, a merge request in the GitLab project setting `.gitlab-ci.yml` to `ci/pin.sh <commit>`'s
    output, for that commit of main: `render` and `validate` run on it.
-3. Merged there, the pipeline on main runs `plan`. Jody reads it and plays `apply`.
+3. Merged there, the pipeline on main runs `plan`, then `apply` of what it planned. Nobody plays it.
+
+Outside production nothing waits for a person (Jody, `tacplus-dev/roadmap:decisions/deterministic-deployments-2026-11-02.md`,
+addendum): this cluster is not production, so `apply` has no manual gate; the review is the pull request's, and the
+plan is in the pipeline's log for anyone to read. The production cluster (`PRODUCTION.md`) will have its own
+pipeline, where `apply` is a protected manual job that only Jody plays. Deleting a deployment is not an approval but
+intent: it stays a deletion pipeline, started on purpose (below), never automatic.
 
 ### Adding a deployment
 
@@ -81,7 +87,7 @@ A pull request adding its entry to `deployments.yaml` (the file says what each f
     quota: {}                     # deploymentproxy's default; or e.g. {pods: "50"}, quantities quoted
 ```
 
-`tests/render_test.sh` and `ci/policy.sh` check it. Then the pin (above), the plan, and Jody's apply. The fleet's
+`tests/render_test.sh` and `ci/policy.sh` check it. Then the pin (above), the plan and the apply. The fleet's
 deploy account also needs, in IAM, to get the cluster's credentials (`roles/container.clusterViewer`): that is the
 fleet's setup, not this pipeline's.
 
@@ -91,7 +97,7 @@ Removing its entry deletes nothing: `plan` lists it as removed and kept. Deletin
 takes a pipeline of its own, a **deletion pipeline**: no push, merge request, schedule or plain run has the deletion
 job, and a deletion pipeline has no `apply`.
 
-1. The entry removed from `deployments.yaml`, the pin, and Jody's `apply` of it (the job refuses a deployment
+1. The entry removed from `deployments.yaml`, the pin, and the `apply` of it (the job refuses a deployment
    `deployments.yaml` still lists: the next apply would recreate it).
 2. Jody runs a pipeline on `main` with two variables, both the deployment's name: `DELETE_DEPLOYMENT=<name>` and
    `DELETE_CONFIRM=<name>`, the second typed again to confirm. From the web form (Build > Pipelines > Run pipeline,
@@ -123,8 +129,9 @@ Before the first pipeline:
 
 1. **The runner:** a project runner registered to `tacplus-dev/cluster` only, tag `cluster`, VMs used once, with
    no Google account; group runners off on the project.
-2. **The project:** `main` protected; the protected environment `cluster`, deployable by Jody only; pipeline
-   variables allowed to the Owner role only (Settings > CI/CD > Variables, "Minimum role to use pipeline
+2. **The project:** `main` protected; the protected environment `cluster`, deployable by Jody and by the account
+   whose merges start the pipelines on main (the hub's): GitLab runs an automatic job in a protected environment only
+   for a pipeline started by one of its deployers, so `apply` fails for anyone else's; pipeline variables allowed to the Owner role only (Settings > CI/CD > Variables, "Minimum role to use pipeline
    variables"), for a deletion pipeline's two; `.gitlab-ci.yml` from `ci/pin.sh <commit of main>`.
 3. **Its variables** (protected, never group variables): `GCP_WIF_PROVIDER` (the provider of the pool
    `gitlab-tacplus-dev`), and for `drift`, `TACPLUS_READER_APP_ID` and `TACPLUS_READER_INSTALLATION_ID`.
@@ -136,14 +143,14 @@ Before the first pipeline:
    or `TACPLUS_READER_SA` set to a service account that may. Until then `drift` fails, saying which refused.
 6. **The schedule:** nightly, on main.
 
-Then a pipeline on main: `render`, `validate` and `plan` green, and the plan read.
+Then a pipeline on main: `render`, `validate`, `plan` and `apply` green.
 
-### The first apply (Jody)
+### The first apply
 
-1. Read the `plan` of the pipeline on main: deploymentproxy (namespace, CRD, RBAC, ConfigMap, Deployment) and
+1. The `plan` of the pipeline on main: deploymentproxy (namespace, CRD, RBAC, ConfigMap, Deployment) and
    `seatrials` (`tac-seatrials`, its two Roles and RoleBindings), all added; nothing else.
-2. Play `apply`. It plans again on the cluster as it is, applies, and waits for deploymentproxy to roll out.
-3. Run the pipeline again (web): `plan` says `no difference`.
+2. `apply`, after it: it plans again on the cluster as it is, applies, and waits for deploymentproxy to roll out.
+3. Run the pipeline again (web): `plan` says `no difference`, and `apply` changes nothing.
 
 ### Locally
 

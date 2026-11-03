@@ -24,5 +24,10 @@ the looper then marks it `promoted` or `declined` here with the date.
   pipeline). GitLab's CI Lint API with `dry_run` (`POST /projects/88422580/ci/lint`, per ref) would check the same
   against GitLab's own evaluator, but needs a GitLab token the agents do not hold; a job in the project itself could
   run it with its CI_JOB_TOKEN, if that token may call it.
+- **A Jody-only environment for the deletion job** (2026-11-03, #3): the automatic `apply` needs the account whose
+  merges start main's pipelines (the hub's) among the deployers of the protected environment `cluster`, which the
+  deletion job shares, so that account could play a deletion job too. Only a deletion pipeline has one, and only
+  the Owner role may set its variables, but an environment of its own (`cluster-delete`, deployable by Jody alone)
+  would keep deleting Jody's by GitLab's protection, not only by the variables' role.
 
 ## Promoted / declined

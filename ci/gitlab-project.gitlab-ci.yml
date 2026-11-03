@@ -10,8 +10,9 @@
 #   render             the tools (ci/tools.sh), the copy checked (ci/pin.sh --check), ./render.sh into out/
 #   validate           kubeconform and ci/policy.sh on out/, deploymentproxy's release checked, the tests (ci/checks.sh)
 #   plan               main: kubectl diff against the cluster tacplus, and what each deployment gains or loses
-#   apply              main, manual, in the protected environment cluster (Jody only): never deletes; not in a
-#                      deletion pipeline
+#   apply              main, automatically once plan succeeds (main is not production: nothing waits for a person),
+#                      the render plan saved, in the protected environment cluster: never deletes; not in a deletion
+#                      pipeline
 #   DELETE deployment  a deletion pipeline only, manual, in the protected environment cluster: deletes the
 #                      deployment DELETE_DEPLOYMENT
 #   drift              the nightly schedule: plan, and an issue on github.com/tacplus-dev/cluster if it differs; never applies
@@ -90,21 +91,25 @@ plan:
   rules:
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(push|web|api)$/
   script:
-    - cd src && export PATH=$PWD/bin:$PATH && source ci/lib.sh && ci_gcp && ci_kube && ci/plan.sh out
+    - cd src && export PATH=$PWD/bin:$PATH && source ci/lib.sh && ci_gcp && ci_kube && PLAN_SUMMARY=plan.txt ci/plan.sh out
+  # The render it diffed, with the tools, and its summary: what apply applies.
+  artifacts:
+    paths: [src/bin/, src/out/, src/plan.txt]
+    expire_in: 1 week
 
-# The apply: manual, in the protected environment cluster, whose only deployer is Jody. It applies the render the
-# plan above showed, after planning it again on the cluster as it is now; it never deletes. A deletion pipeline has
-# no apply, so that the two are never side by side.
+# The apply: automatic on main once plan succeeds, with no manual gate: this cluster is not production, and outside
+# production nothing waits for a person (tacplus-dev/roadmap decisions/deterministic-deployments-2026-11-02.md,
+# addendum). The production cluster has its own pipeline, with Jody's manual apply (PRODUCTION.md). It applies the
+# render plan saved, after planning it again on the cluster as it is now; it never deletes; a failure fails the
+# pipeline. A deletion pipeline has no apply, so that the two are never side by side.
 apply:
   extends: .cluster
   stage: apply
-  needs: [render, plan]
+  needs: [plan]
   rules:
     - if: $DELETE_DEPLOYMENT
       when: never
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(push|web|api)$/
-      when: manual
-  allow_failure: true
   environment: { name: cluster, action: start }
   resource_group: cluster
   script:

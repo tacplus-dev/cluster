@@ -5,10 +5,11 @@
 # Tests ci/gitlab-project.gitlab-ci.yml and ci/pin.sh: the file parses; every job runs on the project's runner (tag
 # cluster). The pipelines GitLab makes of it, by its workflow and its jobs' rules (pipeline, below): render and
 # validate in every pipeline, so every push and merge request; plan, apply and drift on main only, never from a merge
-# request; a push, a merge request, a schedule or a plain run has no deletion job; a deletion pipeline (web or API, on
+# request; apply automatic on main once plan succeeds (not manual: main is not production), from the render the plan
+# saved; a push, a merge request, a schedule or a plain run has no deletion job; a deletion pipeline (web or API, on
 # main, DELETE_DEPLOYMENT set and DELETE_CONFIRM equal to it) has it, manual, and no apply; the cluster jobs have
-# their id_token; apply and the deletion job are manual, in the protected environment cluster, and run what they
-# say; drift runs only on a schedule and never applies. ci/pin.sh sets CLUSTER_COMMIT and nothing else, --check
+# their id_token; apply and the deletion job are in the protected environment cluster, and run what they say; a
+# failed apply fails the pipeline; drift runs only on a schedule and never applies. ci/pin.sh sets CLUSTER_COMMIT and nothing else, --check
 # accepts its output and refuses any other change, and the jobs refuse an empty CLUSTER_COMMIT. Needs bash and yq.
 #
 #   tests/ci_test.sh
@@ -81,7 +82,7 @@ pipeline() {
 expect() { # expect WHAT GOT WANT
   [ "$2" = "$3" ] && ok "$1: ${3//"$del"/the deletion job}" || fail "$1: the jobs are [$2], not [$3]"
 }
-normal="render:on_success,validate:on_success,plan:on_success,apply:manual,"
+normal="render:on_success,validate:on_success,plan:on_success,apply:on_success,"
 deletion="render:on_success,validate:on_success,plan:on_success,$del:manual,"
 expect "a push to main" "$(pipeline push main)" "$normal"
 expect "a web pipeline on main" "$(pipeline web main)" "$normal"
@@ -113,13 +114,18 @@ cluster_job() { # cluster_job JOB: extends .cluster, which has the id_token
 for j in plan apply "$del" drift; do
   cluster_job "$j" || fail "$j: does not extend .cluster"
 done
-[[ $(q '.plan.script[0]') == *"ci_gcp && ci_kube && ci/plan.sh out" ]] && ok "plan: ci/plan.sh" || fail "plan runs: $(q '.plan.script')"
+[[ $(q '.plan.script[0]') == *"ci_gcp && ci_kube && PLAN_SUMMARY=plan.txt ci/plan.sh out" ]] && ok "plan: ci/plan.sh" || fail "plan runs: $(q '.plan.script')"
 for j in apply "$del"; do
   [ "$(q ".[\"$j\"].environment.name")" = cluster ] && [ "$(q ".[\"$j\"].resource_group")" = cluster ] &&
     ok "${j//"$del"/the deletion job}: in the protected environment cluster" || fail "$j: $(q ".[\"$j\"]")"
 done
-[[ $(q '.apply.script[0]') == *"ci_gcp && ci_kube && ci/apply.sh out" ]] && [ "$(q '.apply.needs | join(",")')" = render,plan ] &&
-  ok "apply: ci/apply.sh, after plan" || fail "apply runs: $(q '.apply.script')"
+[[ $(q '.apply.script[0]') == *"ci_gcp && ci_kube && ci/apply.sh out" ]] && [ "$(q '.apply.needs | join(",")')" = plan ] &&
+  ok "apply: ci/apply.sh, after plan" || fail "apply runs: $(q '.apply.script'), after $(q '.apply.needs')"
+[ "$(q '[.apply.rules[].when] | map(select(. == "manual")) | length')" = 0 ] && [ "$(q '.apply.allow_failure // false')" = false ] &&
+  ok "apply: never manual, and its failure fails the pipeline" || fail "apply: $(q '.apply.rules'), allow_failure $(q '.apply.allow_failure')"
+# apply applies the render plan diffed: plan saves it (src/out/, with src/bin/) and its summary, and apply takes them from plan.
+[ "$(q '(.plan.artifacts.paths // []) | join(",")')" = src/bin/,src/out/,src/plan.txt ] && [[ $(q '.plan.script[0]') == *"PLAN_SUMMARY=plan.txt ci/plan.sh out" ]] &&
+  ok "plan: saves the render it diffed and its summary" || fail "plan saves: $(q '.plan.artifacts'), runs $(q '.plan.script')"
 [[ $(q ".[\"$del\"].script[0]") == *"ci/delete-deployment.sh deployments.yaml" ]] && ok "the deletion job: ci/delete-deployment.sh" ||
   fail "the deletion job runs: $(q ".[\"$del\"].script")"
 for j in render validate plan drift; do
@@ -134,7 +140,7 @@ done
   [ "$(yq -r '.variables.CLUSTER_COMMIT' "$work/pinned")" = "$c" ] && ok "ci/pin.sh sets CLUSTER_COMMIT and nothing else" || fail "ci/pin.sh: $(diff "$ci" "$work/pinned")"
 "$here/ci/pin.sh" --check "$work/pinned" >/dev/null 2>&1 && ok "ci/pin.sh --check accepts its own output" || fail "ci/pin.sh --check refuses its own output"
 sed 's/when: manual/when: on_success/' "$work/pinned" > "$work/edited"
-"$here/ci/pin.sh" --check "$work/edited" > "$work/log" 2>&1 && fail "ci/pin.sh --check accepts an apply made automatic" ||
+"$here/ci/pin.sh" --check "$work/edited" > "$work/log" 2>&1 && fail "ci/pin.sh --check accepts a deletion job made automatic" ||
   { grep -q "ci/pin.sh $c" "$work/log" && ok "ci/pin.sh --check refuses a copy edited by hand" || fail "the refusal: $(cat "$work/log")"; }
 "$here/ci/pin.sh" --check "$ci" > "$work/log" 2>&1 && fail "ci/pin.sh --check accepts no CLUSTER_COMMIT" ||
   { grep -q "sets no CLUSTER_COMMIT" "$work/log" && ok "ci/pin.sh --check refuses the unpinned file" || fail "the refusal: $(cat "$work/log")"; }
