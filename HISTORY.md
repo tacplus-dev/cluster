@@ -5,3 +5,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 
 - 2026-11-02 looper issue Build the cluster pipeline: deploymentproxy + deployments.yaml, plan on every change, apply only by Jody, nightly drift (#1, d1d2442)
 - 2026-11-02 looper issue delete-deployment appears next to apply in every pipeline; Jody clicked it by mistake (the guard held): show it only in a deletion pipeline (#2, bf4f13f)
+- 2026-11-03 looper issue Apply automatically on main after a successful plan (not production): no manual gate (#3, cdfb623)
