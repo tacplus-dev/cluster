@@ -8,13 +8,14 @@
 # this repository out at that commit: it is public, so with no credential. Runbook: README.
 #
 #   render             the tools (ci/tools.sh), the copy checked (ci/pin.sh --check), ./render.sh into out/
-#   validate           kubeconform and ci/policy.sh on out/, deploymentproxy's release checked, the tests (ci/checks.sh)
+#   validate           kubeconform and ci/policy.sh on out/, deploymentproxy's release and GitLab Runner's chart
+#                      checked, the tests (ci/checks.sh)
 #   security           OSV-Scanner on the tree, govulncheck on the pinned tools, gitleaks on the tree and its history,
 #                      Trivy on the CI image, security-exceptions.yaml enforced (ci/security.sh); plan waits for it
 #   plan               main: kubectl diff against the cluster tacplus, and what each deployment gains or loses
 #   apply              main, automatically once plan succeeds (main is not production: nothing waits for a person),
-#                      the render plan saved, in the protected environment cluster: never deletes; not in a deletion
-#                      pipeline
+#                      the render plan saved, then the in-cluster runners' tokens from Secret Manager by version, in
+#                      the protected environment cluster: never deletes; not in a deletion pipeline
 #   DELETE deployment  a deletion pipeline only, manual, in the protected environment cluster: deletes the
 #                      deployment DELETE_DEPLOYMENT
 #   drift              the nightly schedule: plan, and an issue on github.com/tacplus-dev/cluster if it differs; never applies

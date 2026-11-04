@@ -3,10 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Tests render.sh against fixtures: tests/fixtures/render/deployments.yaml renders to exactly
-# tests/fixtures/render/out/ (one file for deploymentproxy, one per deployment); the image is pinned by digest;
+# tests/fixtures/render/out/ (one file for deploymentproxy, one per deployment, one for ci); the images are pinned by
+# digest (deploymentproxy's, and the runners' and their jobs' in ci); ci's RBAC is in ci only; build jobs select and
+# tolerate the spot pool and control jobs never; each runner's pods name its token's version, and no token is in it;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
 # is; deployments.yaml itself renders and passes ci/policy.sh; a removed entry renders nothing for it; a release
-# file that does not match its checksum, and every malformed entry, is refused with a message. Needs bash and yq.
+# file or chart file that does not match its checksum, every malformed entry, and a runner file that names its token
+# by latest or sets what only gitlab-runner/values.yaml sets, is refused with a message. Needs bash, yq and helm.
 #
 #   tests/render_test.sh
 #   UPDATE=1 tests/render_test.sh    # rewrites the expected output (review the diff)
@@ -27,8 +30,8 @@ if "$here/render.sh" "$fixtures/deployments.yaml" "$work/out" > "$work/log" 2>&1
 else
   fail "render.sh failed on the fixture: $(cat "$work/log")"
 fi
-[ "$(ls "$work/out" 2>/dev/null | tr '\n' ' ')" = "00-deploymentproxy.yaml 10-deployment-alpha.yaml 10-deployment-beta-2.yaml " ] &&
-  ok "one file for deploymentproxy, one per deployment" || fail "the files are: $(ls "$work/out" 2>/dev/null | tr '\n' ' ')"
+[ "$(ls "$work/out" 2>/dev/null | tr '\n' ' ')" = "00-deploymentproxy.yaml 10-deployment-alpha.yaml 10-deployment-beta-2.yaml 20-ci.yaml " ] &&
+  ok "one file for deploymentproxy, one per deployment, one for ci" || fail "the files are: $(ls "$work/out" 2>/dev/null | tr '\n' ' ')"
 
 dp=$work/out/00-deploymentproxy.yaml
 image=$(yq 'select(.kind == "Deployment") | .spec.template.spec.containers[0].image' "$dp")
@@ -38,6 +41,32 @@ quota=$(yq 'select(.kind == "ConfigMap") | .data."config.yaml" | from_yaml | .qu
 [ "$quota" = '{"beta-2":{"pods":"20","requests.cpu":"2"}}' ] &&
   ok "beta-2's quota reaches deploymentproxy's config, alpha's default adds nothing" || fail "quota.deployments is $quota"
 
+# ci: every image by digest, gitlab-runner/pin.yaml's; the runners' RBAC in ci only; build jobs on the spot pool only.
+ci=$work/out/20-ci.yaml
+runner_pin=$here/gitlab-runner/pin.yaml
+images=$(yq ea '[select(.kind == "Deployment") | .spec.template.spec | (.containers + (.initContainers // []))[] | .image] | unique | join(" ")' "$ci")
+[ "$images" = "$(yq '.runner' "$runner_pin")" ] && [[ $images == *@sha256:* ]] &&
+  ok "the runners run the pinned runner image, by digest: $images" || fail "the runners' images are [$images]"
+runner_toml() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.template.toml"' "$ci" |
+  yq -p toml ".runners[0].kubernetes | $2"; }
+jobs=$(for r in build control; do runner_toml $r '.image + " " + .helper_image'; done | sort -u)
+[ "$jobs" = "$(yq '.job + " " + .helper' "$runner_pin")" ] &&
+  ok "every runner's jobs default to the pinned job image, with the pinned helper, by digest" || fail "the jobs' images are [$jobs]"
+! grep -qiE 'image.*:latest|latest@' "$ci" && ok "nothing in ci's render names latest" || fail "ci's render names latest"
+[ "$(yq ea '[select(.kind == "ClusterRole" or .kind == "ClusterRoleBinding")] | length' "$ci")" = 0 ] &&
+  [ "$(yq ea '[select(.kind == "Role" or .kind == "RoleBinding") | .metadata.namespace] | unique | join(" ")' "$ci")" = ci ] &&
+  [ "$(yq ea '[select(.kind == "RoleBinding") | .roleRef.kind] | unique | join(" ")' "$ci")" = Role ] &&
+  ok "the runners' accounts hold Roles in ci only, no cluster RBAC" || fail "ci's RBAC: $(yq -N 'select(.kind | test("Role")) | .kind + " " + (.metadata.namespace // "")' "$ci")"
+[ "$(runner_toml build '.node_selector.spot + " " + .node_tolerations."spot=true"')" = "true NoSchedule" ] &&
+  [ "$(runner_toml control '[(.node_selector // {}) | keys[], (.node_tolerations // {}) | keys[]] | map(select(test("spot"))) | length')" = 0 ] &&
+  [ "$(runner_toml control '.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms[0].match_expressions[] | select(.key == "spot") | .operator + " " + .values[0]')" = "NotIn true" ] &&
+  ok "build jobs select and tolerate the tainted spot pool; control jobs never tolerate it and refuse a spot node" || fail "the jobs' placement"
+[ "$(yq ea '[select(.kind == "Deployment") | .spec.template.metadata.annotations."tacplus.dev/runner-token"] | join(" ")' "$ci")" = \
+  "$(yq '.tacplus.token' "$here/gitlab-runner/runners/build.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/control.yaml")" ] &&
+  ok "each runner's pods name its token's Secret Manager version" || fail "the runners' token versions"
+! grep -q 'glrt-[A-Za-z0-9_]' "$ci" && [ "$(yq ea '[select(.kind == "Secret")] | length' "$ci")" = 0 ] &&
+  ok "no token and no Secret in the render" || fail "the render holds a token or a Secret"
+
 # The default quota leaves the release's ConfigMap as it is.
 "$here/render.sh" "$fixtures/removed.yaml" "$work/removed" > "$work/log" 2>&1 || fail "render.sh failed on removed.yaml: $(cat "$work/log")"
 diff <(yq 'select(.kind == "ConfigMap")' "$work/removed/00-deploymentproxy.yaml") \
@@ -45,7 +74,7 @@ diff <(yq 'select(.kind == "ConfigMap")' "$work/removed/00-deploymentproxy.yaml"
   ok "with every quota the default, the ConfigMap is the release's" || fail "the default quota changed the release's ConfigMap"
 
 # A removed entry renders nothing for it, and the rest as before.
-[ "$(ls "$work/removed" | tr '\n' ' ')" = "00-deploymentproxy.yaml 10-deployment-alpha.yaml " ] &&
+[ "$(ls "$work/removed" | tr '\n' ' ')" = "00-deploymentproxy.yaml 10-deployment-alpha.yaml 20-ci.yaml " ] &&
   cmp -s "$work/removed/10-deployment-alpha.yaml" "$fixtures/out/10-deployment-alpha.yaml" &&
   ! grep -q beta "$work/removed/"* &&
   ok "a removed entry renders nothing for it" || fail "a removed entry: $(ls "$work/removed" | tr '\n' ' ')"
@@ -67,6 +96,35 @@ if "$work/tree/render.sh" "$fixtures/deployments.yaml" "$work/edited" > "$work/l
 else
   grep -q 'SHA256SUMS' "$work/log" && ok "a release file edited by hand is refused" || fail "the refusal says: $(cat "$work/log")"
 fi
+
+# A chart file edited by hand is refused.
+cp -R "$here/." "$work/tree2" 2>/dev/null; rm -rf "$work/tree2/out"
+echo "# edited" >> "$work/tree2/gitlab-runner/release/templates/deployment.yaml"
+if "$work/tree2/render.sh" "$fixtures/deployments.yaml" "$work/edited2" > "$work/log" 2>&1; then
+  fail "a chart file edited by hand rendered"
+else
+  grep -q 'gitlab-runner/release does not match its SHA256SUMS' "$work/log" && ok "a chart file edited by hand is refused" || fail "the refusal says: $(cat "$work/log")"
+fi
+
+# refused_runner NAME YQ WANT: render.sh refuses the build runner's file changed by YQ, saying WANT.
+refused_runner() {
+  rm -rf "$work/runners" "$work/bad" && cp -R "$here/gitlab-runner/runners" "$work/runners"
+  yq -i "$2" "$work/runners/build.yaml"
+  if RUNNERS=$work/runners "$here/render.sh" "$fixtures/deployments.yaml" "$work/bad" > "$work/log" 2>&1; then
+    fail "runner: $1: rendered"
+  elif ! grep -q -- "$3" "$work/log"; then
+    fail "runner: $1: the refusal does not say [$3]: $(cat "$work/log")"
+  else
+    ok "refused: a runner with $1"
+  fi
+}
+refused_runner "its token by latest" '.tacplus.token = "projects/jody1-328023/secrets/gitlab-runner-build/versions/latest"' "never latest"
+refused_runner "no token" 'del(.tacplus.token)' "tacplus.token \[\] is not a Secret Manager version"
+refused_runner "no tags" '.tacplus.tags = []' "tacplus.tags is not a list"
+refused_runner "its own security context" '.securityContext.privileged = true' "sets securityContext, which only gitlab-runner/values.yaml sets"
+refused_runner "its own RBAC" '.rbac.clusterWideAccess = true' "sets rbac, which only"
+refused_runner "its own image" '.runners.image = "alpine"' "sets runners.image, which only"
+refused_runner "no config" 'del(.runners.config)' "no runners.config"
 
 # refused NAME YAML WANT: render.sh refuses deployments.yaml YAML, saying WANT, and writes nothing.
 refused() {

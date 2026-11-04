@@ -1,0 +1,67 @@
+# The build runner: the tacplus-dev group's jobs tagged `build`, each a pod on the spot pool (its label spot=true and
+# its taint spot=true:NoSchedule, which only these pods tolerate), never on the normal pool. Image builds run rootless
+# BuildKit in the job's own container (tacplus-dev/tacplus#315): no privilege, no host path, no Docker socket; the
+# build container alone is Unconfined for seccomp and AppArmor, as rootless BuildKit needs (GitLab's docs,
+# docs/executors/kubernetes, Set seccomp and AppArmor profiles), and every container of the pod runs as uid 1000.
+# A job may raise its requests and limits (KUBERNETES_CPU_REQUEST and the rest) up to the *_overwrite_max_allowed
+# ceilings, which fit a c4a-standard-4 (4 CPUs, 16 GB); it may not move its pod, its namespace or its account.
+#
+#   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
+#   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
+#                   writes it into the Secret gitlab-runner-build at apply time
+tacplus:
+  tags: [arm64, build]
+  token: projects/jody1-328023/secrets/gitlab-runner-build/versions/1
+concurrent: 6
+runners:
+  name: tacplus-dev build (cluster, ci, spot pool)
+  config: |
+    [[runners]]
+      executor = "kubernetes"
+      [runners.kubernetes]
+        namespace = "ci"
+        image = "{{ .Values.pinned.job }}"
+        helper_image = "{{ .Values.pinned.helper }}"
+        service_account = "ci-job"
+        automount_service_account_token = false
+        privileged = false
+        # A spot node from 0 takes minutes to come up.
+        poll_timeout = 900
+        cpu_request = "1"
+        cpu_limit = "3"
+        memory_request = "4Gi"
+        memory_limit = "8Gi"
+        cpu_request_overwrite_max_allowed = "3500m"
+        cpu_limit_overwrite_max_allowed = "3500m"
+        memory_request_overwrite_max_allowed = "12Gi"
+        memory_limit_overwrite_max_allowed = "12Gi"
+        helper_cpu_request = "100m"
+        helper_cpu_limit = "1"
+        helper_memory_request = "128Mi"
+        helper_memory_limit = "512Mi"
+        [runners.kubernetes.pod_labels]
+          "tacplus.dev/ci-runner" = "build"
+        [runners.kubernetes.node_selector]
+          "kubernetes.io/arch" = "arm64"
+          "spot" = "true"
+        [runners.kubernetes.node_tolerations]
+          "spot=true" = "NoSchedule"
+          "kubernetes.io/arch=arm64" = "NoSchedule"
+        [runners.kubernetes.pod_security_context]
+          run_as_non_root = true
+          run_as_user = 1000
+          run_as_group = 1000
+          fs_group = 1000
+          [runners.kubernetes.pod_security_context.seccomp_profile]
+            type = "RuntimeDefault"
+        # Rootless BuildKit: user namespaces and mounts (unshare, mount) need these two unconfined; its
+        # newuidmap is setuid, so privilege escalation stays allowed in this container. No capability is added.
+        [runners.kubernetes.build_container_security_context]
+          [runners.kubernetes.build_container_security_context.seccomp_profile]
+            type = "Unconfined"
+          [runners.kubernetes.build_container_security_context.app_armor_profile]
+            type = "Unconfined"
+        [runners.kubernetes.helper_container_security_context]
+          allow_privilege_escalation = false
+          [runners.kubernetes.helper_container_security_context.capabilities]
+            drop = ["ALL"]

@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-04 by the looper (#5).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-04 by the looper (#6).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.5`.
@@ -13,11 +13,24 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-04 by th
   `security-exceptions.yaml` enforced; every pipeline, nightly too; `plan` waits for it), `plan`, `apply` (#3: automatic on main once `plan`
   succeeds, applying the render `plan` saved; protected `cluster`, never deletes; not in a deletion pipeline), the
   deletion job (#2: only in a deletion pipeline, run on main from the web form or the API with `DELETE_DEPLOYMENT` and `DELETE_CONFIRM` both the deployment's name; manual, protected,
-  named for what it destroys), `drift` (nightly, files an issue, never applies). Tests green (`ci/checks.sh`), here
-  and in the CI image.
+  named for what it destroys), `drift` (nightly, files an issue, never applies). CI in the cluster (#6):
+  `out/20-ci.yaml`, the namespace `ci` with GitLab Runner's chart 0.94.2 (runner 19.5.2; chart by archive digest,
+  images by digest, `gitlab-runner/`, rendered by `helm template`, helm v4.3.1 pinned in `ci/tools.sh`) as two
+  runners, `build` (tags `arm64, build`, jobs on the spot pool only) and `control` (`arm64, autoscale,
+  autoscale-16`, the normal pool), per-runner requests, limits and ceilings; Roles in `ci` only; jobs as `ci-job`
+  with no token, kept off the metadata server (NetworkPolicy); the admission policy `ci-pods` refusing privileged,
+  host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
+  1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
+  `ci/policy.sh`. Tests green (`ci/checks.sh`), here and in the CI image.
 - **Released / deployed:** the GitLab project runs pipelines on main: #2 reports Jody playing `apply` in pipeline
   3019831835 (job 17680247127) on 2026-11-02; its outcome is not recorded here yet. The lines below predate it.
-- **Known gaps:** no pipeline has run: the hub owes the runner (tag `cluster`), the project's variables and
+- **Known gaps:** the in-cluster runners are not registered or applied yet: the hub registers them as tacplus-dev
+  group runners and stores their tokens as the Secret Manager versions the runner files name (README, What the hub
+  does, 7), and labels and taints the spot pool (8); until the tokens are readable, `apply` fails after the rest,
+  saying so. Rootless BuildKit is not in the build image yet (tacplus-dev/tacplus#315), and the looper's jobs move
+  over in tacplus-dev/looper's switch issue. The `ci` NetworkPolicy holds only where NetworkPolicy is enforced
+  (Dataplane V2: tacplus-dev/cloud's `dev` cluster, where the decision lands the runner; not known for `tacplus`).
+  No pipeline has run: the hub owes the runner (tag `cluster`), the project's variables and
   environment (now deployable by the account whose merges start main's pipelines too, for the automatic `apply`),
   the cluster grant, and the drift issue's app permission and KMS binding (README, What the hub does); the hub
   re-pins the GitLab copy for #3, and for #4 (v0.2.1, whose arm64 toleration the deploymentproxy pod on `tacplus`

@@ -73,6 +73,6 @@ case "$1 ${2:-}" in
       fi
       echo "namespace \"$n\" deleted"
     done ;;
-  "rollout status"|"-n deploymentproxy") echo "deployment \"deploymentproxy\" successfully rolled out" ;;
+  "rollout status"|"-n deploymentproxy"|"-n ci") echo "${4#deployment/} successfully rolled out" ;;
   *) echo "stub kubectl: not stubbed: $*" >&2; exit 2 ;;
 esac

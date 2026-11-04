@@ -1,0 +1,78 @@
+# The chart's values every runner shares (render.sh: helm template with this file, then the runner's own file in
+# gitlab-runner/runners/, then the pinned images and the token's Secret). The runner manager, one Deployment per
+# runner in the namespace ci: on the normal pool (arm64, never a spot node), non-root, no privilege, its service
+# account allowed only what the Kubernetes executor needs in ci (a Role, never a ClusterRole), no `*`.
+gitlabUrl: https://gitlab.com/
+checkInterval: 3
+logLevel: info
+unregisterRunners: true
+# A stopping manager waits for its running jobs (its pods are the jobs' executors).
+terminationGracePeriodSeconds: 3600
+rbac:
+  create: true
+  clusterWideAccess: false
+  # GitLab's list for the Kubernetes executor (docs/executors/kubernetes, Configure runner API permissions), without
+  # its optional features (no autoscaler, no namespace per job, no suspendable environments), every verb named.
+  rules:
+    - apiGroups: [""]
+      resources: [pods]
+      verbs: [create, delete, get, list, watch]
+    - apiGroups: [""]
+      resources: [pods/attach, pods/exec]
+      verbs: [create, delete, get, patch]
+    - apiGroups: [""]
+      resources: [pods/log]
+      verbs: [get, list]
+    - apiGroups: [""]
+      resources: [secrets]
+      verbs: [create, delete, get, update]
+    - apiGroups: [""]
+      resources: [serviceaccounts]
+      verbs: [get]
+    - apiGroups: [""]
+      resources: [services]
+      verbs: [create, get]
+    - apiGroups: [""]
+      resources: [events]
+      verbs: [list, watch]
+serviceAccount:
+  create: true
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 100
+  fsGroup: 65533
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  privileged: false
+  capabilities:
+    drop: ["ALL"]
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+# The normal pool: arm64 (GKE taints Arm nodes kubernetes.io/arch=arm64:NoSchedule), and never a spot node, by its
+# label or GKE's.
+nodeSelector:
+  kubernetes.io/arch: arm64
+tolerations:
+  - key: kubernetes.io/arch
+    operator: Equal
+    value: arm64
+    effect: NoSchedule
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: spot
+              operator: NotIn
+              values: ["true"]
+            - key: cloud.google.com/gke-spot
+              operator: NotIn
+              values: ["true"]

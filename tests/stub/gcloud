@@ -2,10 +2,22 @@
 # Copyright (c) 2026 Jody Scott
 # SPDX-License-Identifier: Apache-2.0
 #
-# A stub gcloud for the tests: Workload Identity Federation always admits the job.
+# A stub gcloud for the tests: Workload Identity Federation always admits the job. Secret Manager holds the files
+# SMSTUB/<project>/<secret>/<version>, each a version's payload; a version not there is refused as Secret Manager
+# refuses it.
 case "$1 ${2:-}" in
   "iam workload-identity-pools") for a in "$@"; do case "$a" in --output-file=*) echo '{}' > "${a#*=}" ;; esac; done ;;
   "auth print-access-token") echo ya29.stub ;;
   "config get") echo cluster-admin-pipeline@jody1-328023.iam.gserviceaccount.com ;;
+  "secrets versions")
+    [ "${3:-}" = access ] || { echo "stub gcloud: not stubbed: $*" >&2; exit 2; }
+    version=$4 secret= project= file=
+    for a in "$@"; do
+      case "$a" in --secret=*) secret=${a#*=} ;; --project=*) project=${a#*=} ;; --out-file=*) file=${a#*=} ;; esac
+    done
+    echo "gcloud secrets versions access $version --secret=$secret --project=$project" >> "${SMSTUB:-/dev/null}/log"
+    payload=${SMSTUB:-/nonexistent}/$project/$secret/$version
+    [ -f "$payload" ] || { echo "ERROR: (gcloud.secrets.versions.access) PERMISSION_DENIED: Permission 'secretmanager.versions.access' denied for resource 'projects/$project/secrets/$secret/versions/$version'" >&2; exit 1; }
+    cp "$payload" "$file" ;;
 esac
 exit 0

@@ -1,0 +1,65 @@
+# The control runner: the tacplus-dev group's jobs tagged for the looper's kicker, reports, managers and scans
+# (`autoscale`; tacplus's reports, `autoscale-16`), each a pod on the normal pool: it tolerates no spot taint and
+# refuses a spot node by its label or GKE's. No privilege, no privilege escalation, no host path, no Docker socket;
+# agents never build (a build is a job of its own, on the build runner). A job may raise its requests and limits up
+# to the *_overwrite_max_allowed ceilings, which fit a c4a-standard-2 (2 CPUs, 8 GB) beside the platform; it may
+# not move its pod, its namespace or its account.
+#
+#   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
+#   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
+#                   writes it into the Secret gitlab-runner-control at apply time
+tacplus:
+  tags: [arm64, autoscale, autoscale-16]
+  token: projects/jody1-328023/secrets/gitlab-runner-control/versions/1
+concurrent: 8
+runners:
+  name: tacplus-dev control (cluster, ci, normal pool)
+  config: |
+    [[runners]]
+      executor = "kubernetes"
+      [runners.kubernetes]
+        namespace = "ci"
+        image = "{{ .Values.pinned.job }}"
+        helper_image = "{{ .Values.pinned.helper }}"
+        service_account = "ci-job"
+        automount_service_account_token = false
+        privileged = false
+        allow_privilege_escalation = false
+        poll_timeout = 600
+        cpu_request = "250m"
+        cpu_limit = "1"
+        memory_request = "512Mi"
+        memory_limit = "2Gi"
+        cpu_request_overwrite_max_allowed = "1500m"
+        cpu_limit_overwrite_max_allowed = "1500m"
+        memory_request_overwrite_max_allowed = "4Gi"
+        memory_limit_overwrite_max_allowed = "4Gi"
+        helper_cpu_request = "50m"
+        helper_cpu_limit = "500m"
+        helper_memory_request = "64Mi"
+        helper_memory_limit = "256Mi"
+        [runners.kubernetes.pod_labels]
+          "tacplus.dev/ci-runner" = "control"
+        [runners.kubernetes.node_selector]
+          "kubernetes.io/arch" = "arm64"
+        [runners.kubernetes.node_tolerations]
+          "kubernetes.io/arch=arm64" = "NoSchedule"
+        [runners.kubernetes.affinity]
+          [runners.kubernetes.affinity.node_affinity]
+            [runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution]
+              [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms]]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "spot"
+                  operator = "NotIn"
+                  values = ["true"]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "cloud.google.com/gke-spot"
+                  operator = "NotIn"
+                  values = ["true"]
+        [runners.kubernetes.pod_security_context]
+          [runners.kubernetes.pod_security_context.seccomp_profile]
+            type = "RuntimeDefault"
+        [runners.kubernetes.helper_container_security_context]
+          allow_privilege_escalation = false
+          [runners.kubernetes.helper_container_security_context.capabilities]
+            drop = ["ALL"]

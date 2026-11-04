@@ -2,11 +2,14 @@
 # Copyright (c) 2026 Jody Scott
 # SPDX-License-Identifier: Apache-2.0
 #
-# Tests ci/plan.sh, ci/apply.sh, ci/delete-deployment.sh and ci/drift.sh against a stub cluster (tests/stub/kubectl)
-# and, for the drift's issue, a stub gcloud, Cloud KMS and GitHub (tests/stub/curl):
+# Tests ci/plan.sh, ci/apply.sh (and ci/runner-tokens.sh), ci/delete-deployment.sh and ci/drift.sh against a stub
+# cluster (tests/stub/kubectl), a stub Secret Manager (tests/stub/gcloud) and, for the drift's issue, a stub Cloud KMS
+# and GitHub (tests/stub/curl):
 #
 #   - with no cluster grant, plan says "no cluster grant yet" and exits 3; on another context it refuses;
-#   - on an empty cluster, plan lists every unit as added; apply applies it; the plan after is empty;
+#   - on an empty cluster, plan lists every unit as added (ci too); apply applies it; the plan after is empty;
+#   - the runners' tokens: apply fails without them in Secret Manager, saying so; it writes each, by its version, into
+#     its runner's Secret in ci; it refuses a version that holds no runner token; it prints none;
 #   - a changed render is a change, by object, with its diff;
 #   - a removed entry: plan lists it as removed and kept; apply runs no delete and no prune, and the namespace stays;
 #   - delete-deployment refuses no name, no DELETE_CONFIRM or one that differs, a bad name, a listed deployment, an
@@ -24,8 +27,14 @@ trap 'rm -rf "$work"' EXIT
 failed=0
 fail() { echo "FAIL $*"; failed=1; }
 ok() { echo "ok   $*"; }
-export PATH=$here/tests/stub:$PATH KSTUB=$work/k
+export PATH=$here/tests/stub:$PATH KSTUB=$work/k SMSTUB=$work/sm
 mkdir -p "$KSTUB"
+# The runners' tokens in Secret Manager, at the versions gitlab-runner/runners/ names.
+for r in build control; do
+  ref=$(yq '.tacplus.token' "$here/gitlab-runner/runners/$r.yaml")
+  mkdir -p "$SMSTUB/$(dirname "${ref#projects/}" | sed 's|/secrets/|/|; s|/versions$||')"
+  printf 'glrt-stub%s_t0ken\n' "$r" > "$SMSTUB/$(echo "${ref#projects/}" | sed 's|/secrets/|/|; s|/versions/|/|')"
+done
 echo gke_jody1-328023_us-central1-a_tacplus > "$KSTUB/context"
 fixtures=$here/tests/fixtures/render
 "$here/render.sh" "$fixtures/deployments.yaml" "$work/out" >/dev/null || { echo "FAIL render.sh"; exit 1; }
@@ -57,14 +66,41 @@ if run plan env PLAN_SUMMARY="$work/summary" "$here/ci/plan.sh" "$work/out"; the
     grep -qx 'alpha: add v1.Namespace..tac-alpha' "$work/summary" &&
     grep -qx 'beta-2: add rbac.authorization.k8s.io.v1.Role.tac-beta-2.fleet-deploy' "$work/summary" &&
     grep -q '^plan: alpha: add rbac.authorization.k8s.io.v1.RoleBinding.tac-alpha.fleet-deploy$' "$work/plan" &&
-    ok "an empty cluster: every unit's objects are added, per deployment" || fail "the first plan: $(cat "$work/plan")"
+    grep -qx 'ci: add v1.Namespace..ci' "$work/summary" &&
+    grep -qx 'ci: add apps.v1.Deployment.ci.gitlab-runner-build' "$work/summary" &&
+    grep -qx 'ci: add rbac.authorization.k8s.io.v1.Role.ci.gitlab-runner-control' "$work/summary" &&
+    grep -qx 'ci: add admissionregistration.k8s.io.v1.ValidatingAdmissionPolicy..ci-pods' "$work/summary" &&
+    ok "an empty cluster: every unit's objects are added, per deployment and for ci" || fail "the first plan: $(cat "$work/plan")"
 else
   fail "the first plan failed: $(cat "$work/plan")"
 fi
 : > "$KSTUB/log"
+# Without the runners' tokens in Secret Manager (the hub's step), the apply fails, saying so.
+mv "$SMSTUB" "$work/sm.away"
+run apply "$here/ci/apply.sh" "$work/out" && fail "apply without the runners' tokens succeeded" ||
+  { grep -q 'runner-tokens: Secret Manager refused projects/jody1-328023/secrets/gitlab-runner-build/versions/1 to cluster-admin-pipeline@.*PERMISSION_DENIED.*(README, What the hub does)' "$work/apply" &&
+    ok "apply without a runner's token fails, naming its version" || fail "apply without tokens: $(cat "$work/apply")"; }
+mv "$work/sm.away" "$SMSTUB"
+: > "$KSTUB/log"
 run apply "$here/ci/apply.sh" "$work/out" && grep -q 'apply: done' "$work/apply" &&
-  [ "$(grep -c '^kubectl apply --server-side --field-manager=tacplus-cluster --force-conflicts -f ' "$KSTUB/log")" = 3 ] &&
-  ok "apply applies the three files server-side" || fail "apply: $(cat "$work/apply" "$KSTUB/log")"
+  [ "$(grep -c "^kubectl apply --server-side --field-manager=tacplus-cluster --force-conflicts -f $work/out/" "$KSTUB/log")" = 4 ] &&
+  grep -qx 'kubectl -n ci rollout status deployment/gitlab-runner-control --timeout=5m' "$KSTUB/log" &&
+  ok "apply applies the four files server-side and waits for the runners" || fail "apply: $(cat "$work/apply" "$KSTUB/log")"
+# Each runner's token, from Secret Manager by its version, in the Secret its pods mount, and printed nowhere.
+s=$KSTUB/live/v1.Secret.ci.gitlab-runner-build
+[ -f "$s" ] && [ "$(yq '.data."runner-token"' "$s" | base64 -d)" = glrt-stubbuild_t0ken ] &&
+  [ "$(yq '.metadata.annotations."tacplus.dev/runner-token"' "$s")" = projects/jody1-328023/secrets/gitlab-runner-build/versions/1 ] &&
+  [ "$(yq '.data."runner-registration-token"' "$s")" = "" ] &&
+  [ -f "$KSTUB/live/v1.Secret.ci.gitlab-runner-control" ] &&
+  grep -qx 'gcloud secrets versions access 1 --secret=gitlab-runner-control --project=jody1-328023' "$SMSTUB/log" &&
+  ok "apply writes each runner's token, by its version, into its Secret in ci" || fail "the runners' Secrets: $(cat "$s" 2>/dev/null; cat "$work/apply")"
+! grep -rq 't0ken\|Z2xydC1zdHVi' "$work/apply" "$KSTUB/log" && ok "no token in the apply's output" || fail "a token is printed: $(cat "$work/apply")"
+printf 'not-a-token\n' > "$work/sm.bad" && cp "$SMSTUB/jody1-328023/gitlab-runner-build/1" "$work/sm.good" &&
+  cp "$work/sm.bad" "$SMSTUB/jody1-328023/gitlab-runner-build/1"
+run apply "$here/ci/apply.sh" "$work/out" && fail "apply with a token that is not one succeeded" ||
+  { grep -q 'versions/1 is not a runner authentication token' "$work/apply" && ! grep -q not-a-token "$work/apply" &&
+    ok "a version that holds no runner token is refused, unprinted" || fail "a bad token: $(cat "$work/apply")"; }
+cp "$work/sm.good" "$SMSTUB/jody1-328023/gitlab-runner-build/1"
 run plan env PLAN_SUMMARY="$work/summary" "$here/ci/plan.sh" "$work/out" && [ ! -s "$work/summary" ] &&
   grep -q 'plan: no difference' "$work/plan" && ok "after the apply, plan finds no difference" || fail "the plan after the apply: $(cat "$work/plan")"
 
@@ -112,7 +148,7 @@ echo '{"deploymentproxy.tacplus.dev/deployment": "alpha"}' > "$KSTUB/ns/tac-alph
 : > "$KSTUB/log"
 if run delete env DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2 "$here/ci/delete-deployment.sh" "$fixtures/removed.yaml"; then
   left=$(ls "$KSTUB/ns" | tr '\n' ' ')
-  [ "$left" = "deploymentproxy kube-system letsencrypt tac-alpha tac-alpha-b7654321 tac-other " ] &&
+  [ "$left" = "ci deploymentproxy kube-system letsencrypt tac-alpha tac-alpha-b7654321 tac-other " ] &&
     grep -qx 'kubectl delete namespace tac-beta-2 --wait=true --timeout=15m' "$KSTUB/log" &&
     grep -qx 'kubectl delete namespace tac-beta-2-a1234567 --wait=true --timeout=15m' "$KSTUB/log" &&
     ok "delete-deployment deletes tac-beta-2 and its tenant namespace, and nothing else" ||

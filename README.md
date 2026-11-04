@@ -15,6 +15,9 @@ by Jody 2026-11-02).
   - deploymentproxy's per-deployment Role;
   - the fleet deploy account's namespace-scoped Role and RoleBinding;
   - the fleet `operator` service account's binding.
+- **CI in the cluster** (the namespace `ci`): GitLab Runner with the Kubernetes executor, one runner for builds
+  (spot pool) and one for control work (normal pool), registered to the tacplus-dev group ([CI in the
+  cluster](#ci-in-the-cluster)).
 - **Cluster-scoped objects a fleet's chart needs** (CRDs, ClusterRoles), and only from here. None yet: the render
   has no place for them until a fleet needs one (PROPOSALS.md).
 
@@ -33,9 +36,13 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `deploymentproxy/pin.yaml` | deploymentproxy's release: line `0.2`, tag, commit, image by digest, the manifests it applies. |
 | `deploymentproxy/release/` | Those manifests as fetched (`deploymentproxy/fetch.sh`), with their `SHA256SUMS`. Never edited. |
 | `deploymentproxy/bump.sh` | A bump to a release of the line, from its tag: the pin, the release, the render fixture. |
-| `render.sh` | The render: `out/00-deploymentproxy.yaml` and `out/10-deployment-<name>.yaml` for each entry. |
+| `gitlab-runner/pin.yaml` | GitLab Runner's chart (version, archive digest) and its images, the runner's, the helper's and the jobs' default, by digest. |
+| `gitlab-runner/release/` | The chart as fetched (`gitlab-runner/fetch.sh`), with its `SHA256SUMS`. Never edited. |
+| `gitlab-runner/values.yaml` | The chart's values every runner shares: the runner manager's pod, its Role in `ci`, its placement. |
+| `gitlab-runner/runners/<runner>.yaml` | One runner each (`build`, `control`): its tags, its token's Secret Manager version, its jobs' `config.toml`. |
+| `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
-| `ci/*.sh` | The jobs' scripts: `policy`, `validate`, `security`, `plan`, `apply`, `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools). |
+| `ci/*.sh` | The jobs' scripts: `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools). |
 | `security-exceptions.yaml` | The security findings accepted, each until its expiry (Security checks, below). |
 | `tests/` | The tests (`ci/checks.sh` runs them all), their fixtures and stubs. |
 
@@ -53,11 +60,11 @@ that commit (it is public: no credential).
 
 | Job | When | What |
 |---|---|---|
-| `render` | every push and merge request | Builds or fetches the pinned tools (`ci/tools.sh`: yq, kubeconform, kubectl, gke-gcloud-auth-plugin, gitleaks), checks the project's `.gitlab-ci.yml` is this repository's with only `CLUSTER_COMMIT` set (`ci/pin.sh --check`), renders into `out/`. |
-| `validate` | every push and merge request | kubeconform and `ci/policy.sh` on `out/`, `deploymentproxy/release` against its release (`fetch.sh --check`), the tests. |
+| `render` | every push and merge request | Builds or fetches the pinned tools (`ci/tools.sh`: yq, kubeconform, helm, kubectl, gke-gcloud-auth-plugin, gitleaks), checks the project's `.gitlab-ci.yml` is this repository's with only `CLUSTER_COMMIT` set (`ci/pin.sh --check`), renders into `out/`. |
+| `validate` | every push and merge request | kubeconform and `ci/policy.sh` on `out/`, `deploymentproxy/release` against its release and `gitlab-runner/release` against its chart and images (each `fetch.sh --check`), the tests. |
 | `security` | every pipeline: every push and merge request, and the nightly schedule | The security checks (below). Fails the pipeline on a secret or an unaccepted HIGH or CRITICAL finding with a fix; `plan`, so `apply`, waits for it. Its report is the artifact `src/security/`. |
-| `plan` | main (push, web, API) | `kubectl diff` against `tacplus`, then per unit (deploymentproxy, each deployment) what is added, changed or removed; a deployment whose entry is gone is listed as kept. Saves the render it diffed and its summary (`plan.txt`). |
-| `apply` | main, **automatically** once `plan` succeeds, protected environment `cluster`; not in a deletion pipeline | Applies the render `plan` saved: plans again, then applies server-side. Never deletes or prunes. A failed apply fails the pipeline. |
+| `plan` | main (push, web, API) | `kubectl diff` against `tacplus`, then per unit (deploymentproxy, each deployment, `ci`) what is added, changed or removed; a deployment whose entry is gone is listed as kept. Saves the render it diffed and its summary (`plan.txt`). |
+| `apply` | main, **automatically** once `plan` succeeds, protected environment `cluster`; not in a deletion pipeline | Applies the render `plan` saved: plans again, then applies server-side, then writes the runners' tokens from Secret Manager (`ci/runner-tokens.sh`), then waits for deploymentproxy and the runners. Never deletes or prunes. A failed apply fails the pipeline. |
 | `DELETE deployment: removes tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)` | a deletion pipeline only (below), **manual**, protected environment `cluster` (Jody only) | Deletes the deployment `DELETE_DEPLOYMENT`: `tac-<name>` and its tenant namespaces (`ci/delete-deployment.sh`). |
 | `drift` | the nightly schedule | `plan`; if anything differs, an issue here (one open at a time; a new drift is a comment). Never applies. |
 
@@ -149,6 +156,17 @@ Before the first pipeline:
    this project's federated principal allowed to sign with its KMS key `tacplus-reader` (`roles/cloudkms.signer`),
    or `TACPLUS_READER_SA` set to a service account that may. Until then `drift` fails, saying which refused.
 6. **The schedule:** nightly, on main.
+7. **The in-cluster runners** ([CI in the cluster](#ci-in-the-cluster)): each runner of `gitlab-runner/runners/`
+   created in GitLab as a **group runner of tacplus-dev** with its `tacplus.tags` and "run untagged jobs" off, its
+   authentication token (`glrt-...`) stored as the version of the Secret Manager secret its `tacplus.token` names
+   (`gitlab-runner-build` and `gitlab-runner-control` in `jody1-328023`, version 1), and `cluster-admin-pipeline`
+   allowed to read those two secrets (`roles/secretmanager.secretAccessor` on each). A new token is a new version
+   and a pull request moving `tacplus.token` to it. Until both are readable, `apply` fails after applying the rest,
+   saying `runner-tokens: Secret Manager refused <version>`.
+8. **The pools:** the spot pool labelled `spot=true` and tainted `spot=true:NoSchedule` (tacplus-dev/cloud#7's
+   answer; the pool made by hand in `jody1-328023` until the cloud pipeline adopts it), the normal pool neither;
+   Workload Identity on the cluster and its pools (`GKE_METADATA`), and NetworkPolicy enforced (Dataplane V2, as
+   tacplus-dev/cloud's `dev` cluster has), for the `ci` namespace's NetworkPolicy to hold.
 
 Then a pipeline on main: `render`, `validate`, `security`, `plan` and `apply` green.
 
@@ -168,6 +186,60 @@ ci/checks.sh                                # the tests
 ci/tools.sh security && ci/security.sh . ghcr.io/tacplus-dev/tacplus/build:2.5 bin/*   # the security checks
 ```
 
+## CI in the cluster
+
+The tacplus-dev group's CI jobs run in the cluster, each as a pod of GitLab Runner's Kubernetes executor, in the
+namespace `ci` (Jody, `tacplus-dev/roadmap:decisions/only-vms-are-k8s-nodes-2026-11-04.md` and its addendum; #6).
+This pipeline applies it like the rest, from `out/20-ci.yaml`: GitLab's own chart (`gitlab-runner/release`, chart
+0.94.2, GitLab Runner 19.5.2), rendered by `helm template` with `gitlab-runner/values.yaml` and one file per runner.
+The chart is pinned by the SHA-256 of its archive, and the runner, helper and default job images by digest
+(`gitlab-runner/pin.yaml`); nothing resolves a moving tag or "latest".
+
+| Runner | Tags | Its jobs' pods | Default requests / limits | Ceiling a job may raise them to |
+|---|---|---|---|---|
+| `build` | `arm64`, `build` | the spot pool only: node selector `spot=true`, toleration `spot=true:NoSchedule` | CPU 1 / 3, memory 4Gi / 8Gi | CPU 3500m, memory 12Gi (a c4a-standard-4) |
+| `control` | `arm64`, `autoscale`, `autoscale-16` (the looper's kicker, reports, managers, scans) | the normal pool: no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 250m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
+
+A job raises its own with GitLab's variables (`KUBERNETES_CPU_REQUEST`, `KUBERNETES_MEMORY_LIMIT` and the rest) up
+to the ceiling; the helper container has its own small defaults. It may override nothing else: not its node
+selector, tolerations, namespace, service account or pod annotations (the policy refuses any
+`*_overwrite_allowed`). The runner managers (one Deployment per runner, in `ci`) run on the normal pool too. A spot
+node from 0 takes minutes, so a build job waits up to 15 minutes for its pod (`poll_timeout`); preemption is
+handled the GitLab way, with `retry:` in the pipeline files (`runner_system_failure`, `stuck_or_timeout_failure`).
+
+- **No privileged pod, no host path, no Docker socket.** Image builds use rootless BuildKit in the build job's own
+  container (tacplus-dev/tacplus#315): every container of a build pod runs as uid 1000, and the build container
+  alone is `Unconfined` for seccomp and AppArmor, as rootless BuildKit needs (GitLab's docs: "Set seccomp and
+  AppArmor profiles"), with no capability added. Control jobs run with seccomp `RuntimeDefault` and no privilege
+  escalation. Besides the policy on the render, the cluster itself refuses any pod in `ci` that is privileged, has
+  a host path, the host's network, PID or IPC, a host port or an added capability (the admission policy
+  `ci-pods`), whoever creates it.
+- **Namespace-scoped RBAC.** Each runner's service account holds a Role in `ci` only, with what the Kubernetes
+  executor needs (pods, their exec, attach and logs, secrets, services, service accounts read, events read), every
+  verb named. No ClusterRole, no ClusterRoleBinding.
+- **No credentials for jobs.** Job pods run as `ci-job`, which has no role and no token in the pod. The
+  NetworkPolicy `ci-no-metadata-server` keeps every pod in `ci` off the metadata server (169.254.169.254, and
+  169.254.169.252 under Workload Identity), so no pod gets the node's service account or a workload identity. A job
+  that needs Google Cloud federates its own GitLab id_token (WIF), as today.
+- **The tokens.** Each runner's authentication token is a Secret Manager version named in its file
+  (`tacplus.token`, `projects/<project>/secrets/<secret>/versions/<n>`, never "latest"), and on its pods as an
+  annotation. At apply, `ci/runner-tokens.sh` reads that version as `cluster-admin-pipeline` and writes it into the
+  Secret its pods mount (`gitlab-runner-<runner>` in `ci`); a new version restarts the runner. The token is never in
+  this repository, in a GitLab variable or in the job's log.
+
+`ci/policy.sh` checks all of it on the render (each runner's `config.toml` included): the pinned images, the
+namespace-scoped RBAC, the absence of privileged pods, host paths and the Docker socket, and that build pods land
+only on the tainted spot pool and other jobs never; `tests/policy_test.sh` breaks each rule and
+`tests/render_test.sh` checks the render.
+
+**A bump** of the chart: its version, url and digest and the three images in `gitlab-runner/pin.yaml` together, then
+`gitlab-runner/fetch.sh` (which refuses an archive or an image that is not the pinned digest, and a chart whose
+appVersion is not the images') and `UPDATE=1 tests/render_test.sh`; review the diff of `release/` and the fixture.
+
+**Moving jobs over** is tacplus-dev/looper's (the switch issue): a job tagged `arm64, autoscale` or `arm64, build`
+runs here once these runners are online and the VM runners holding the same tags are paused. The spot pool's size
+waits on tacplus-dev/cloud#7; this uses whatever pool exists.
+
 ## Security checks
 
 tacplus-dev/looper#49's deterministic floor, as a job of this pipeline (tacplus-dev/build's checks never reach it:
@@ -177,7 +249,7 @@ job (`ci/security.sh`) runs in every pipeline, so on every push and merge reques
 | Tool | On |
 |---|---|
 | OSV-Scanner | the tree's dependency manifests and lock files (none today: shell and YAML) |
-| `govulncheck -mode=binary` | every pinned tool binary the pipeline runs, `bin/`: yq, kubeconform, kubectl, gke-gcloud-auth-plugin, gitleaks, osv-scanner, govulncheck, trivy |
+| `govulncheck -mode=binary` | every pinned tool binary the pipeline runs, `bin/`: yq, kubeconform, helm, kubectl, gke-gcloud-auth-plugin, gitleaks, osv-scanner, govulncheck, trivy |
 | gitleaks | the tree, and every commit of its history (the job fetches it whole) |
 | Trivy | the CI image the jobs run in (`CI_JOB_IMAGE`, `ghcr.io/tacplus-dev/tacplus/build:2.5`), for the runner's platform |
 

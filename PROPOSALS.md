@@ -46,6 +46,25 @@ the looper then marks it `promoted` or `declined` here with the date.
   (2025-12), whose kubectl dispatcher and gke-gcloud-auth-plugin are built with Go 1.22 to 1.24 (61 to 82
   govulncheck findings each). This pipeline no longer runs them (#5 pins its own), but other jobs in the image may:
   tacplus-dev/tacplus's to decide.
+- **The in-cluster runners registered by tacplus-dev/cloud's gitlab stack** (2026-11-04, #6): the stack already
+  registers the VM pools' runners and writes their tokens to Secret Manager (`modules/gitlab`). Registering
+  `build` and `control` there too (group runners of tacplus-dev, the tags of `gitlab-runner/runners/`, run untagged
+  off) would make the hub's step 7 a plan, and a new token a new version the runner files then pin.
+- **A bump script for GitLab Runner** (2026-11-04, #6): a bump is five values in `gitlab-runner/pin.yaml` changed
+  together, then `fetch.sh` and the fixture. As `deploymentproxy/bump.sh` does from a tag (#4), a
+  `gitlab-runner/bump.sh <chart version>` could resolve the archive's digest from charts.gitlab.io's index and the
+  images' digests from the chart's appVersion, then fetch and regenerate the fixture.
+- **A narrower profile than Unconfined for builds** (2026-11-04, #6): rootless BuildKit's build container is
+  Unconfined for seccomp and AppArmor. Once tacplus-dev/tacplus#315 settles the build image, a `Localhost` seccomp
+  profile allowing only what rootlesskit needs (unshare, mount, the user namespace calls) would replace it, or user
+  namespaces (`hostUsers: false`) where GKE supports them for these pods.
+- **The admission policy tested against an API server in the tests** (2026-11-04, #6): `ci-pods` was checked by
+  hand against envtest's kube-apiserver 1.35 (each refusal, and the build and manager pods admitted); the tests
+  check its render only. A test running envtest's kube-apiserver and etcd (pinned like the other tools) would keep
+  its CEL honest on every change.
+- **Runner managers apart from their jobs** (2026-11-04, #6): the managers and their token Secrets share `ci` with
+  the job pods. Job pods hold no Kubernetes token, so they cannot read those Secrets, but the chart's
+  `runners.jobNamespace` would put the jobs in a namespace of their own (`ci-jobs`), with the managers' Role there.
 
 ## Promoted / declined
 - **A security report of the pipeline's own** (2026-11-04, nightly scan): no job checks the Go tools `ci/tools.sh`
