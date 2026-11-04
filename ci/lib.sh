@@ -29,11 +29,14 @@ ci_gcp() {
 }
 
 # ci_kube: kubectl on the cluster CLUSTER (tacplus) in ZONE, as that account. Every job calls it in an && list,
-# where errexit is off, so it returns on its own failures, saying why: no credentials for the cluster (the hub has
-# not granted the account yet), or no current context.
+# where errexit is off, so it returns on its own failures, saying why: no pinned kubectl or GKE auth plugin on the
+# PATH (ci/tools.sh, in bin/), no credentials for the cluster (the hub has not granted the account yet), or no
+# current context.
 ci_kube() {
-  local cluster=${CLUSTER:-tacplus} zone=${ZONE:-us-central1-a} context
-  command -v kubectl >/dev/null || gcloud components install kubectl gke-gcloud-auth-plugin --quiet >/dev/null 2>&1 || true
+  local cluster=${CLUSTER:-tacplus} zone=${ZONE:-us-central1-a} context t
+  for t in kubectl gke-gcloud-auth-plugin; do
+    command -v "$t" >/dev/null || { echo "kube: no $t on the PATH: ci/tools.sh pins it in bin/" >&2; return 1; }
+  done
   export KUBECONFIG=$ci_tmp/kubeconfig USE_GKE_GCLOUD_AUTH_PLUGIN=True
   gcloud container clusters get-credentials "$cluster" --zone "$zone" \
       --project "${GCP_PROJECT:-jody1-328023}" >/dev/null 2>"$ci_tmp/kube-err" ||

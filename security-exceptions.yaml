@@ -1,0 +1,60 @@
+# Copyright (c) 2026 Jody Scott
+# SPDX-License-Identifier: Apache-2.0
+#
+# The known vulnerabilities this repository accepts, each until its expiry, in the form looper-scan reads
+# (tacplus-dev/looper#49: exactly id, reason, decided_by and expires, YYYY-MM-DD). The security job
+# (ci/security.sh) enforces it: an expired entry fails the pipeline. Found by `govulncheck -mode=binary` (symbols
+# present) in the pinned tools of ci/tools.sh, each at its latest upstream release (kubectl: the latest of the
+# cluster's minor), none with the fixed version; everything else the first run found is fixed there (the Go tools
+# built with the pinned toolchain, kubectl and the GKE auth plugin pinned rather than the CI image's). Track and
+# bump: move each pin to the first release with the fix and remove its entries. The binaries, by pin:
+#
+#   kubectl v1.34.13                GO-2026-5158 6603 6610 6611 6612 6617 6629 6860 6866
+#   gke-gcloud-auth-plugin 0.5.21   GO-2026-6860 6866
+#   trivy 0.76.1                    GO-2026-5932 6860 6866
+#   gitleaks v8.30.1                GO-2025-3922
+exceptions:
+  - id: GO-2025-3922
+    reason: "ulikunitz/xz memory leak on corrupted LZMA archives (gitleaks v8.30.1, which pins xz v0.5.12): gitleaks reads only this repository's own tree and history, and decodes no archive (its archive depth is 0 by default). Fixed in xz v0.5.15; v8.30.1 is gitleaks' latest release."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04
+  - id: GO-2026-5158
+    reason: "otel baggage header length (kubectl v1.34.13, otel v1.41.0): kubectl takes no baggage header from anyone but the cluster's API server, over TLS. Fixed in otel v1.42.0; no kubectl 1.34 release with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04
+  - id: GO-2026-5932
+    reason: "x/crypto/openpgp, unmaintained (trivy 0.76.1, x/crypto v0.57.0): the job's trivy reads one image, the CI image, and no OpenPGP key or message from outside. No trivy release past it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04
+  - id: GO-2026-6603
+    reason: "x/net HTTP/2 server, Trailer headers (kubectl v1.34.13, x/net v0.56.0): kubectl runs no HTTP/2 server here (no kubectl proxy); it is a client of the cluster's API server only. Fixed in x/net v0.60.0; no kubectl 1.34 release with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04
+  - id: GO-2026-6610
+    reason: "x/net HTTP/2 transport, malformed framing headers (kubectl v1.34.13, x/net v0.56.0): kubectl's only peer is the cluster's API server, over TLS. Fixed in x/net v0.60.0; no kubectl 1.34 release with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04
+  - id: GO-2026-6611
+    reason: "x/net HTTP/2 transport, CPU on repeated window changes (kubectl v1.34.13, x/net v0.56.0): kubectl's only peer is the cluster's API server, over TLS. Fixed in x/net v0.60.0; no kubectl 1.34 release with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04
+  - id: GO-2026-6612
+    reason: "x/net HTTP/2 server streams, flow control refund (kubectl v1.34.13, x/net v0.56.0): kubectl runs no HTTP/2 server here. Fixed in x/net v0.60.0; no kubectl 1.34 release with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04
+  - id: GO-2026-6617
+    reason: "x/net HTTP/2 server, HPACK encoder race (kubectl v1.34.13, x/net v0.56.0): kubectl runs no HTTP/2 server here. Fixed in x/net v0.60.0; no kubectl 1.34 release with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04
+  - id: GO-2026-6629
+    reason: "x/text precis panic on crafted input (kubectl v1.34.13, x/text v0.39.0): kubectl's input is this repository's render and the cluster's API server. Fixed in x/text v0.41.0; no kubectl 1.34 release with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04
+  - id: GO-2026-6860
+    reason: "x/net/html quadratic text coalescing (kubectl v1.34.13 x/net v0.56.0, gke-gcloud-auth-plugin 0.5.21 v0.61.0, trivy 0.76.1 v0.60.0): none of them parses HTML from outside here; their peers are the cluster, Google's token endpoints and the image registries. Fixed in x/net v0.62.0; no release of the three with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04
+  - id: GO-2026-6866
+    reason: "x/net/html raw text rendering (kubectl v1.34.13, gke-gcloud-auth-plugin 0.5.21, trivy 0.76.1): none of them renders HTML here. Fixed in x/net v0.62.0; no release of the three with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    expires: 2026-12-04

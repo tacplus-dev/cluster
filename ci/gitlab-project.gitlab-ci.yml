@@ -9,6 +9,8 @@
 #
 #   render             the tools (ci/tools.sh), the copy checked (ci/pin.sh --check), ./render.sh into out/
 #   validate           kubeconform and ci/policy.sh on out/, deploymentproxy's release checked, the tests (ci/checks.sh)
+#   security           OSV-Scanner on the tree, govulncheck on the pinned tools, gitleaks on the tree and its history,
+#                      Trivy on the CI image, security-exceptions.yaml enforced (ci/security.sh); plan waits for it
 #   plan               main: kubectl diff against the cluster tacplus, and what each deployment gains or loses
 #   apply              main, automatically once plan succeeds (main is not production: nothing waits for a person),
 #                      the render plan saved, in the protected environment cluster: never deletes; not in a deletion
@@ -17,13 +19,13 @@
 #                      deployment DELETE_DEPLOYMENT
 #   drift              the nightly schedule: plan, and an issue on github.com/tacplus-dev/cluster if it differs; never applies
 #
-# render and validate run on every push and merge request. The cluster jobs run on main only, where Workload
-# Identity Federation admits this project (its provider's condition: protected main) as cluster-admin-pipeline,
-# the only holder of cluster-admin on tacplus. No key file and no GitHub token is stored: the id_token is exchanged
-# for each job. The only pipeline variables are a deletion pipeline's: DELETE_DEPLOYMENT and DELETE_CONFIRM, both
-# the deployment's name, set when Jody runs the pipeline on main from the web form or the API (README, Deleting a
-# deployment); no other pipeline has the deletion job. Every job runs on the project's own runner (tag
-# `cluster`: a VM used once, with no Google account of its own), never on the agents' runner.
+# render, validate and security run on every push and merge request, and nightly. The cluster jobs run on main only,
+# where Workload Identity Federation admits this project (its provider's condition: protected main) as
+# cluster-admin-pipeline, the only holder of cluster-admin on tacplus. No key file and no GitHub token is stored:
+# the id_token is exchanged for each job. The only pipeline variables are a deletion pipeline's: DELETE_DEPLOYMENT
+# and DELETE_CONFIRM, both the deployment's name, set when Jody runs the pipeline on main from the web form or the
+# API (README, Deleting a deployment); no other pipeline has the deletion job. Every job runs on the project's own
+# runner (tag `cluster`: a VM used once, with no Google account of its own), never on the agents' runner.
 stages: [render, validate, plan, apply]
 
 variables:
@@ -84,10 +86,28 @@ validate:
   script:
     - cd src && export PATH=$PWD/bin:$PATH && ci/validate.sh out && ci/checks.sh
 
+# The security checks (ci/security.sh): in every pipeline, so on every push and merge request and on the nightly
+# schedule. They fail on any secret, and on a HIGH or CRITICAL finding with a fix that no unexpired entry of
+# security-exceptions.yaml accepts; plan, and so apply, waits for them. Their JSON report is the job's artifact,
+# kept whether it passes or fails. The history is fetched in full for gitleaks; no credential is in this job.
+security:
+  stage: validate
+  needs: []
+  script:
+    - |
+      cd src
+      git fetch -q --unshallow https://github.com/tacplus-dev/cluster.git "$CLUSTER_COMMIT"
+      ci/tools.sh security
+      PATH=$PWD/bin:$PATH ci/security.sh . "$CI_JOB_IMAGE" bin/*
+  artifacts:
+    when: always
+    paths: [src/security/]
+    expire_in: 30 days
+
 plan:
   extends: .cluster
   stage: plan
-  needs: [render, validate]
+  needs: [render, validate, { job: security, artifacts: false }]
   rules:
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(push|web|api)$/
   script:

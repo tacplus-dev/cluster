@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Jody Scott
+# SPDX-License-Identifier: Apache-2.0
+#
+# A stub govulncheck for the tests (`-mode=binary -format json BINARY`): prints SSTUB/govulncheck-<BINARY's name>.json,
+# or a report of no finding; SSTUB/govulncheck-fails makes it fail as on a binary it cannot read.
+set -uo pipefail
+s=${SSTUB:?SSTUB is not set}
+for b; do :; done
+[ -e "$s/govulncheck-fails" ] && { echo "govulncheck: $b: not a Go binary" >&2; exit 1; }
+if [ -f "$s/govulncheck-$(basename "$b").json" ]; then cat "$s/govulncheck-$(basename "$b").json"
+else echo '{"config":{"protocol_version":"v1.0.0","scanner_name":"govulncheck","db":"https://vuln.go.dev"}}'; fi

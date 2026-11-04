@@ -29,6 +29,25 @@ the looper then marks it `promoted` or `declined` here with the date.
   deletion job shares, so that account could play a deletion job too. Only a deletion pipeline has one, and only
   the Owner role may set its variables, but an environment of its own (`cluster-delete`, deployable by Jody alone)
   would keep deleting Jody's by GitLab's protection, not only by the variables' role.
+- **Bump the accepted tools when their fixes ship** (2026-11-04, #5): `security-exceptions.yaml` accepts 11
+  govulncheck findings until 2026-12-04, each waiting on an upstream release (kubectl 1.34 with x/net v0.60.0+,
+  x/text v0.41.0+ and otel v1.42.0+; gke-gcloud-auth-plugin and trivy with x/net v0.62.0; trivy past x/crypto
+  v0.58.0; gitleaks with xz v0.5.15). Before then, move each pin in `ci/tools.sh` and drop its entries; the job's
+  summary lists the entries no finding needs. A nightly that files an issue a week before an expiry (as `drift`
+  does) would make that a reminder rather than a red pipeline.
+- **GKE credentials without the auth plugin** (2026-11-04, #5): kubectl reaches GKE through
+  gke-gcloud-auth-plugin, a binary of its own to pin and scan (the CI image's, Cloud SDK 549.0.0's, built with
+  go1.23.1, had 69 standard-library findings: #5 pins 0.5.21 instead). A kubeconfig written by `ci_kube` with the
+  cluster's endpoint and CA (`gcloud container clusters describe`) and the job's access token would drop the binary.
+- **Trivy on deploymentproxy's pinned image** (2026-11-04, #5): the security job scans the CI image; the image this
+  pipeline deploys (`deploymentproxy/pin.yaml`, by digest) is deploymentproxy's build's to scan, but a Trivy run on
+  the digest here would catch a finding published after its release.
+- **The CI image's gcloud SDK** (2026-11-04, #5): `ghcr.io/tacplus-dev/tacplus/build:2.5` carries Cloud SDK 549.0.0
+  (2025-12), whose kubectl dispatcher and gke-gcloud-auth-plugin are built with Go 1.22 to 1.24 (61 to 82
+  govulncheck findings each). This pipeline no longer runs them (#5 pins its own), but other jobs in the image may:
+  tacplus-dev/tacplus's to decide.
+
+## Promoted / declined
 - **A security report of the pipeline's own** (2026-11-04, nightly scan): no job checks the Go tools `ci/tools.sh`
   builds (yq v4.54.1, kubeconform v0.7.0) for known vulnerabilities, and the README has no "Security checks"
   section, so the nightly scan has no build report to read and runs the auditor itself. Tonight's
@@ -36,5 +55,4 @@ the looper then marks it `promoted` or `declined` here with the date.
   required modules, uncalled; kubeconform: 2 in required modules, uncalled). A step in `validate` running
   govulncheck on `bin/`, and a README section saying where its report is, would make that a gate. Links:
   tacplus-dev/looper#49 (the scans), tacplus-dev/roadmap:items/tacplus-security-sweep.md (tacplus's equivalent).
-
-## Promoted / declined
+  **Promoted** 2026-11-04: the `security` job (#5).

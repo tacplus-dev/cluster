@@ -3,14 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Tests ci/gitlab-project.gitlab-ci.yml and ci/pin.sh: the file parses; every job runs on the project's runner (tag
-# cluster). The pipelines GitLab makes of it, by its workflow and its jobs' rules (pipeline, below): render and
-# validate in every pipeline, so every push and merge request; plan, apply and drift on main only, never from a merge
-# request; apply automatic on main once plan succeeds (not manual: main is not production), from the render the plan
+# cluster). The pipelines GitLab makes of it, by its workflow and its jobs' rules (pipeline, below): render,
+# validate and security in every pipeline, so every push and merge request and the schedule; plan, apply and drift
+# on main only, never from a merge request; apply automatic on main once plan succeeds (not manual: main is not production), from the render the plan
 # saved; a push, a merge request, a schedule or a plain run has no deletion job; a deletion pipeline (web or API, on
 # main, DELETE_DEPLOYMENT set and DELETE_CONFIRM equal to it) has it, manual, and no apply; the cluster jobs have
 # their id_token; apply and the deletion job are in the protected environment cluster, and run what they say; a
 # failed apply fails the pipeline; drift runs only on a schedule and never applies. ci/pin.sh sets CLUSTER_COMMIT and nothing else, --check
-# accepts its output and refuses any other change, and the jobs refuse an empty CLUSTER_COMMIT. Needs bash and yq.
+# accepts its output and refuses any other change, and the jobs refuse an empty CLUSTER_COMMIT. The security job has
+# no id_token, fetches the history, runs ci/security.sh, keeps its report pass or fail, and plan waits for it.
+# Needs bash and yq.
 #
 #   tests/ci_test.sh
 set -uo pipefail
@@ -26,7 +28,7 @@ q() { yq -r "$1" "$ci"; }
 yq -e '.' "$ci" >/dev/null 2>&1 && ok "the CI file parses" || { echo "FAIL the CI file does not parse"; exit 1; }
 del='DELETE deployment: removes tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)'
 mapfile -t jobs < <(q 'keys | .[] | select(test("^(stages|variables|workflow|default)$|^\\.") | not)')
-[ "$(printf '%s,' "${jobs[@]}")" = "render,validate,plan,apply,$del,drift," ] && ok "the jobs: ${jobs[*]}" || fail "the jobs are: ${jobs[*]}"
+[ "$(printf '%s,' "${jobs[@]}")" = "render,validate,security,plan,apply,$del,drift," ] && ok "the jobs: ${jobs[*]}" || fail "the jobs are: ${jobs[*]}"
 stages=" $(q '.stages | join(" ")') "
 for j in "${jobs[@]}"; do
   [[ $stages == *" $(q ".[\"$j\"].stage") "* ]] || fail "$j: its stage $(q ".[\"$j\"].stage") is not in stages"
@@ -82,24 +84,25 @@ pipeline() {
 expect() { # expect WHAT GOT WANT
   [ "$2" = "$3" ] && ok "$1: ${3//"$del"/the deletion job}" || fail "$1: the jobs are [$2], not [$3]"
 }
-normal="render:on_success,validate:on_success,plan:on_success,apply:on_success,"
-deletion="render:on_success,validate:on_success,plan:on_success,$del:manual,"
+checks="render:on_success,validate:on_success,security:on_success,"
+normal="${checks}plan:on_success,apply:on_success,"
+deletion="${checks}plan:on_success,$del:manual,"
 expect "a push to main" "$(pipeline push main)" "$normal"
 expect "a web pipeline on main" "$(pipeline web main)" "$normal"
 expect "an API pipeline on main" "$(pipeline api main)" "$normal"
-expect "the schedule" "$(pipeline schedule main)" "render:on_success,validate:on_success,drift:on_success,"
-expect "a merge request" "$(pipeline merge_request_event "")" "render:on_success,validate:on_success,"
-expect "a push to another branch" "$(pipeline push topic)" "render:on_success,validate:on_success,"
+expect "the schedule" "$(pipeline schedule main)" "${checks}drift:on_success,"
+expect "a merge request" "$(pipeline merge_request_event "")" "$checks"
+expect "a push to another branch" "$(pipeline push topic)" "$checks"
 expect "a deletion pipeline (web)" "$(pipeline web main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "$deletion"
 expect "a deletion pipeline (API)" "$(pipeline api main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "$deletion"
-nodel="render:on_success,validate:on_success,plan:on_success,"
+nodel="${checks}plan:on_success,"
 expect "DELETE_DEPLOYMENT without DELETE_CONFIRM" "$(pipeline web main DELETE_DEPLOYMENT=beta-2)" "$nodel"
 expect "a DELETE_CONFIRM that differs" "$(pipeline web main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta)" "$nodel"
 expect "DELETE_CONFIRM alone" "$(pipeline web main DELETE_CONFIRM=beta-2)" "$normal"
 expect "both on a push" "$(pipeline push main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "$nodel"
-expect "both on the schedule" "$(pipeline schedule main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "render:on_success,validate:on_success,drift:on_success,"
-expect "both on another branch" "$(pipeline web topic DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "render:on_success,validate:on_success,"
-expect "both on a merge request" "$(pipeline merge_request_event "" DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "render:on_success,validate:on_success,"
+expect "both on the schedule" "$(pipeline schedule main DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "${checks}drift:on_success,"
+expect "both on another branch" "$(pipeline web topic DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "$checks"
+expect "both on a merge request" "$(pipeline merge_request_event "" DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2)" "$checks"
 # The same of the copy ci/pin.sh makes, the file the GitLab project runs.
 c=0123456789abcdef0123456789abcdef01234567
 ci_src=$ci ci=$work/rendered
@@ -128,9 +131,21 @@ done
   ok "plan: saves the render it diffed and its summary" || fail "plan saves: $(q '.plan.artifacts'), runs $(q '.plan.script')"
 [[ $(q ".[\"$del\"].script[0]") == *"ci/delete-deployment.sh deployments.yaml" ]] && ok "the deletion job: ci/delete-deployment.sh" ||
   fail "the deletion job runs: $(q ".[\"$del\"].script")"
-for j in render validate plan drift; do
+for j in render validate security plan drift; do
   [ "$(q ".[\"$j\"].environment // \"none\"")" = none ] || fail "$j: in an environment"
 done
+# The security job: on its own (no render, no id_token), the whole history fetched for gitleaks, the pinned
+# scanners, ci/security.sh on the tree, every tool in bin/ and the job's own image; its report kept, pass or fail;
+# plan waits for it, and so apply.
+[ "$(q '.security.needs | length')" = 0 ] && [ "$(q '.security.extends // "none"')" = none ] && [ "$(q '.security.id_tokens // "none"')" = none ] &&
+  ok "security: needs no other job, and has no id_token" || fail "security: $(q '.security')"
+sec=$(q '.security.script[0]')
+[[ $sec == *'git fetch -q --unshallow https://github.com/tacplus-dev/cluster.git "$CLUSTER_COMMIT"'* && $sec == *"ci/tools.sh security"* &&
+   $sec == *'ci/security.sh . "$CI_JOB_IMAGE" bin/*'* ]] && ok "security: the history, the pinned scanners, ci/security.sh" || fail "security runs: $sec"
+[ "$(q '.security.artifacts.when')" = always ] && [ "$(q '.security.artifacts.paths | join(",")')" = src/security/ ] &&
+  ok "security: its report is kept, pass or fail" || fail "security's artifacts: $(q '.security.artifacts')"
+[ "$(q '.security.allow_failure // false')" = false ] && [ "$(q '.plan.needs[] | select(.job == "security") | .job')" = security ] &&
+  ok "security: its failure fails the pipeline, and plan waits for it" || fail "security: allow_failure $(q '.security.allow_failure'), plan needs $(q '.plan.needs')"
 [[ $(q '.drift.script[0]') == *"ci/drift.sh out" ]] && ! q '.drift.script[]' | grep -qE 'apply|delete' &&
   ok "drift: ci/drift.sh, never apply or delete" || fail "drift: $(q '.drift')"
 

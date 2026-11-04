@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Jody Scott
+# SPDX-License-Identifier: Apache-2.0
+#
+# A stub osv-scanner for the tests (`scan source -r --format json --output FILE DIR`): SSTUB/osv-scanner.json is its
+# report, exit 1 (findings); without it, exit 128 (no manifest or lock file), as osv-scanner does on this tree.
+set -uo pipefail
+s=${SSTUB:?SSTUB is not set}
+out=
+while [ $# -gt 0 ]; do [ "$1" = --output ] && { out=$2; shift; }; shift; done
+[ -f "$s/osv-scanner.json" ] || exit 128
+cp "$s/osv-scanner.json" "${out:?no --output}"
+exit 1

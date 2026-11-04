@@ -35,7 +35,8 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `deploymentproxy/bump.sh` | A bump to a release of the line, from its tag: the pin, the release, the render fixture. |
 | `render.sh` | The render: `out/00-deploymentproxy.yaml` and `out/10-deployment-<name>.yaml` for each entry. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
-| `ci/*.sh` | The jobs' scripts: `policy`, `validate`, `plan`, `apply`, `delete-deployment`, `drift`; `lib.sh` (credentials). |
+| `ci/*.sh` | The jobs' scripts: `policy`, `validate`, `security`, `plan`, `apply`, `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools). |
+| `security-exceptions.yaml` | The security findings accepted, each until its expiry (Security checks, below). |
 | `tests/` | The tests (`ci/checks.sh` runs them all), their fixtures and stubs. |
 
 ## How it runs
@@ -52,15 +53,16 @@ that commit (it is public: no credential).
 
 | Job | When | What |
 |---|---|---|
-| `render` | every push and merge request | Builds yq and kubeconform (`ci/tools.sh`), checks the project's `.gitlab-ci.yml` is this repository's with only `CLUSTER_COMMIT` set (`ci/pin.sh --check`), renders into `out/`. |
+| `render` | every push and merge request | Builds or fetches the pinned tools (`ci/tools.sh`: yq, kubeconform, kubectl, gke-gcloud-auth-plugin, gitleaks), checks the project's `.gitlab-ci.yml` is this repository's with only `CLUSTER_COMMIT` set (`ci/pin.sh --check`), renders into `out/`. |
 | `validate` | every push and merge request | kubeconform and `ci/policy.sh` on `out/`, `deploymentproxy/release` against its release (`fetch.sh --check`), the tests. |
+| `security` | every pipeline: every push and merge request, and the nightly schedule | The security checks (below). Fails the pipeline on a secret or an unaccepted HIGH or CRITICAL finding with a fix; `plan`, so `apply`, waits for it. Its report is the artifact `src/security/`. |
 | `plan` | main (push, web, API) | `kubectl diff` against `tacplus`, then per unit (deploymentproxy, each deployment) what is added, changed or removed; a deployment whose entry is gone is listed as kept. Saves the render it diffed and its summary (`plan.txt`). |
 | `apply` | main, **automatically** once `plan` succeeds, protected environment `cluster`; not in a deletion pipeline | Applies the render `plan` saved: plans again, then applies server-side. Never deletes or prunes. A failed apply fails the pipeline. |
 | `DELETE deployment: removes tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)` | a deletion pipeline only (below), **manual**, protected environment `cluster` (Jody only) | Deletes the deployment `DELETE_DEPLOYMENT`: `tac-<name>` and its tenant namespaces (`ci/delete-deployment.sh`). |
 | `drift` | the nightly schedule | `plan`; if anything differs, an issue here (one open at a time; a new drift is a comment). Never applies. |
 
 The cluster jobs run only on main, because Workload Identity Federation admits only this project's protected main:
-a merge request gets `render` and `validate`, and its `plan`, then `apply`, run once it is merged.
+a merge request gets `render`, `validate` and `security`, and its `plan`, then `apply`, run once it is merged.
 Until the hub's steps below are done, `plan` stops with `kube: no cluster grant yet` (or GCP's refusal, saying so).
 
 ### How a change reaches the cluster
@@ -148,7 +150,7 @@ Before the first pipeline:
    or `TACPLUS_READER_SA` set to a service account that may. Until then `drift` fails, saying which refused.
 6. **The schedule:** nightly, on main.
 
-Then a pipeline on main: `render`, `validate`, `plan` and `apply` green.
+Then a pipeline on main: `render`, `validate`, `security`, `plan` and `apply` green.
 
 ### The first apply
 
@@ -160,10 +162,48 @@ Then a pipeline on main: `render`, `validate`, `plan` and `apply` green.
 ### Locally
 
 ```sh
-ci/tools.sh && export PATH=$PWD/bin:$PATH   # yq and kubeconform into bin/ (needs go)
+ci/tools.sh && export PATH=$PWD/bin:$PATH   # the pinned tools into bin/ (needs go, curl)
 ./render.sh && ci/validate.sh out           # the render, kubeconform, the policy, deploymentproxy's release
 ci/checks.sh                                # the tests
+ci/tools.sh security && ci/security.sh . ghcr.io/tacplus-dev/tacplus/build:2.5 bin/*   # the security checks
 ```
+
+## Security checks
+
+tacplus-dev/looper#49's deterministic floor, as a job of this pipeline (tacplus-dev/build's checks never reach it:
+this pipeline has its own GitLab project and identity), for the pipeline that holds cluster-admin. The `security`
+job (`ci/security.sh`) runs in every pipeline, so on every push and merge request, and nightly on the schedule:
+
+| Tool | On |
+|---|---|
+| OSV-Scanner | the tree's dependency manifests and lock files (none today: shell and YAML) |
+| `govulncheck -mode=binary` | every pinned tool binary the pipeline runs, `bin/`: yq, kubeconform, kubectl, gke-gcloud-auth-plugin, gitleaks, osv-scanner, govulncheck, trivy |
+| gitleaks | the tree, and every commit of its history (the job fetches it whole) |
+| Trivy | the CI image the jobs run in (`CI_JOB_IMAGE`, `ghcr.io/tacplus-dev/tacplus/build:2.5`), for the runner's platform |
+
+The tools are pinned in `ci/tools.sh`, each by its version and a SHA-256: the Go ones built at their module's
+version with a pinned Go toolchain, the module checked against its go.sum hash (h1:, a SHA-256) and the checksum
+database; kubectl, gke-gcloud-auth-plugin and Trivy downloaded from their releases and checked against the
+SHA-256 of the file for linux/amd64 or linux/arm64. The vulnerability databases are each tool's of the day.
+
+**The policy**, looper-scan's: the job fails on any secret, and on any HIGH or CRITICAL finding with a fixed version,
+unless an unexpired entry of `security-exceptions.yaml` accepts it (by its id or an alias, a CVE or GHSA); a
+govulncheck finding (a vulnerable symbol in the binary) counts HIGH, govulncheck giving no severity. A tool that
+cannot run fails it, and so does an exception that has expired or says less than its four fields:
+
+```yaml
+exceptions:
+  - id: GO-2026-6860            # the finding's id, or an alias
+    reason: "why it is accepted, and what fixes it"
+    decided_by: Jody Scott
+    expires: 2026-12-04         # YYYY-MM-DD; the job fails from the day after
+```
+
+Exactly those fields, which looper-scan reads too. The summary lists the entries no finding needs any more, to
+remove. **The report:** the job's artifact `src/security/`, kept 30 days, pass or fail: `findings.json` (every
+finding: tool, id, aliases, severity, fix, where, and whether an exception accepts it or it fails the job),
+`summary.md` (also in the job's log), `verdict`, and `raw/`, each tool's own JSON. `tests/security_test.sh` tests the
+job: a planted secret, in the tree or the history only, fails it; an expired exception fails it; a clean tree passes.
 
 ## Never
 
