@@ -29,5 +29,12 @@ the looper then marks it `promoted` or `declined` here with the date.
   deletion job shares, so that account could play a deletion job too. Only a deletion pipeline has one, and only
   the Owner role may set its variables, but an environment of its own (`cluster-delete`, deployable by Jody alone)
   would keep deleting Jody's by GitLab's protection, not only by the variables' role.
+- **A security report of the pipeline's own** (2026-11-04, nightly scan): no job checks the Go tools `ci/tools.sh`
+  builds (yq v4.54.1, kubeconform v0.7.0) for known vulnerabilities, and the README has no "Security checks"
+  section, so the nightly scan has no build report to read and runs the auditor itself. Tonight's
+  `govulncheck -mode=binary bin/yq` and `bin/kubeconform` found none reachable (yq: 2 in imported packages and 5 in
+  required modules, uncalled; kubeconform: 2 in required modules, uncalled). A step in `validate` running
+  govulncheck on `bin/`, and a README section saying where its report is, would make that a gate. Links:
+  tacplus-dev/looper#49 (the scans), tacplus-dev/roadmap:items/tacplus-security-sweep.md (tacplus's equivalent).
 
 ## Promoted / declined
