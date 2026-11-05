@@ -39,9 +39,14 @@ the looper then marks it `promoted` or `declined` here with the date.
   gke-gcloud-auth-plugin, a binary of its own to pin and scan (the CI image's, Cloud SDK 549.0.0's, built with
   go1.23.1, had 69 standard-library findings: #5 pins 0.5.21 instead). A kubeconfig written by `ci_kube` with the
   cluster's endpoint and CA (`gcloud container clusters describe`) and the job's access token would drop the binary.
-- **Trivy on deploymentproxy's pinned image** (2026-11-04, #5): the security job scans the CI image; the image this
-  pipeline deploys (`deploymentproxy/pin.yaml`, by digest) is deploymentproxy's build's to scan, but a Trivy run on
-  the digest here would catch a finding published after its release.
+- **Trivy on the images this pipeline deploys** (2026-11-04, #5; widened 2026-11-05, nightly scan): the security
+  job scans the CI image only. The images this pipeline deploys, each by digest, go unscanned: deploymentproxy's
+  (`deploymentproxy/pin.yaml`) and GitLab Runner's `runner`, `helper` and `job` (`gitlab-runner/pin.yaml`). A Trivy
+  run on each pinned digest in `ci/security.sh`, under the same policy and exceptions, would catch a finding
+  published after its release. Tonight's scan, by hand, found the runner 19.5.2 images carrying fixed HIGH and
+  CRITICAL findings (#9; the helper's miniperl is CRITICAL), and the `job` image the same Debian findings as the CI
+  image (#8). deploymentproxy 0.2.1 was clean. Since no upstream release may have the fix yet, an expiring
+  exception is the way to accept one.
 - **The CI image's gcloud SDK** (2026-11-04, #5): `ghcr.io/tacplus-dev/tacplus/build:2.5` carries Cloud SDK 549.0.0
   (2025-12), whose kubectl dispatcher and gke-gcloud-auth-plugin are built with Go 1.22 to 1.24 (61 to 82
   govulncheck findings each). This pipeline no longer runs them (#5 pins its own), but other jobs in the image may:
