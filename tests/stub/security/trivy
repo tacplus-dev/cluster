@@ -2,11 +2,15 @@
 # Copyright (c) 2026 Jody Scott
 # SPDX-License-Identifier: Apache-2.0
 #
-# A stub trivy for the tests (`image -q --scanners vuln --platform P --format json -o FILE IMAGE`): SSTUB/trivy.json
-# is its report, or one with no vulnerability; each call is logged to SSTUB/trivy.log.
+# A stub trivy for the tests (`image -q --scanners vuln --platform P --format json -o FILE IMAGE`): its report is
+# SSTUB/trivy-NAME.json, NAME the image's repository's last part (registry.example/runner-helper:v1@sha256:... is
+# runner-helper), else SSTUB/trivy.json, else one with no vulnerability; each call is logged to SSTUB/trivy.log.
 set -uo pipefail
 s=${SSTUB:?SSTUB is not set}
 echo "trivy $*" >> "$s/trivy.log"
-out=
-while [ $# -gt 0 ]; do [ "$1" = -o ] && { out=$2; shift; }; shift; done
-if [ -f "$s/trivy.json" ]; then cp "$s/trivy.json" "${out:?no -o}"; else echo '{"Results":[]}' > "${out:?no -o}"; fi
+out= image=
+while [ $# -gt 0 ]; do [ "$1" = -o ] && { out=$2; shift; }; image=$1; shift; done
+name=${image%@*} name=${name##*/} name=${name%%:*}
+if [ -f "$s/trivy-$name.json" ]; then cp "$s/trivy-$name.json" "${out:?no -o}"
+elif [ -f "$s/trivy.json" ]; then cp "$s/trivy.json" "${out:?no -o}"
+else echo '{"Results":[]}' > "${out:?no -o}"; fi

@@ -11,7 +11,8 @@
 #   validate           kubeconform and ci/policy.sh on out/, deploymentproxy's release and GitLab Runner's chart
 #                      checked, the tests (ci/checks.sh)
 #   security           OSV-Scanner on the tree, govulncheck on the pinned tools, gitleaks on the tree and its history,
-#                      Trivy on the CI image, security-exceptions.yaml enforced (ci/security.sh); plan waits for it
+#                      Trivy on the CI image and the pinned images it deploys, security-exceptions.yaml enforced
+#                      (ci/security.sh); plan waits for it
 #   plan               main: kubectl diff against the cluster dev, and what each deployment gains or loses
 #   apply              main, automatically once plan succeeds (main is not production: nothing waits for a person),
 #                      the render plan saved, then the in-cluster runners' tokens from Secret Manager by version, in

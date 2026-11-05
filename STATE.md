@@ -13,7 +13,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-05 by th
   pin, the release and the render fixture); `render.sh`; `ci/policy.sh` (no cluster-scoped resource or `*`
   in a deployment's Roles); `ci/tools.sh` pinning every tool by version and SHA-256 (#5: kubectl v1.34.13 and
   gke-gcloud-auth-plugin 0.5.21 pinned, no longer the CI image's gcloud components); the GitLab jobs `render`, `validate`,
-  `security` (#5: OSV-Scanner, govulncheck on `bin/`, gitleaks on the tree and history, Trivy on the CI image;
+  `security` (#5: OSV-Scanner, govulncheck on `bin/`, gitleaks on the tree and history, Trivy on the CI image and,
+  #9, on each image the pins deploy by digest for linux/arm64 (GitLab Runner's runner, helper and job, deploymentproxy's);
   `security-exceptions.yaml` enforced; every pipeline, nightly too; `plan` waits for it), `plan`, `apply` (#3: automatic on main once `plan`
   succeeds, applying the render `plan` saved; protected `cluster`, never deletes; not in a deletion pipeline), the
   deletion job (#2: only in a deletion pipeline, run on main from the web form or the API with `DELETE_DEPLOYMENT` and `DELETE_CONFIRM` both the deployment's name; manual, protected,
@@ -42,6 +43,9 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-05 by th
   place in the render yet.
 - **Known vulnerabilities:** 11 accepted in `security-exceptions.yaml` until 2026-12-04 (#5), none with a fixed
   release of its tool: kubectl v1.34.13 (x/net, x/text, otel), gke-gcloud-auth-plugin 0.5.21 and trivy 0.76.1
-  (x/net/html; trivy's x/crypto/openpgp), gitleaks v8.30.1 (xz). The CI image's Trivy scan: no HIGH or CRITICAL
-  with a fix (2026-11-04). The job has not run in GitLab yet (no runner).
+  (x/net/html; trivy's x/crypto/openpgp), gitleaks v8.30.1 (xz). 20 accepted until 2026-12-05 (#9), in GitLab
+  Runner 19.5.2's runner and helper images, its latest release (libexpat, curl, go-jose/v4, x/net; docker-machine's
+  x/net, x/text, x/crypto, grpc; the helper's miniperl, two CRITICAL, which the helper never runs). deploymentproxy
+  0.2.1's image: none (2026-11-05). The `job` image carries the CI image's Debian findings (#8). The job has not run
+  in GitLab yet (no runner).
 - **Blocked on:** the hub's steps above (no issue).

@@ -260,7 +260,7 @@ job (`ci/security.sh`) runs in every pipeline, so on every push and merge reques
 | OSV-Scanner | the tree's dependency manifests and lock files (none today: shell and YAML) |
 | `govulncheck -mode=binary` | every pinned tool binary the pipeline runs, `bin/`: yq, kubeconform, helm, kubectl, gke-gcloud-auth-plugin, gitleaks, osv-scanner, govulncheck, trivy |
 | gitleaks | the tree, and every commit of its history (the job fetches it whole) |
-| Trivy | the CI image the jobs run in (`CI_JOB_IMAGE`, `ghcr.io/tacplus-dev/tacplus/build:2.5`), for the runner's platform |
+| Trivy | the CI image the jobs run in (`CI_JOB_IMAGE`, `ghcr.io/tacplus-dev/tacplus/build:2.5`), for the runner's platform; and each image the commit deploys, by the digest its pin names, for linux/arm64 (the cluster's): `gitlab-runner/pin.yaml`'s `runner`, `helper` and `job`, `deploymentproxy/pin.yaml`'s `image` (#9) |
 
 The tools are pinned in `ci/tools.sh`, each by its version and a SHA-256: the Go ones built at their module's
 version with a pinned Go toolchain, the module checked against its go.sum hash (h1:, a SHA-256) and the checksum

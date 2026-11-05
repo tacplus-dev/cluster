@@ -3,14 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # The security job (tacplus-dev/looper#49's floor, in this pipeline: tacplus-dev/build's checks never reach it).
-# On REPO's commit, its tree and its history, on the pinned tool binaries the pipeline runs and on the CI image:
+# On REPO's commit, its tree and its history, on the pinned tool binaries the pipeline runs, on the CI image and on
+# the images the commit deploys:
 #
 #   OSV-Scanner               the tree's dependency manifests and lock files
 #   govulncheck -mode=binary  each BINARY (ci/tools.sh's bin/: yq, kubeconform, kubectl, gke-gcloud-auth-plugin,
 #                             gitleaks, osv-scanner, govulncheck, trivy); a finding is the vulnerable symbol in the
 #                             binary, counted HIGH (govulncheck gives no severity), as looper-scan counts it
 #   gitleaks                  the tree, and every commit of the history
-#   Trivy                     IMAGE, the image the jobs run in (its platform: this machine's)
+#   Trivy                     IMAGE, the image the jobs run in (its platform: this machine's); and each image the
+#                             tree's pins deploy, by digest, for linux/arm64 (the cluster's): gitlab-runner/pin.yaml's
+#                             runner, helper and job, deploymentproxy/pin.yaml's image
 #
 # The policy (looper-scan's): a secret fails, and so does a HIGH or CRITICAL finding with a fixed version, unless
 # an unexpired entry of the commit's security-exceptions.yaml names it (its id or an alias: a CVE, a GHSA). An
@@ -99,15 +102,33 @@ elif gitleaks git --no-banner --redact --exit-code 0 -f json -r "$out/raw/gitlea
     "CRITICAL"; true; ("commit " + .Commit[0:12] + " " + .File + ":" + (.StartLine | tostring)); .Description)]' "$out/raw/gitleaks-history.json"
 else problems+=("gitleaks on the history: $(tail -1 "$out/raw/gitleaks-history.log")"); fi
 
+# trivy_image NAME IMAGE PLATFORM: Trivy on IMAGE for PLATFORM, its report raw/NAME.json.
+trivy_image() {
+  local name=$1 img=$2 platform=$3
+  log "trivy: $img ($platform)"
+  if trivy image -q --scanners vuln --platform "$platform" --format json -o "$out/raw/$name.json" "$img" 2>"$out/raw/$name.log"; then
+    norm "$name" '[.[0].Results[]? | .Target as $t | (.Vulnerabilities // [])[]
+      | finding("trivy"; "sca"; .VulnerabilityID; []; (.Severity // "UNKNOWN"); ((.FixedVersion // "") != "");
+                (.PkgName + "@" + (.InstalledVersion // "") + " (" + $image + ": " + $t + ")"); .Title)]' \
+      "$out/raw/$name.json" --arg image "$img"
+  else problems+=("trivy on $img: $(tail -1 "$out/raw/$name.log")"); fi
+}
 # Trivy on the image, for this machine's platform: the one the jobs run.
 case $(uname -m) in x86_64|amd64) platform=linux/amd64 ;; aarch64|arm64) platform=linux/arm64 ;; *) platform=linux/$(uname -m) ;; esac
-log "trivy: $image ($platform)"
-if trivy image -q --scanners vuln --platform "$platform" --format json -o "$out/raw/trivy-image.json" "$image" 2>"$out/raw/trivy-image.log"; then
-  norm trivy-image '[.[0].Results[]? | .Target as $t | (.Vulnerabilities // [])[]
-    | finding("trivy"; "sca"; .VulnerabilityID; []; (.Severity // "UNKNOWN"); ((.FixedVersion // "") != "");
-              (.PkgName + "@" + (.InstalledVersion // "") + " (" + $image + ": " + $t + ")"); .Title)]' \
-    "$out/raw/trivy-image.json" --arg image "$image"
-else problems+=("trivy on $image: $(tail -1 "$out/raw/trivy-image.log")"); fi
+trivy_image trivy-image "$image" "$platform"
+# Trivy on each image the commit deploys, by the digest its pin names, for the cluster's platform (arm64): GitLab
+# Runner's runner, helper and job (gitlab-runner/pin.yaml) and deploymentproxy's (deploymentproxy/pin.yaml). A pin
+# file the tree has must name each, by digest.
+i=0
+for pin in gitlab-runner/pin.yaml:runner gitlab-runner/pin.yaml:helper gitlab-runner/pin.yaml:job deploymentproxy/pin.yaml:image; do
+  f=${pin%%:*} key=${pin#*:}
+  [ -f "$t/tree/$f" ] || continue
+  i=$((i + 1))
+  img=$(sed -n "s/^$key:[[:space:]]*\([^[:space:]#]*\).*/\1/p" "$t/tree/$f" | head -1)
+  if [ -z "$img" ]; then problems+=("$f: no \"$key:\" image to scan"); continue; fi
+  case $img in *@sha256:*) ;; *) problems+=("$f: its $key image $img is not by digest"); continue ;; esac
+  trivy_image "trivy-deployed-$i-$key" "$img" linux/arm64
+done
 
 # security-exceptions.yaml, read as looper-scan reads it: a list "exceptions:" of entries with exactly id, reason,
 # decided_by and expires. A JSON array on stdout; a file it cannot read that way is a problem, never an empty list.

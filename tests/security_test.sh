@@ -5,7 +5,8 @@
 # Tests ci/security.sh, the security job, on a repository made here: a clean tree passes, and writes its JSON
 # report; a secret fails the job, planted in the tree or only in the history (gitleaks itself, not a stub), and so
 # does a shallow clone, whose history it cannot read; a HIGH or CRITICAL finding with a fix fails, from
-# govulncheck on a binary, OSV-Scanner on the tree or Trivy on the image, unless an unexpired exception names it
+# govulncheck on a binary, OSV-Scanner on the tree, Trivy on the image or on an image the tree's pins deploy (each
+# by its digest, for linux/arm64; a pin without its image, or not by digest, fails), unless an unexpired exception names it
 # (by its id or an alias); an expired exception fails the job, with or without its finding, and so does an entry
 # with a field missing or one too many, or a tool that cannot run; a finding without a fix, or below HIGH, passes.
 # This repository's own files hold no secret, and its security-exceptions.yaml reads, each entry with its four fields. OSV-Scanner, govulncheck
@@ -129,8 +130,40 @@ jq -e --arg image "$image" 'any(.[]; .tool == "trivy" and .blocking and .where =
   "$work/security/findings.json" >/dev/null && ok "Trivy's finding names the image and the package" ||
   fail "trivy's finding: $(cat "$work/security/findings.json")"
 
+# The images this repository deploys, read from its pins: each scanned by its digest, for the cluster's platform.
+deployed=(registry.example/runner:alpine-v1@sha256:1111 registry.example/runner-helper:v1@sha256:2222
+          registry.example/build:2@sha256:3333 registry.example/deploymentproxy:0.2.1@sha256:4444)
+pins() {
+  mkdir -p "$work/repo/gitlab-runner" "$work/repo/deploymentproxy"
+  printf 'chart:\n  name: gitlab-runner\nrunner: %s\nhelper: %s\njob: %s\n' "${deployed[@]:0:3}" > "$work/repo/gitlab-runner/pin.yaml"
+  printf 'repository: tacplus-dev/deploymentproxy\nimage: %s\nfiles:\n  - a.yaml\n' "${deployed[3]}" > "$work/repo/deploymentproxy/pin.yaml"
+  commit pins
+}
 repo
-jq -nc --arg root "$work/repo" '{results: [{source: {path: "/tmp/x/go.sum"}, packages: [{package: {name: "golang.org/x/crypto", version: "v0.1.0"},
+pins
+passes "the deployed images, clean"
+all=1
+for d in "${deployed[@]}"; do
+  grep -q -- "image -q --scanners vuln --platform linux/arm64 --format json -o .* $d\$" "$SSTUB/trivy.log" || all=0
+done
+[ "$all" = 1 ] && ok "Trivy scans each pinned image by its digest, for linux/arm64" || fail "trivy ran: $(cat "$SSTUB/trivy.log")"
+jq -nc '{Results: [{Target: "alpine 3.24.3", Vulnerabilities: [
+  {VulnerabilityID: "CVE-2026-42496", PkgName: "miniperl", InstalledVersion: "5.42.2-r1", FixedVersion: "5.42.3-r0", Severity: "CRITICAL"}]}]}' \
+  > "$SSTUB/trivy-runner-helper.json"
+fails "a deployed image's CRITICAL with a fix" "CVE-2026-42496"
+jq -e --arg image "${deployed[1]}" '[.[] | select(.blocking)] | length == 1 and .[0].where == "miniperl@5.42.2-r1 (\($image): alpine 3.24.3)"' \
+  "$work/security/findings.json" >/dev/null && ok "the finding names the deployed image, and only it" ||
+  fail "the deployed image's finding: $(cat "$work/security/findings.json")"
+exceptions "$(entry CVE-2026-42496 "$later")"
+passes "the same, accepted by an unexpired exception"
+printf 'repository: tacplus-dev/deploymentproxy\n' > "$work/repo/deploymentproxy/pin.yaml" && commit "no image"
+fails "a pin without its image" 'deploymentproxy/pin.yaml: no "image:" image to scan'
+pins
+printf 'image: registry.example/deploymentproxy:0.2.1\n' > "$work/repo/deploymentproxy/pin.yaml" && commit "a tag only"
+fails "a pinned image not by digest" "not by digest"
+
+repo
+jq -nc --arg root "$work/repo" '{results:[{source: {path: "/tmp/x/go.sum"}, packages: [{package: {name: "golang.org/x/crypto", version: "v0.1.0"},
   vulnerabilities: [{id: "GO-2026-5932", summary: "ssh", affected: [{ranges: [{events: [{introduced: "0"}, {fixed: "0.58.1"}]}]}]}],
   groups: [{ids: ["GO-2026-5932"], aliases: ["CVE-2026-5555"], max_severity: "7.5"}]}]}]}' > "$SSTUB/osv-scanner.json"
 fails "a HIGH dependency of the tree with a fix" "GO-2026-5932"
