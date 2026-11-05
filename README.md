@@ -1,8 +1,9 @@
 # cluster
 
-The only holder of cluster-admin on the shared GKE cluster `tacplus` (us-central1-a, arm64). It owns everything
-cluster-scoped. Fleets deploy their own workloads into their own namespace, with their own namespace-only account,
-and never get cluster privilege (`tacplus-dev/roadmap:decisions/deploymentproxy-2026-11-02.md`).
+The only holder of cluster-admin on the shared GKE cluster `dev` (us-central1-a, arm64; the project `tacplus-dev` in
+seabeam.net, built by tacplus-dev/cloud; #7). It owns everything cluster-scoped. Fleets deploy their own workloads
+into their own namespace, with their own namespace-only account, and never get cluster privilege
+(`tacplus-dev/roadmap:decisions/deploymentproxy-2026-11-02.md`).
 
 Design and decision: `tacplus-dev/roadmap:decisions/cluster-pipeline-2026-11-02.md` (tacplus-dev/roadmap#1, approved
 by Jody 2026-11-02).
@@ -53,8 +54,9 @@ pattern: the project carries only its `.gitlab-ci.yml`, which is `ci/gitlab-proj
 `CLUSTER_COMMIT` set to the commit of this repository it renders and applies. Every job fetches this repository at
 that commit (it is public: no credential).
 
-- **Identity:** the Google service account `cluster-admin-pipeline`, through Workload Identity Federation (pool
-  `gitlab-tacplus-dev`, `attribute.project_path` = `tacplus-dev/cluster`, protected `main` only). No keys.
+- **Identity:** the Google service account `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`, through
+  Workload Identity Federation (pool `gitlab-com`, provider `tacplus-dev-cluster`, in the project `tacplus-dev`:
+  `attribute.project_path` = `tacplus-dev/cluster`, protected `main` only). No keys.
 - **Runner:** a project runner locked to the GitLab project, tag `cluster`, with a fresh VM per job and no GCP
   account on the VM. Every job is tagged for it.
 
@@ -63,7 +65,7 @@ that commit (it is public: no credential).
 | `render` | every push and merge request | Builds or fetches the pinned tools (`ci/tools.sh`: yq, kubeconform, helm, kubectl, gke-gcloud-auth-plugin, gitleaks), checks the project's `.gitlab-ci.yml` is this repository's with only `CLUSTER_COMMIT` set (`ci/pin.sh --check`), renders into `out/`. |
 | `validate` | every push and merge request | kubeconform and `ci/policy.sh` on `out/`, `deploymentproxy/release` against its release and `gitlab-runner/release` against its chart and images (each `fetch.sh --check`), the tests. |
 | `security` | every pipeline: every push and merge request, and the nightly schedule | The security checks (below). Fails the pipeline on a secret or an unaccepted HIGH or CRITICAL finding with a fix; `plan`, so `apply`, waits for it. Its report is the artifact `src/security/`. |
-| `plan` | main (push, web, API) | `kubectl diff` against `tacplus`, then per unit (deploymentproxy, each deployment, `ci`) what is added, changed or removed; a deployment whose entry is gone is listed as kept. Saves the render it diffed and its summary (`plan.txt`). |
+| `plan` | main (push, web, API) | `kubectl diff` against `dev`, then per unit (deploymentproxy, each deployment, `ci`) what is added, changed or removed; a deployment whose entry is gone is listed as kept. Saves the render it diffed and its summary (`plan.txt`). |
 | `apply` | main, **automatically** once `plan` succeeds, protected environment `cluster`; not in a deletion pipeline | Applies the render `plan` saved: plans again, then applies server-side, then writes the runners' tokens from Secret Manager (`ci/runner-tokens.sh`), then waits for deploymentproxy and the runners. Never deletes or prunes. A failed apply fails the pipeline. |
 | `DELETE deployment: removes tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)` | a deletion pipeline only (below), **manual**, protected environment `cluster` (Jody only) | Deletes the deployment `DELETE_DEPLOYMENT`: `tac-<name>` and its tenant namespaces (`ci/delete-deployment.sh`). |
 | `drift` | the nightly schedule | `plan`; if anything differs, an issue here (one open at a time; a new drift is a comment). Never applies. |
@@ -91,7 +93,7 @@ A pull request adding its entry to `deployments.yaml` (the file says what each f
 
 ```yaml
   - name: <deployment>            # at most 16 characters of [a-z0-9-], starting with a letter
-    deployAccount: <name>-deploy@jody1-328023.iam.gserviceaccount.com
+    deployAccount: <name>-deploy@tacplus-dev.iam.gserviceaccount.com
     operator: operator
     gitlabProject: tacplus-dev/fleet-<fleet>
     quota: {}                     # deploymentproxy's default; or e.g. {pods: "50"}, quantities quoted
@@ -147,11 +149,12 @@ Before the first pipeline:
    whose merges start the pipelines on main (the hub's): GitLab runs an automatic job in a protected environment only
    for a pipeline started by one of its deployers, so `apply` fails for anyone else's; pipeline variables allowed to the Owner role only (Settings > CI/CD > Variables, "Minimum role to use pipeline
    variables"), for a deletion pipeline's two; `.gitlab-ci.yml` from `ci/pin.sh <commit of main>`.
-3. **Its variables** (protected, never group variables): `GCP_WIF_PROVIDER` (the provider of the pool
-   `gitlab-tacplus-dev`), and for `drift`, `TACPLUS_READER_APP_ID` and `TACPLUS_READER_INSTALLATION_ID`.
+3. **Its variables** (protected, never group variables): `GCP_WIF_PROVIDER`
+   (`projects/1038314073791/locations/global/workloadIdentityPools/gitlab-com/providers/tacplus-dev-cluster`), and
+   for `drift`, `TACPLUS_READER_APP_ID` and `TACPLUS_READER_INSTALLATION_ID`.
 4. **The cluster grant:** `cluster-admin-pipeline` may get the cluster's credentials (IAM
-   `roles/container.clusterViewer` on `jody1-328023`) and is cluster-admin on `tacplus` (a ClusterRoleBinding of
-   `cluster-admin` to the User `cluster-admin-pipeline@jody1-328023.iam.gserviceaccount.com`).
+   `roles/container.clusterViewer` on `tacplus-dev`, tacplus-dev/cloud's) and is cluster-admin on `dev` (a
+   ClusterRoleBinding of `cluster-admin` to the User `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`).
 5. **The drift issue:** the tacplus-reader app installed on `tacplus-dev/cluster` with Issues read and write, and
    this project's federated principal allowed to sign with its KMS key `tacplus-reader` (`roles/cloudkms.signer`),
    or `TACPLUS_READER_SA` set to a service account that may. Until then `drift` fails, saying which refused.
@@ -159,16 +162,22 @@ Before the first pipeline:
 7. **The in-cluster runners** ([CI in the cluster](#ci-in-the-cluster)): each runner of `gitlab-runner/runners/`
    created in GitLab as a **group runner of tacplus-dev** with its `tacplus.tags` and "run untagged jobs" off, its
    authentication token (`glrt-...`) stored as the version of the Secret Manager secret its `tacplus.token` names
-   (`gitlab-runner-build` and `gitlab-runner-control` in `jody1-328023`, version 1), and `cluster-admin-pipeline`
+   (`gitlab-runner-build` and `gitlab-runner-control` in `tacplus-dev`, version 1), and `cluster-admin-pipeline`
    allowed to read those two secrets (`roles/secretmanager.secretAccessor` on each). A new token is a new version
    and a pull request moving `tacplus.token` to it. Until both are readable, `apply` fails after applying the rest,
    saying `runner-tokens: Secret Manager refused <version>`.
 8. **The pools:** the spot pool labelled `spot=true` and tainted `spot=true:NoSchedule` (tacplus-dev/cloud#7's
-   answer; the pool made by hand in `jody1-328023` until the cloud pipeline adopts it), the normal pool neither;
-   Workload Identity on the cluster and its pools (`GKE_METADATA`), and NetworkPolicy enforced (Dataplane V2, as
+   answer; tacplus-dev/cloud's `dev` stack makes them so), the normal pool neither; Workload Identity on the cluster and its pools (`GKE_METADATA`), and NetworkPolicy enforced (Dataplane V2, as
    tacplus-dev/cloud's `dev` cluster has), for the `ci` namespace's NetworkPolicy to hold.
 
 Then a pipeline on main: `render`, `validate`, `security`, `plan` and `apply` green.
+
+**The move from `tacplus` to `dev`** (#7; `tacplus-dev/roadmap:decisions/only-vms-are-k8s-nodes-2026-11-04.md`,
+addendum "a new cluster in seabeam.net"), in order: the hub sets `GCP_WIF_PROVIDER` to the provider above; the
+change retargeting this repository (`GCP_PROJECT`, `CLUSTER`, `GCP_DEPLOY_SA`, seatrials' `deployAccount`, the
+runners' tokens) lands; the hub re-pins `.gitlab-ci.yml`; the pipeline on main applies to `dev`. The old cluster
+`tacplus` in `jody1-328023` is then unused, and Jody deletes it. The drift job's KMS key stays in `jody1-328023`
+until it moves (tacplus-dev/cloud#15).
 
 ### The first apply
 

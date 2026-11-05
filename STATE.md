@@ -1,9 +1,13 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-04 by the looper (#6).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-05 by the looper (#7).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.5`.
+- **Target (#7):** tacplus-dev/cloud's cluster `dev` (us-central1-a) in the project `tacplus-dev` (seabeam.net), as
+  `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`; seatrials' deploy account and the runners' token
+  secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1) in `tacplus-dev` too. The old `tacplus` in
+  `jody1-328023` is no longer the target; Jody deletes it once the pipeline applies to `dev`.
 - **Works:** the cluster pipeline (#1): `deployments.yaml` (first entry `seatrials`); deploymentproxy v0.2.1 fetched
   and pinned by commit, checksum and image digest, bumped by one command (`deploymentproxy/bump.sh <tag>`, #4: the
   pin, the release and the render fixture); `render.sh`; `ci/policy.sh` (no cluster-scoped resource or `*`
@@ -26,15 +30,15 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-04 by th
   3019831835 (job 17680247127) on 2026-11-02; its outcome is not recorded here yet. The lines below predate it.
 - **Known gaps:** the in-cluster runners are not registered or applied yet: the hub registers them as tacplus-dev
   group runners and stores their tokens as the Secret Manager versions the runner files name (README, What the hub
-  does, 7), and labels and taints the spot pool (8); until the tokens are readable, `apply` fails after the rest,
+  does, 7; in `tacplus-dev`, #7), the spot pool labelled and tainted by tacplus-dev/cloud's `dev` stack; until the tokens are readable, `apply` fails after the rest,
   saying so. Rootless BuildKit is not in the build image yet (tacplus-dev/tacplus#315), and the looper's jobs move
   over in tacplus-dev/looper's switch issue. The `ci` NetworkPolicy holds only where NetworkPolicy is enforced
-  (Dataplane V2: tacplus-dev/cloud's `dev` cluster, where the decision lands the runner; not known for `tacplus`).
+  (Dataplane V2: tacplus-dev/cloud's `dev` cluster has it).
   No pipeline has run: the hub owes the runner (tag `cluster`), the project's variables and
   environment (now deployable by the account whose merges start main's pipelines too, for the automatic `apply`),
   the cluster grant, and the drift issue's app permission and KMS binding (README, What the hub does); the hub
-  re-pins the GitLab copy for #3, and for #4 (v0.2.1, whose arm64 toleration the deploymentproxy pod on `tacplus`
-  waits for: it is Pending on the arm64 taint until then). The cluster-scoped objects a fleet's chart needs have no
+  re-pins the GitLab copy for #3, #4 and #7, after setting `GCP_WIF_PROVIDER` to `dev`'s provider (README, What the
+  hub does, the move from `tacplus` to `dev`). The cluster-scoped objects a fleet's chart needs have no
   place in the render yet.
 - **Known vulnerabilities:** 11 accepted in `security-exceptions.yaml` until 2026-12-04 (#5), none with a fixed
   release of its tool: kubectl v1.34.13 (x/net, x/text, otel), gke-gcloud-auth-plugin 0.5.21 and trivy 0.76.1

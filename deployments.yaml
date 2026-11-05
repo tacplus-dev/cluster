@@ -1,4 +1,4 @@
-# The deployments on the cluster `tacplus`, one entry each (README, Adding a deployment). For each, the pipeline
+# The deployments on the cluster `dev`, one entry each (README, Adding a deployment). For each, the pipeline
 # applies the namespace tac-<name> labelled tacplus.dev/deployment=<name>, deploymentproxy's Role for its operator
 # account, and its deploy account's Role and RoleBinding in tac-<name> only (render.sh).
 #
@@ -12,7 +12,7 @@
 # Removing an entry deletes nothing: the delete-deployment job does, and only Jody runs it.
 deployments:
   - name: seatrials
-    deployAccount: seatrials-deploy@jody1-328023.iam.gserviceaccount.com
+    deployAccount: seatrials-deploy@tacplus-dev.iam.gserviceaccount.com
     operator: operator
     gitlabProject: tacplus-dev/fleet-seatrials
     quota: {}

@@ -4,11 +4,12 @@
 #
 # A stub gcloud for the tests: Workload Identity Federation always admits the job. Secret Manager holds the files
 # SMSTUB/<project>/<secret>/<version>, each a version's payload; a version not there is refused as Secret Manager
-# refuses it.
+# refuses it. `container clusters` calls (get-credentials) are logged to KSTUB/log.
 case "$1 ${2:-}" in
   "iam workload-identity-pools") for a in "$@"; do case "$a" in --output-file=*) echo '{}' > "${a#*=}" ;; esac; done ;;
   "auth print-access-token") echo ya29.stub ;;
-  "config get") echo cluster-admin-pipeline@jody1-328023.iam.gserviceaccount.com ;;
+  "config get") echo cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com ;;
+  "container clusters") echo "gcloud $*" >> "${KSTUB:-/dev/null}/log" ;;
   "secrets versions")
     [ "${3:-}" = access ] || { echo "stub gcloud: not stubbed: $*" >&2; exit 2; }
     version=$4 secret= project= file=

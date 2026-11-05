@@ -24,22 +24,22 @@ ci_gcp() {
   gcloud auth login --cred-file="$ci_tmp/gcp-federation.json" --quiet >/dev/null 2>"$ci_tmp/gcloud-err" ||
     { echo "gcp: Workload Identity Federation refused this job ($GCP_WIF_PROVIDER): $(grep -m1 '^ERROR' "$ci_tmp/gcloud-err" || head -c 300 "$ci_tmp/gcloud-err")" >&2
       return 1; }
-  gcloud config set project "${GCP_PROJECT:-jody1-328023}" >/dev/null 2>&1
+  gcloud config set project "${GCP_PROJECT:-tacplus-dev}" >/dev/null 2>&1
   echo "gcp: $(gcloud config get account 2>/dev/null) through workload identity federation"
 }
 
-# ci_kube: kubectl on the cluster CLUSTER (tacplus) in ZONE, as that account. Every job calls it in an && list,
+# ci_kube: kubectl on the cluster CLUSTER (dev) in ZONE (us-central1-a), in GCP_PROJECT (tacplus-dev), as that account. Every job calls it in an && list,
 # where errexit is off, so it returns on its own failures, saying why: no pinned kubectl or GKE auth plugin on the
 # PATH (ci/tools.sh, in bin/), no credentials for the cluster (the hub has not granted the account yet), or no
 # current context.
 ci_kube() {
-  local cluster=${CLUSTER:-tacplus} zone=${ZONE:-us-central1-a} context t
+  local cluster=${CLUSTER:-dev} zone=${ZONE:-us-central1-a} context t
   for t in kubectl gke-gcloud-auth-plugin; do
     command -v "$t" >/dev/null || { echo "kube: no $t on the PATH: ci/tools.sh pins it in bin/" >&2; return 1; }
   done
   export KUBECONFIG=$ci_tmp/kubeconfig USE_GKE_GCLOUD_AUTH_PLUGIN=True
   gcloud container clusters get-credentials "$cluster" --zone "$zone" \
-      --project "${GCP_PROJECT:-jody1-328023}" >/dev/null 2>"$ci_tmp/kube-err" ||
+      --project "${GCP_PROJECT:-tacplus-dev}" >/dev/null 2>"$ci_tmp/kube-err" ||
     { echo "kube: no cluster grant yet? no credentials for the cluster $cluster ($zone) as $(gcloud config get account 2>/dev/null): $(grep -m1 '^ERROR' "$ci_tmp/kube-err" || head -c 300 "$ci_tmp/kube-err") (README, What the hub does)" >&2
       return 1; }
   context=$(kubectl config current-context 2>/dev/null) && [ -n "$context" ] ||

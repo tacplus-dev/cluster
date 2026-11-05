@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Jody Scott
 # SPDX-License-Identifier: Apache-2.0
 #
-# Applies the render OUT to the cluster `tacplus` (the apply job, automatic on main once plan succeeds): the plan first, so the job's log says
+# Applies the render OUT to the cluster `dev` (the apply job, automatic on main once plan succeeds): the plan first, so the job's log says
 # what it changes, then each file server-side, in order (deploymentproxy, then each deployment, then ci), then the
 # runners' tokens from Secret Manager (ci/runner-tokens.sh), then waits for deploymentproxy and the runners. It only
 # creates and updates: it never deletes, and never prunes, so a removed entry's namespace stays until

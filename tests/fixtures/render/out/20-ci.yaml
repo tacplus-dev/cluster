@@ -363,7 +363,7 @@ spec:
       annotations:
         checksum/configmap: 55c079c11cef42c94092138a7d0ebdeced4697641436c2cdab78cb77e1eed148
         tacplus.dev/runner-tags: "arm64,build"
-        tacplus.dev/runner-token: "projects/jody1-328023/secrets/gitlab-runner-build/versions/1"
+        tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build/versions/1"
         tacplus.dev/runner-token-secret: "gitlab-runner-build"
     spec:
       securityContext:
@@ -754,7 +754,7 @@ spec:
       annotations:
         checksum/configmap: 0625864c86408ef0c9db5f96dfd8b802d095766f3c99085a17c74bea4557b556
         tacplus.dev/runner-tags: "arm64,autoscale,autoscale-16"
-        tacplus.dev/runner-token: "projects/jody1-328023/secrets/gitlab-runner-control/versions/1"
+        tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
         tacplus.dev/runner-token-secret: "gitlab-runner-control"
     spec:
       securityContext:

@@ -14,7 +14,7 @@ out=${1:?usage: ci/drift.sh OUT}
 source "$here/lib.sh"
 repo=${GITHUB_REPOSITORY:-tacplus-dev/cluster}
 api=${GITHUB_API:-https://api.github.com}
-title="Drift on the tacplus cluster"
+title="Drift on the ${CLUSTER:-dev} cluster"
 die() { echo "drift: $*" >&2; exit 1; }
 
 tmp=$(mktemp -d)
@@ -24,7 +24,7 @@ PLAN_SUMMARY=$tmp/summary "$here/plan.sh" "$out"
 
 mark="drift-sha256:$(sha256sum < "$tmp/summary" | cut -c1-16)"
 {
-  echo "The nightly drift check found the cluster \`tacplus\` differs from the render of $repo@${CLUSTER_COMMIT:-unknown} (what an apply would change):"
+  echo "The nightly drift check found the cluster \`${CLUSTER:-dev}\` differs from the render of $repo@${CLUSTER_COMMIT:-unknown} (what an apply would change):"
   echo
   echo '```'
   cat "$tmp/summary"

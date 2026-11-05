@@ -35,7 +35,7 @@ for r in build control; do
   mkdir -p "$SMSTUB/$(dirname "${ref#projects/}" | sed 's|/secrets/|/|; s|/versions$||')"
   printf 'glrt-stub%s_t0ken\n' "$r" > "$SMSTUB/$(echo "${ref#projects/}" | sed 's|/secrets/|/|; s|/versions/|/|')"
 done
-echo gke_jody1-328023_us-central1-a_tacplus > "$KSTUB/context"
+echo gke_tacplus-dev_us-central1-a_dev > "$KSTUB/context"
 fixtures=$here/tests/fixtures/render
 "$here/render.sh" "$fixtures/deployments.yaml" "$work/out" >/dev/null || { echo "FAIL render.sh"; exit 1; }
 "$here/render.sh" "$fixtures/removed.yaml" "$work/removed" >/dev/null || { echo "FAIL render.sh"; exit 1; }
@@ -49,16 +49,24 @@ run() { # run LOG CMD...: CMD's output in $work/LOG; its status returned.
   "$@" > "$work/$log" 2>&1
 }
 
+# ci_kube, with nothing set: the credentials of the cluster dev (us-central1-a) in tacplus-dev.
+printf '#!/bin/sh\n' > "$work/gke-gcloud-auth-plugin" && chmod +x "$work/gke-gcloud-auth-plugin"
+: > "$KSTUB/log"
+run kube env -u GCP_PROJECT -u CLUSTER -u ZONE PATH="$work:$PATH" bash -c ". '$here/ci/lib.sh' && ci_kube" &&
+  grep -qx 'gcloud container clusters get-credentials dev --zone us-central1-a --project tacplus-dev' "$KSTUB/log" &&
+  grep -qx 'kube: gke_tacplus-dev_us-central1-a_dev' "$work/kube" &&
+  ok "ci_kube: by default the cluster dev (us-central1-a) in tacplus-dev" || fail "ci_kube: $(cat "$work/kube" "$KSTUB/log")"
+
 # No grant yet, then the wrong cluster.
 echo no > "$KSTUB/grant"
 run plan "$here/ci/plan.sh" "$work/out"; s=$?
 [ "$s" = 3 ] && grep -q 'no cluster grant yet: cluster-admin-pipeline@' "$work/plan" &&
   ok "no grant: plan says no cluster grant yet, exit 3" || fail "no grant: exit $s: $(cat "$work/plan")"
 echo yes > "$KSTUB/grant"
-echo gke_jody1-328023_us-central1-a_seatrials > "$KSTUB/context"
+echo gke_tacplus-dev_us-central1-a_seatrials > "$KSTUB/context"
 run plan "$here/ci/plan.sh" "$work/out" && fail "plan ran on the seatrials cluster" ||
-  { grep -q 'not the cluster tacplus' "$work/plan" && ok "another cluster's context is refused" || fail "another context: $(cat "$work/plan")"; }
-echo gke_jody1-328023_us-central1-a_tacplus > "$KSTUB/context"
+  { grep -q 'not the cluster dev' "$work/plan" && ok "another cluster's context is refused" || fail "another context: $(cat "$work/plan")"; }
+echo gke_tacplus-dev_us-central1-a_dev > "$KSTUB/context"
 
 # An empty cluster: everything added; the apply; then in sync.
 if run plan env PLAN_SUMMARY="$work/summary" "$here/ci/plan.sh" "$work/out"; then
@@ -78,7 +86,7 @@ fi
 # Without the runners' tokens in Secret Manager (the hub's step), the apply fails, saying so.
 mv "$SMSTUB" "$work/sm.away"
 run apply "$here/ci/apply.sh" "$work/out" && fail "apply without the runners' tokens succeeded" ||
-  { grep -q 'runner-tokens: Secret Manager refused projects/jody1-328023/secrets/gitlab-runner-build/versions/1 to cluster-admin-pipeline@.*PERMISSION_DENIED.*(README, What the hub does)' "$work/apply" &&
+  { grep -q 'runner-tokens: Secret Manager refused projects/tacplus-dev/secrets/gitlab-runner-build/versions/1 to cluster-admin-pipeline@.*PERMISSION_DENIED.*(README, What the hub does)' "$work/apply" &&
     ok "apply without a runner's token fails, naming its version" || fail "apply without tokens: $(cat "$work/apply")"; }
 mv "$work/sm.away" "$SMSTUB"
 : > "$KSTUB/log"
@@ -89,18 +97,18 @@ run apply "$here/ci/apply.sh" "$work/out" && grep -q 'apply: done' "$work/apply"
 # Each runner's token, from Secret Manager by its version, in the Secret its pods mount, and printed nowhere.
 s=$KSTUB/live/v1.Secret.ci.gitlab-runner-build
 [ -f "$s" ] && [ "$(yq '.data."runner-token"' "$s" | base64 -d)" = glrt-stubbuild_t0ken ] &&
-  [ "$(yq '.metadata.annotations."tacplus.dev/runner-token"' "$s")" = projects/jody1-328023/secrets/gitlab-runner-build/versions/1 ] &&
+  [ "$(yq '.metadata.annotations."tacplus.dev/runner-token"' "$s")" = projects/tacplus-dev/secrets/gitlab-runner-build/versions/1 ] &&
   [ "$(yq '.data."runner-registration-token"' "$s")" = "" ] &&
   [ -f "$KSTUB/live/v1.Secret.ci.gitlab-runner-control" ] &&
-  grep -qx 'gcloud secrets versions access 1 --secret=gitlab-runner-control --project=jody1-328023' "$SMSTUB/log" &&
+  grep -qx 'gcloud secrets versions access 1 --secret=gitlab-runner-control --project=tacplus-dev' "$SMSTUB/log" &&
   ok "apply writes each runner's token, by its version, into its Secret in ci" || fail "the runners' Secrets: $(cat "$s" 2>/dev/null; cat "$work/apply")"
 ! grep -rq 't0ken\|Z2xydC1zdHVi' "$work/apply" "$KSTUB/log" && ok "no token in the apply's output" || fail "a token is printed: $(cat "$work/apply")"
-printf 'not-a-token\n' > "$work/sm.bad" && cp "$SMSTUB/jody1-328023/gitlab-runner-build/1" "$work/sm.good" &&
-  cp "$work/sm.bad" "$SMSTUB/jody1-328023/gitlab-runner-build/1"
+printf 'not-a-token\n' > "$work/sm.bad" && cp "$SMSTUB/tacplus-dev/gitlab-runner-build/1" "$work/sm.good" &&
+  cp "$work/sm.bad" "$SMSTUB/tacplus-dev/gitlab-runner-build/1"
 run apply "$here/ci/apply.sh" "$work/out" && fail "apply with a token that is not one succeeded" ||
   { grep -q 'versions/1 is not a runner authentication token' "$work/apply" && ! grep -q not-a-token "$work/apply" &&
     ok "a version that holds no runner token is refused, unprinted" || fail "a bad token: $(cat "$work/apply")"; }
-cp "$work/sm.good" "$SMSTUB/jody1-328023/gitlab-runner-build/1"
+cp "$work/sm.good" "$SMSTUB/tacplus-dev/gitlab-runner-build/1"
 run plan env PLAN_SUMMARY="$work/summary" "$here/ci/plan.sh" "$work/out" && [ ! -s "$work/summary" ] &&
   grep -q 'plan: no difference' "$work/plan" && ok "after the apply, plan finds no difference" || fail "the plan after the apply: $(cat "$work/plan")"
 
@@ -172,7 +180,7 @@ run drift "$here/ci/drift.sh" "$work/out" && grep -qx 'drift: none' "$work/drift
 cp -R "$work/out" "$work/drifted"
 yq -i '(select(.kind == "Role" and .metadata.name == "fleet-deploy") | .rules[0].verbs) = ["get"]' "$work/drifted/10-deployment-beta-2.yaml"
 run drift "$here/ci/drift.sh" "$work/drifted" && grep -q 'drift: filed tacplus-dev/cluster#1' "$work/drift" &&
-  jq -e '.title == "Drift on the tacplus cluster" and (.body | contains("beta-2: change rbac.authorization.k8s.io.v1.Role.tac-beta-2.fleet-deploy"))' "$GSTUB/issues/1" >/dev/null &&
+  jq -e '.title == "Drift on the dev cluster" and (.body | contains("beta-2: change rbac.authorization.k8s.io.v1.Role.tac-beta-2.fleet-deploy"))' "$GSTUB/issues/1" >/dev/null &&
   grep -q 'permissions.*"issues":"write".*"repositories":\["cluster"\]' "$GSTUB/token-requests" &&
   ok "drift: an issue saying what differs, with a token for issues on cluster alone" || fail "drift: $(cat "$work/drift"; cat "$GSTUB/issues/1" 2>/dev/null)"
 run drift "$here/ci/drift.sh" "$work/drifted" && grep -q 'the same drift is already on tacplus-dev/cluster#1' "$work/drift" &&

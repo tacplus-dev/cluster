@@ -167,4 +167,17 @@ script=$(q '.default.before_script[0]')
   { grep -q 'CLUSTER_COMMIT is not a full commit hash' "$work/log" && [ ! -e "$work/src" ] && ok "the jobs refuse an empty CLUSTER_COMMIT" ||
     fail "no CLUSTER_COMMIT: $(cat "$work/log")"; }
 
+# The target (#7): the cluster dev in us-central1-a, in the project tacplus-dev, as its cluster-admin-pipeline; the
+# runners' tokens and the deployments' accounts in that project too.
+[ "$(q '.variables.GCP_PROJECT')" = tacplus-dev ] && [ "$(q '.variables.CLUSTER')" = dev ] && [ "$(q '.variables.ZONE')" = us-central1-a ] &&
+  [ "$(q '.variables.GCP_DEPLOY_SA')" = cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com ] &&
+  ok "the pipeline targets the cluster dev (us-central1-a) in tacplus-dev, as cluster-admin-pipeline there" ||
+  fail "the pipeline's target: $(q '.variables')"
+for r in "$here"/gitlab-runner/runners/*.yaml; do
+  [[ $(yq '.tacplus.token' "$r") == "projects/tacplus-dev/secrets/gitlab-runner-$(basename "$r" .yaml)/versions/"* ]] ||
+    fail "${r#"$here"/}: its token is not gitlab-runner-$(basename "$r" .yaml) in tacplus-dev: $(yq '.tacplus.token' "$r")"
+done
+others=$(yq '.deployments[].deployAccount | select(test("@tacplus-dev\\.iam\\.gserviceaccount\\.com$") | not)' "$here/deployments.yaml")
+[ -z "$others" ] && ok "the runners' tokens and the deployments' accounts are in tacplus-dev" || fail "deploy accounts outside tacplus-dev: $others"
+
 [ "$failed" = 0 ] && echo "ci_test: all passed" || { echo "ci_test: failed"; exit 1; }

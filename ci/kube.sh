@@ -4,10 +4,10 @@
 # Sourced by ci/plan.sh, ci/apply.sh and ci/delete-deployment.sh: what they check before they read or change the
 # cluster.
 
-# kube_check: kubectl's current context is the cluster CLUSTER (tacplus), and this account is cluster-admin there.
+# kube_check: kubectl's current context is the cluster CLUSTER (dev), and this account is cluster-admin there.
 # Until the hub has granted it (README, What the hub does), it returns 3, saying "no cluster grant yet".
 kube_check() {
-  local cluster=${CLUSTER:-tacplus} ctx who
+  local cluster=${CLUSTER:-dev} ctx who
   ctx=$(kubectl config current-context 2>/dev/null) || { echo "kube: no current context" >&2; return 1; }
   case $ctx in
     *_"$cluster") ;;

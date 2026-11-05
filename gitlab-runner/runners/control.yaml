@@ -10,7 +10,7 @@
 #                   writes it into the Secret gitlab-runner-control at apply time
 tacplus:
   tags: [arm64, autoscale, autoscale-16]
-  token: projects/jody1-328023/secrets/gitlab-runner-control/versions/1
+  token: projects/tacplus-dev/secrets/gitlab-runner-control/versions/1
 concurrent: 8
 runners:
   name: tacplus-dev control (cluster, ci, normal pool)

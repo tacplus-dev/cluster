@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Jody Scott
 # SPDX-License-Identifier: Apache-2.0
 #
-# What an apply of the render OUT would change on the cluster `tacplus`, and nothing else: `kubectl diff`
+# What an apply of the render OUT would change on the cluster `dev`, and nothing else: `kubectl diff`
 # (server-side, as ci/apply.sh applies) of each file of the render, then a summary per unit (deploymentproxy, each
 # deployment, and ci) of what is added, changed or removed. A unit whose namespace does not exist yet is all added,
 # listed from the render (the server cannot diff objects in a namespace it does not have). A namespace labelled

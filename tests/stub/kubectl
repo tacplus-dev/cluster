@@ -35,7 +35,7 @@ objects() {
 case "$1 ${2:-}" in
   "config current-context") cat "$k/context" ;;
   "auth can-i") if [ "$(cat "$k/grant" 2>/dev/null)" = yes ]; then echo yes; else echo no; exit 1; fi ;;
-  "auth whoami") echo "cluster-admin-pipeline@jody1-328023.iam.gserviceaccount.com" ;;
+  "auth whoami") echo "cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com" ;;
   "get namespaces")
     sel=$(selector "$@")
     for n in $(ls "$k/ns"); do

@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Jody Scott
 # SPDX-License-Identifier: Apache-2.0
 #
-# Renders what the pipeline applies to the cluster `tacplus`, one file per unit (README, What it manages):
+# Renders what the pipeline applies to the cluster `dev`, one file per unit (README, What it manages):
 #
 #   OUT/00-deploymentproxy.yaml     deploymentproxy's release (deploymentproxy/release, checked against its
 #                                   SHA256SUMS), its image pinned by digest (deploymentproxy/pin.yaml), each

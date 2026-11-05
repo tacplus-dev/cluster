@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Jody Scott
 # SPDX-License-Identifier: Apache-2.0
 #
-# Deletes one deployment from the cluster `tacplus`, with its tenants' data (the deletion job, Jody's only, in a
+# Deletes one deployment from the cluster `dev`, with its tenants' data (the deletion job, Jody's only, in a
 # deletion pipeline: README, Deleting a deployment): the namespace tac-<name>, then whatever tenant namespace of it deploymentproxy has not deleted already
 # (labelled deploymentproxy.tacplus.dev/deployment=<name>). It refuses a deployment deployments.yaml still lists
 # (remove the entry and apply first, or the next apply recreates it), a DELETE_CONFIRM that is not the same name

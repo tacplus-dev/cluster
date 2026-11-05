@@ -12,7 +12,7 @@
 #                      checked, the tests (ci/checks.sh)
 #   security           OSV-Scanner on the tree, govulncheck on the pinned tools, gitleaks on the tree and its history,
 #                      Trivy on the CI image, security-exceptions.yaml enforced (ci/security.sh); plan waits for it
-#   plan               main: kubectl diff against the cluster tacplus, and what each deployment gains or loses
+#   plan               main: kubectl diff against the cluster dev, and what each deployment gains or loses
 #   apply              main, automatically once plan succeeds (main is not production: nothing waits for a person),
 #                      the render plan saved, then the in-cluster runners' tokens from Secret Manager by version, in
 #                      the protected environment cluster: never deletes; not in a deletion pipeline
@@ -22,7 +22,7 @@
 #
 # render, validate and security run on every push and merge request, and nightly. The cluster jobs run on main only,
 # where Workload Identity Federation admits this project (its provider's condition: protected main) as
-# cluster-admin-pipeline, the only holder of cluster-admin on tacplus. No key file and no GitHub token is stored:
+# cluster-admin-pipeline, the only holder of cluster-admin on dev. No key file and no GitHub token is stored:
 # the id_token is exchanged for each job. The only pipeline variables are a deletion pipeline's: DELETE_DEPLOYMENT
 # and DELETE_CONFIRM, both the deployment's name, set when Jody runs the pipeline on main from the web form or the
 # API (README, Deleting a deployment); no other pipeline has the deletion job. Every job runs on the project's own
@@ -33,9 +33,10 @@ variables:
   # The commit of github.com/tacplus-dev/cluster this pipeline renders and applies; empty in the repository,
   # set in the GitLab project's copy (ci/pin.sh).
   CLUSTER_COMMIT: ""
-  GCP_PROJECT: jody1-328023
-  GCP_DEPLOY_SA: cluster-admin-pipeline@jody1-328023.iam.gserviceaccount.com
-  CLUSTER: tacplus
+  # The cluster: tacplus-dev/cloud's dev, in the project tacplus-dev (seabeam.net; #7).
+  GCP_PROJECT: tacplus-dev
+  GCP_DEPLOY_SA: cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com
+  CLUSTER: dev
   ZONE: us-central1-a
   # The tacplus-reader app's key, in Cloud KMS (github_app_token in ci/lib.sh): the drift job files its issue with it.
   TACPLUS_READER_KMS_KEY: projects/jody1-328023/locations/us/keyRings/looper/cryptoKeys/tacplus-reader

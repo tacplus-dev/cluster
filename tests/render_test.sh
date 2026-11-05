@@ -118,7 +118,7 @@ refused_runner() {
     ok "refused: a runner with $1"
   fi
 }
-refused_runner "its token by latest" '.tacplus.token = "projects/jody1-328023/secrets/gitlab-runner-build/versions/latest"' "never latest"
+refused_runner "its token by latest" '.tacplus.token = "projects/tacplus-dev/secrets/gitlab-runner-build/versions/latest"' "never latest"
 refused_runner "no token" 'del(.tacplus.token)' "tacplus.token \[\] is not a Secret Manager version"
 refused_runner "no tags" '.tacplus.tags = []' "tacplus.tags is not a list"
 refused_runner "its own security context" '.securityContext.privileged = true' "sets securityContext, which only gitlab-runner/values.yaml sets"

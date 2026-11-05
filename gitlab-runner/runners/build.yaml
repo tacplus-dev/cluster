@@ -11,7 +11,7 @@
 #                   writes it into the Secret gitlab-runner-build at apply time
 tacplus:
   tags: [arm64, build]
-  token: projects/jody1-328023/secrets/gitlab-runner-build/versions/1
+  token: projects/tacplus-dev/secrets/gitlab-runner-build/versions/1
 concurrent: 6
 runners:
   name: tacplus-dev build (cluster, ci, spot pool)
