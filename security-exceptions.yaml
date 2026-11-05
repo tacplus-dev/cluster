@@ -21,6 +21,14 @@
 #                                   78669 (x/net)
 #   runner's docker-machine         CVE-2026-46600 56851 56852 56854 84304 84445, GHSA-hrxh-6v49-42gf (and 78669)
 #   helper                          CVE-2026-42496 8376 (CRITICAL), 42497 48962 57432 57433 9538 (miniperl)
+#
+# And Trivy's scan of the CI image, ghcr.io/tacplus-dev/tacplus/build:2.5 (2.5.11, sha256:82154c02..., Debian 13.7),
+# also gitlab-runner/pin.yaml's job: (#8): Debian fixed them, the image is not rebuilt yet. When
+# tacplus-dev/tacplus#283 rebuilds build:2.5, move job: in gitlab-runner/pin.yaml to the rebuilt digest and remove
+# these entries:
+#
+#   ImageMagick 8:7.1.1.43+dfsg1-1+deb13u13 (fixed in deb13u14)   CVE-2026-109258 109260 109262 109263 109268 116149
+#   apt 3.0.3 (fixed in 3.0.4)                                      CVE-2026-109518
 exceptions:
   - id: GO-2025-3922
     reason: "ulikunitz/xz memory leak on corrupted LZMA archives (gitleaks v8.30.1, which pins xz v0.5.12): gitleaks reads only this repository's own tree and history, and decodes no archive (its archive depth is 0 by default). Fixed in xz v0.5.15; v8.30.1 is gitleaks' latest release."
@@ -146,3 +154,31 @@ exceptions:
     reason: "miniperl, HIGH (helper 19.5.2, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.2 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
+  - id: CVE-2026-109258
+    reason: "ImageMagick in the CI image (ghcr.io/tacplus-dev/tacplus/build:2.5, Debian 13.7, also pin.yaml's job:): no job here runs ImageMagick or processes an image; the jobs run shell, yq and the pinned tools on this repository's render. Fixed in Debian (deb13u14); arrives with the line's image rebuild (tacplus-dev/tacplus#283)."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#8, 2026-11-05)"
+    expires: 2026-11-19
+  - id: CVE-2026-109260
+    reason: "ImageMagick in the CI image (ghcr.io/tacplus-dev/tacplus/build:2.5, Debian 13.7, also pin.yaml's job:): no job here runs ImageMagick or processes an image; the jobs run shell, yq and the pinned tools on this repository's render. Fixed in Debian (deb13u14); arrives with the line's image rebuild (tacplus-dev/tacplus#283)."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#8, 2026-11-05)"
+    expires: 2026-11-19
+  - id: CVE-2026-109262
+    reason: "ImageMagick in the CI image (ghcr.io/tacplus-dev/tacplus/build:2.5, Debian 13.7, also pin.yaml's job:): no job here runs ImageMagick or processes an image; the jobs run shell, yq and the pinned tools on this repository's render. Fixed in Debian (deb13u14); arrives with the line's image rebuild (tacplus-dev/tacplus#283)."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#8, 2026-11-05)"
+    expires: 2026-11-19
+  - id: CVE-2026-109263
+    reason: "ImageMagick in the CI image (ghcr.io/tacplus-dev/tacplus/build:2.5, Debian 13.7, also pin.yaml's job:): no job here runs ImageMagick or processes an image; the jobs run shell, yq and the pinned tools on this repository's render. Fixed in Debian (deb13u14); arrives with the line's image rebuild (tacplus-dev/tacplus#283)."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#8, 2026-11-05)"
+    expires: 2026-11-19
+  - id: CVE-2026-109268
+    reason: "ImageMagick in the CI image (ghcr.io/tacplus-dev/tacplus/build:2.5, Debian 13.7, also pin.yaml's job:): no job here runs ImageMagick or processes an image; the jobs run shell, yq and the pinned tools on this repository's render. Fixed in Debian (deb13u14); arrives with the line's image rebuild (tacplus-dev/tacplus#283)."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#8, 2026-11-05)"
+    expires: 2026-11-19
+  - id: CVE-2026-116149
+    reason: "ImageMagick in the CI image (ghcr.io/tacplus-dev/tacplus/build:2.5, Debian 13.7, also pin.yaml's job:): no job here runs ImageMagick or processes an image; the jobs run shell, yq and the pinned tools on this repository's render. Fixed in Debian (deb13u14); arrives with the line's image rebuild (tacplus-dev/tacplus#283)."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#8, 2026-11-05)"
+    expires: 2026-11-19
+  - id: CVE-2026-109518
+    reason: "apt in the CI image (ghcr.io/tacplus-dev/tacplus/build:2.5, Debian 13.7, also pin.yaml's job:): an on-path attack on package installs; no job here runs apt (ci/tools.sh fetches each tool by its pinned SHA-256 or module hash), apt runs only when the image is built. Fixed in apt 3.0.4; arrives with the line's image rebuild (tacplus-dev/tacplus#283)."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#8, 2026-11-05)"
+    expires: 2026-11-19

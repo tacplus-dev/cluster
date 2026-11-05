@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-05 by the looper (#7).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-05 by the looper (#8).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.5`.
@@ -46,6 +46,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-05 by th
   (x/net/html; trivy's x/crypto/openpgp), gitleaks v8.30.1 (xz). 20 accepted until 2026-12-05 (#9), in GitLab
   Runner 19.5.2's runner and helper images, its latest release (libexpat, curl, go-jose/v4, x/net; docker-machine's
   x/net, x/text, x/crypto, grpc; the helper's miniperl, two CRITICAL, which the helper never runs). deploymentproxy
-  0.2.1's image: none (2026-11-05). The `job` image carries the CI image's Debian findings (#8). The job has not run
-  in GitLab yet (no runner).
+  0.2.1's image: none (2026-11-05). The CI image `build:2.5` (2.5.11, also `gitlab-runner/pin.yaml`'s `job:`): 7
+  fixed Debian CVEs (6 ImageMagick, 1 apt) accepted until 2026-11-19 (#8), until tacplus-dev/tacplus#283 rebuilds
+  it; then bump `job:` to the rebuilt digest and remove the entries. The job has not run in GitLab yet (no runner).
 - **Blocked on:** the hub's steps above (no issue).
