@@ -11,6 +11,7 @@ Nothing built yet. The design is approved (tacplus-dev/roadmap#1, 2026-11-02).
 - Security job in the pipeline: OSV-Scanner, govulncheck on pinned binaries, gitleaks, Trivy on the CI image, an enforced security-exceptions.yaml (#5). Agent, at Jody's request, 2026-11-04 (`tacplus-dev/roadmap:suggestions/2026-11-04-the-deterministic-security-checks-in-the-pipelines-that-apply-infrastructure.md`).
 - CI in the cluster: GitLab Runner, Kubernetes executor, builds on the spot pool, control jobs on the normal pool, no privileged pods (#6). Agent, at Jody's request, 2026-11-04 (`tacplus-dev/roadmap:decisions/only-vms-are-k8s-nodes-2026-11-04.md`).
 - Retarget the pipeline to the new cluster in seabeam.net (project tacplus-dev, cluster dev), the runners' token secrets there (#7). Agent, at Jody's request, 2026-11-05 (`tacplus-dev/roadmap:decisions/only-vms-are-k8s-nodes-2026-11-04.md`).
+- The in-cluster control runner on tags of its own, `arm64, control`, and never the VM runners' (#13). Agent, at Jody's request, 2026-11-06 (`tacplus-dev/roadmap:suggestions/2026-11-06-the-in-cluster-control-runner-on-tags-of-its-own-or-registered-paused.md`).
 
 ## Later
 - A reconciler (GKE Config Sync or Argo CD) instead of a manual apply, if standing privilege becomes acceptable (roadmap#1, alternative ii).
