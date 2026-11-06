@@ -45,6 +45,16 @@ the looper then marks it `promoted` or `declined` here with the date.
   CRITICAL), and docker-machine's x/net, x/text, x/crypto and grpc in the runner. When GitLab ships 19.5.3 or later
   (chart 0.94.3 or later) with them, bump chart, runner and helper together (README, `gitlab-runner/pin.yaml`'s "A
   bump"), and drop the entries the security job's summary then lists as needed by no finding.
+  Update 2026-11-06 (nightly scan): 19.5.3 (chart 0.94.3) is out, and only some of the fixes are in it. Its images
+  drop docker-machine's findings and curl's, but still carry libexpat 2.9.0-r0, go-jose/v4 4.1.4 and x/net 0.58.0, and
+  the helper's miniperl 5.42.2-r1. So a bump to it removes about 8 of the 20 entries, not all of them (#11).
+- **The Go tools built with their vulnerable dependencies raised** (2026-11-06, nightly scan, #10): `ci/tools.sh`
+  builds each Go tool with `go install pkg@version`, which cannot change a dependency's version. When an advisory's
+  fix exists in a module but not yet in a release of the tool, as with GO-2026-6865 (klauspost/compress v1.20.2) in
+  gitleaks, osv-scanner and trivy, the only way left is an exception. Building each tool from its module at the
+  pinned version with a reviewed `go.mod` override (`go get <module>@<fixed>`, the result's `go.sum` pinned in the
+  repository) would let the pipeline take a fix in a day, not wait a month. The cost is a build that upstream never
+  tested. Trivy is downloaded as a release binary today, so it would have to be built too.
 - **The CI image's gcloud SDK** (2026-11-04, #5): `ghcr.io/tacplus-dev/tacplus/build:2.5` carries Cloud SDK 549.0.0
   (2025-12), whose kubectl dispatcher and gke-gcloud-auth-plugin are built with Go 1.22 to 1.24 (61 to 82
   govulncheck findings each). This pipeline no longer runs them (#5 pins its own), but other jobs in the image may:
