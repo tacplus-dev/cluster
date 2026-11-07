@@ -1,9 +1,9 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by the looper (#10, #11).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by the looper (#10, #11, #12).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
-  `ghcr.io/tacplus-dev/tacplus/build:2.5`.
+  `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
 - **Target (#7):** tacplus-dev/cloud's cluster `dev` (us-central1-a) in the project `tacplus-dev` (seabeam.net), as
   `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`; seatrials' deploy account and the runners' token
   secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1) in `tacplus-dev` too. The old `tacplus` in
@@ -38,7 +38,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by th
   No pipeline has run: the hub owes the runner (tag `cluster`), the project's variables and
   environment (now deployable by the account whose merges start main's pipelines too, for the automatic `apply`),
   the cluster grant, and the drift issue's app permission and KMS binding (README, What the hub does); the hub
-  re-pins the GitLab copy for #3, #4 and #7, after setting `GCP_WIF_PROVIDER` to `dev`'s provider (README, What the
+  re-pins the GitLab copy for #3, #4, #7 and #12, after setting `GCP_WIF_PROVIDER` to `dev`'s provider (README, What the
   hub does, the move from `tacplus` to `dev`). The cluster-scoped objects a fleet's chart needs have no
   place in the render yet.
 - **Known vulnerabilities:** 10 accepted in `security-exceptions.yaml` until 2026-12-04 (#5), none with a fixed
@@ -52,7 +52,6 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by th
   and docker-machine's, and their 8 entries are gone. Not accepted, so failing the job (2026-11-07): Trivy's
   CVE-2026-123158 (the runner's openssh 10.3_p1-r1) and CVE-2026-78661 (x/net/html: the runner, the helper, the CI
   image's gh), published since (#15). deploymentproxy
-  0.2.1's image: none (2026-11-05). The CI image `build:2.5` (2.5.11, also `gitlab-runner/pin.yaml`'s `job:`): 7
-  fixed Debian CVEs (6 ImageMagick, 1 apt) accepted until 2026-11-19 (#8), until tacplus-dev/tacplus#283 rebuilds
-  it; then bump `job:` to the rebuilt digest and remove the entries. The job has not run in GitLab yet (no runner).
+  0.2.1's image: none (2026-11-05). The CI image `build:2.6` (2.6.1, also `gitlab-runner/pin.yaml`'s `job:`, #12): only gh's CVE-2026-78661 above (#15);
+  #8's 7 Debian CVEs in `build:2.5` went with the move. The job has not run in GitLab yet (no runner).
 - **Blocked on:** the hub's steps above (no issue).

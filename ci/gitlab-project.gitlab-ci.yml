@@ -50,7 +50,7 @@ workflow:
     - if: $CI_COMMIT_BRANCH && $CI_PIPELINE_SOURCE =~ /^(push|web|api|schedule)$/
 
 default:
-  image: ghcr.io/tacplus-dev/tacplus/build:2.5
+  image: ghcr.io/tacplus-dev/tacplus/build:2.6
   tags: [cluster]
   interruptible: false
   before_script:

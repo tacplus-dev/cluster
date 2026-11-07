@@ -23,7 +23,7 @@ fail() { echo "FAIL $*"; failed=1; }
 ok() { echo "ok   $*"; }
 command -v gitleaks >/dev/null || { echo "FAIL no gitleaks on the PATH (ci/tools.sh)"; exit 1; }
 export PATH=$here/tests/stub/security:$PATH SSTUB=$work/stub SECURITY_OUT=$work/security
-image=ghcr.io/tacplus-dev/tacplus/build:2.5
+image=ghcr.io/tacplus-dev/tacplus/build:2.6
 mkdir -p "$work/bin" && printf 'not really a binary\n' > "$work/bin/kubectl"
 today=$(date -u +%Y-%m-%d)
 later=$(date -u -d '+30 days' +%Y-%m-%d)
