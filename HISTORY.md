@@ -14,3 +14,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-07 looper issue security fails on main: GO-2026-6865 (klauspost/compress) in gitleaks, osv-scanner, trivy and GO-2026-6888 (brotli) in gitleaks; no tool release has the fix (#10, 167746d)
 - 2026-11-07 looper issue security fails on main: CVE-2026-115506 (libexpat 2.9.0-r0) in GitLab Runner 19.5.2's runner and helper; 19.5.3 still has it (#11, f6bb117)
 - 2026-11-07 looper issue Control runner on tags of its own (arm64, control), not the VM runners' autoscale tags (#13, 144a786)
+- 2026-11-07 looper issue CI image and runners' default job image pinned to build:2.5; tacplus 2.6 is the latest line (and build:2.6 has none of #8's CVEs) (#12)
