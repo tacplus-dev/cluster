@@ -200,7 +200,7 @@ ci/tools.sh security && ci/security.sh . ghcr.io/tacplus-dev/tacplus/build:2.5 b
 The tacplus-dev group's CI jobs run in the cluster, each as a pod of GitLab Runner's Kubernetes executor, in the
 namespace `ci` (Jody, `tacplus-dev/roadmap:decisions/only-vms-are-k8s-nodes-2026-11-04.md` and its addendum; #6).
 This pipeline applies it like the rest, from `out/20-ci.yaml`: GitLab's own chart (`gitlab-runner/release`, chart
-0.94.2, GitLab Runner 19.5.2), rendered by `helm template` with `gitlab-runner/values.yaml` and one file per runner.
+0.94.3, GitLab Runner 19.5.3), rendered by `helm template` with `gitlab-runner/values.yaml` and one file per runner.
 The chart is pinned by the SHA-256 of its archive, and the runner, helper and default job images by digest
 (`gitlab-runner/pin.yaml`); nothing resolves a moving tag or "latest".
 

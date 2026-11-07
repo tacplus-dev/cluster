@@ -8,13 +8,13 @@
 # render fixture. Review the diff of release/ in the pull request.
 chart:
   name: gitlab-runner
-  version: 0.94.2
-  url: https://gitlab-charts.s3.amazonaws.com/gitlab-runner-0.94.2.tgz
+  version: 0.94.3
+  url: https://gitlab-charts.s3.amazonaws.com/gitlab-runner-0.94.3.tgz
   index: https://charts.gitlab.io/index.yaml
-  digest: sha256:6a63ce370db021252f4f6f0414a4ff1fb09f8105d683dd8539ee670263944f21
+  digest: sha256:0a7b8ae7b3a76560f5331de479372d166ee95571e51c2c62754560e295151757
 # The runner manager (the chart's Deployment): the chart's appVersion, its alpine variant.
-runner: registry.gitlab.com/gitlab-org/gitlab-runner:alpine-v19.5.2@sha256:800157105b792ed3f0c9bc0aa6bc6427d66889cafd2c8aae4c4c177194699144
+runner: registry.gitlab.com/gitlab-org/gitlab-runner:alpine-v19.5.3@sha256:25adb59339aebbee89050b2d3fd0d193a30c1860c70fd4d98d1c8b1e154914a3
 # The helper container of every job pod (clones, caches, artifacts), the same version.
-helper: registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:v19.5.2@sha256:ae5b88412762e33a2a1ad4c5bb81b6eec75b638088207299a681ead573e093f1
+helper: registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:v19.5.3@sha256:3e3f338637600789b42a97b0942a686e3b734a01181cd7bc74250ffa39b44810
 # A job's image when its job names none: the tacplus build image the pipelines already run.
 job: ghcr.io/tacplus-dev/tacplus/build:2.5.11@sha256:82154c0263fb66e0b6533672a677d0c7a930b2883879a9191c84631cc0d4ce12

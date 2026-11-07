@@ -49,6 +49,9 @@ the looper then marks it `promoted` or `declined` here with the date.
   Update 2026-11-06 (nightly scan): 19.5.3 (chart 0.94.3) is out, and only some of the fixes are in it. Its images
   drop docker-machine's findings and curl's, but still carry libexpat 2.9.0-r0, go-jose/v4 4.1.4 and x/net 0.58.0, and
   the helper's miniperl 5.42.2-r1. So a bump to it removes about 8 of the 20 entries, not all of them (#11).
+  Update 2026-11-07 (#11): bumped to 19.5.3 (chart 0.94.3), CVE-2026-115506 accepted next to its libexpat siblings,
+  and the 8 entries no finding needed any more removed; 13 remain until 2026-12-05, for the next release with
+  libexpat 2.10.0-r0, go-jose/v4 4.1.6, x/net 0.60.0 and miniperl 5.42.3-r0.
 - **The Go tools built with their vulnerable dependencies raised** (2026-11-06, nightly scan, #10): done for the
   tools built here (#10): `ci/tools.sh` builds gitleaks and OSV-Scanner in a module of their own with the fixed
   modules (`go get <module>@<fixed>`), each checked against the checksum database. Left: the result's `go.sum` is
@@ -59,6 +62,7 @@ the looper then marks it `promoted` or `declined` here with the date.
   CVE-2026-123158 (openssh 10.3_p1-r1 in the runner image) and CVE-2026-78661 (x/net/html, in the runner, helper,
   docker-machine and the CI image's `gh`), beside #11's CVE-2026-115506. Neither is #10's; the nightly scan should
   file them, with #11 and #12 their likely homes.
+  Update 2026-11-07 (#11): filed as #15; still failing the job after #11's bump to 19.5.3.
 - **The CI image's gcloud SDK** (2026-11-04, #5): `ghcr.io/tacplus-dev/tacplus/build:2.5` carries Cloud SDK 549.0.0
   (2025-12), whose kubectl dispatcher and gke-gcloud-auth-plugin are built with Go 1.22 to 1.24 (61 to 82
   govulncheck findings each). This pipeline no longer runs them (#5 pins its own), but other jobs in the image may:

@@ -17,12 +17,12 @@
 # tacplus-dev/cloud#24): gitleaks v8.30.1 with klauspost/compress v1.20.2, andybalholm/brotli v1.2.7 and
 # ulikunitz/xz v0.5.15, osv-scanner v2.7.0 with compress v1.20.2, so none of them needs an entry.
 #
-# And found by Trivy in GitLab Runner 19.5.2's images (gitlab-runner/pin.yaml; #9), GitLab's latest release, none
-# with the fix (track: bump chart, runner and helper to the first release with them, and remove these entries):
+# And found by Trivy in GitLab Runner's images (gitlab-runner/pin.yaml; #9, and #11 for 19.5.3), GitLab's latest
+# release, none with the fix (track: bump chart, runner and helper to the first release with them, and remove these
+# entries). 19.5.3 fixed curl's and docker-machine's (#11 removed their entries); these remain:
 #
-#   runner and helper               CVE-2026-113351 117610 118370 (libexpat), 92392 (curl), 116587 (go-jose/v4),
+#   runner and helper               CVE-2026-113351 115506 117610 118370 (libexpat), 116587 (go-jose/v4),
 #                                   78669 (x/net)
-#   runner's docker-machine         CVE-2026-46600 56851 56852 56854 84304 84445, GHSA-hrxh-6v49-42gf (and 78669)
 #   helper                          CVE-2026-42496 8376 (CRITICAL), 42497 48962 57432 57433 9538 (miniperl)
 #
 # And Trivy's scan of the CI image, ghcr.io/tacplus-dev/tacplus/build:2.5 (2.5.11, sha256:82154c02..., Debian 13.7),
@@ -78,83 +78,55 @@ exceptions:
     decided_by: "jodydadescott (tacplus-dev/cluster#10, 2026-11-06)"
     expires: 2026-12-06
   - id: CVE-2026-113351
-    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.2, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.3, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-117610
-    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.2, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.3, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-118370
-    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.2, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.3, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
+  - id: CVE-2026-115506
+    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.3, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.3 is the latest release, none with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#11, 2026-11-06)"
+    expires: 2026-12-05
   - id: CVE-2026-116587
-    reason: "go-jose/v4 v4.1.4 (gitlab-runner and gitlab-runner-helper 19.5.2): it is reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in v4.1.6; GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "go-jose/v4 v4.1.4 (gitlab-runner and gitlab-runner-helper 19.5.3): it is reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in v4.1.6; GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-78669
-    reason: "x/net v0.58.0 (gitlab-runner, gitlab-runner-helper 19.5.2; v0.55.0 in docker-machine, which the Kubernetes executor never runs): it is reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in v0.60.0; GitLab Runner 19.5.2 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-92392
-    reason: "curl/libcurl 8.22.0-r0 (runner and helper 19.5.2, alpine 3.24.3): they are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 8.23.0-r0; GitLab Runner 19.5.2 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-46600
-    reason: "x/net v0.55.0 in usr/bin/docker-machine (runner 19.5.2): never run: the Kubernetes executor does not use docker-machine; the binary only ships in the image. No runner release past 19.5.2 yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-56851
-    reason: "x/text v0.37.0 in usr/bin/docker-machine (runner 19.5.2): never run: the Kubernetes executor does not use docker-machine; the binary only ships in the image. No runner release past 19.5.2 yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-56852
-    reason: "x/text v0.37.0 in usr/bin/docker-machine (runner 19.5.2): never run: the Kubernetes executor does not use docker-machine; the binary only ships in the image. No runner release past 19.5.2 yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-56854
-    reason: "x/crypto v0.52.0 in usr/bin/docker-machine (runner 19.5.2): never run: the Kubernetes executor does not use docker-machine; the binary only ships in the image. No runner release past 19.5.2 yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-84304
-    reason: "grpc v1.80.0 in usr/bin/docker-machine (runner 19.5.2): never run: the Kubernetes executor does not use docker-machine; the binary only ships in the image. No runner release past 19.5.2 yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-84445
-    reason: "grpc v1.80.0 in usr/bin/docker-machine (runner 19.5.2): never run: the Kubernetes executor does not use docker-machine; the binary only ships in the image. No runner release past 19.5.2 yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: GHSA-hrxh-6v49-42gf
-    reason: "grpc v1.80.0 in usr/bin/docker-machine (runner 19.5.2): never run: the Kubernetes executor does not use docker-machine; the binary only ships in the image. No runner release past 19.5.2 yet."
+    reason: "x/net v0.58.0 (gitlab-runner, gitlab-runner-helper 19.5.3): it is reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in v0.60.0; GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-42496
-    reason: "miniperl, CRITICAL (helper 19.5.2, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "miniperl, CRITICAL (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-8376
-    reason: "miniperl, CRITICAL (helper 19.5.2, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "miniperl, CRITICAL (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-42497
-    reason: "miniperl, HIGH (helper 19.5.2, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-48962
-    reason: "miniperl, HIGH (helper 19.5.2, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-57432
-    reason: "miniperl, HIGH (helper 19.5.2, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-57433
-    reason: "miniperl, HIGH (helper 19.5.2, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-9538
-    reason: "miniperl, HIGH (helper 19.5.2, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.2 is the latest release, none with it yet."
+    reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
   - id: CVE-2026-109258

@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by the looper (#10).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by the looper (#10, #11).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.5`.
@@ -19,7 +19,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by th
   succeeds, applying the render `plan` saved; protected `cluster`, never deletes; not in a deletion pipeline), the
   deletion job (#2: only in a deletion pipeline, run on main from the web form or the API with `DELETE_DEPLOYMENT` and `DELETE_CONFIRM` both the deployment's name; manual, protected,
   named for what it destroys), `drift` (nightly, files an issue, never applies). CI in the cluster (#6):
-  `out/20-ci.yaml`, the namespace `ci` with GitLab Runner's chart 0.94.2 (runner 19.5.2; chart by archive digest,
+  `out/20-ci.yaml`, the namespace `ci` with GitLab Runner's chart 0.94.3 (runner 19.5.3, #11; chart by archive digest,
   images by digest, `gitlab-runner/`, rendered by `helm template`, helm v4.3.1 pinned in `ci/tools.sh`) as two
   runners, `build` (tags `arm64, build`, jobs on the spot pool only) and `control` (`arm64, autoscale,
   autoscale-16`, the normal pool), per-runner requests, limits and ceilings; Roles in `ci` only; jobs as `ci-job`
@@ -46,9 +46,12 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by th
   (x/net/html; trivy's x/crypto/openpgp). GO-2026-6865 (klauspost/compress, fixed in v1.20.2) accepted in trivy
   0.76.1 until 2026-12-06 (#10), no trivy release with it. gitleaks and OSV-Scanner are built with the fixed modules
   instead (`ci/tools.sh`, #10): GO-2026-6865 and GO-2026-6888 (brotli v1.2.7), and gitleaks' xz (v0.5.15), none
-  accepted. 20 accepted until 2026-12-05 (#9), in GitLab
-  Runner 19.5.2's runner and helper images, its latest release (libexpat, curl, go-jose/v4, x/net; docker-machine's
-  x/net, x/text, x/crypto, grpc; the helper's miniperl, two CRITICAL, which the helper never runs). deploymentproxy
+  accepted. 13 accepted until 2026-12-05 (#9, #11), in GitLab
+  Runner 19.5.3's runner and helper images, its latest release (libexpat, four with CVE-2026-115506, #11; go-jose/v4,
+  x/net; the helper's miniperl, two CRITICAL, which the helper never runs); the bump to 19.5.3 (#11) cleared curl's
+  and docker-machine's, and their 8 entries are gone. Not accepted, so failing the job (2026-11-07): Trivy's
+  CVE-2026-123158 (the runner's openssh 10.3_p1-r1) and CVE-2026-78661 (x/net/html: the runner, the helper, the CI
+  image's gh), published since (#15). deploymentproxy
   0.2.1's image: none (2026-11-05). The CI image `build:2.5` (2.5.11, also `gitlab-runner/pin.yaml`'s `job:`): 7
   fixed Debian CVEs (6 ImageMagick, 1 apt) accepted until 2026-11-19 (#8), until tacplus-dev/tacplus#283 rebuilds
   it; then bump `job:` to the rebuilt digest and remove the entries. The job has not run in GitLab yet (no runner).
