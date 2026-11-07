@@ -264,7 +264,8 @@ job (`ci/security.sh`) runs in every pipeline, so on every push and merge reques
 
 The tools are pinned in `ci/tools.sh`, each by its version and a SHA-256: the Go ones built at their module's
 version with a pinned Go toolchain, the module checked against its go.sum hash (h1:, a SHA-256) and the checksum
-database; kubectl, gke-gcloud-auth-plugin and Trivy downloaded from their releases and checked against the
+database, and with the fixed release of any dependency an advisory names that the tool's own release does not have
+yet (gitleaks and OSV-Scanner, #10: instead of an exception); kubectl, gke-gcloud-auth-plugin and Trivy downloaded from their releases and checked against the
 SHA-256 of the file for linux/amd64 or linux/arm64. The vulnerability databases are each tool's of the day.
 
 **The policy**, looper-scan's: the job fails on any secret, and on any HIGH or CRITICAL finding with a fixed version,

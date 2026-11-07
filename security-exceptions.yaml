@@ -11,8 +11,11 @@
 #
 #   kubectl v1.34.13                GO-2026-5158 6603 6610 6611 6612 6617 6629 6860 6866
 #   gke-gcloud-auth-plugin 0.5.21   GO-2026-6860 6866
-#   trivy 0.76.1                    GO-2026-5932 6860 6866
-#   gitleaks v8.30.1                GO-2025-3922
+#   trivy 0.76.1                    GO-2026-5932 6860 6866 6865 (#10)
+#
+# The Go tools built here from source are built with the fixed modules instead (ci/tools.sh; #10, the policy of
+# tacplus-dev/cloud#24): gitleaks v8.30.1 with klauspost/compress v1.20.2, andybalholm/brotli v1.2.7 and
+# ulikunitz/xz v0.5.15, osv-scanner v2.7.0 with compress v1.20.2, so none of them needs an entry.
 #
 # And found by Trivy in GitLab Runner 19.5.2's images (gitlab-runner/pin.yaml; #9), GitLab's latest release, none
 # with the fix (track: bump chart, runner and helper to the first release with them, and remove these entries):
@@ -30,10 +33,6 @@
 #   ImageMagick 8:7.1.1.43+dfsg1-1+deb13u13 (fixed in deb13u14)   CVE-2026-109258 109260 109262 109263 109268 116149
 #   apt 3.0.3 (fixed in 3.0.4)                                      CVE-2026-109518
 exceptions:
-  - id: GO-2025-3922
-    reason: "ulikunitz/xz memory leak on corrupted LZMA archives (gitleaks v8.30.1, which pins xz v0.5.12): gitleaks reads only this repository's own tree and history, and decodes no archive (its archive depth is 0 by default). Fixed in xz v0.5.15; v8.30.1 is gitleaks' latest release."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
-    expires: 2026-12-04
   - id: GO-2026-5158
     reason: "otel baggage header length (kubectl v1.34.13, otel v1.41.0): kubectl takes no baggage header from anyone but the cluster's API server, over TLS. Fixed in otel v1.42.0; no kubectl 1.34 release with it yet."
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
@@ -74,6 +73,10 @@ exceptions:
     reason: "x/net/html raw text rendering (kubectl v1.34.13, gke-gcloud-auth-plugin 0.5.21, trivy 0.76.1): none of them renders HTML here. Fixed in x/net v0.62.0; no release of the three with it yet."
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
     expires: 2026-12-04
+  - id: GO-2026-6865
+    reason: "klauspost/compress panic on two-block frames (trivy 0.76.1, compress v1.20.1; a release binary, not built here): the job's trivy decodes only the CI image's and the pinned images' layers, from their registries, and its own vulnerability database. Fixed in compress v1.20.2; no trivy release with it yet (0.76.2 still has v1.20.1)."
+    decided_by: "jodydadescott (tacplus-dev/cluster#10, 2026-11-06)"
+    expires: 2026-12-06
   - id: CVE-2026-113351
     reason: "libexpat 2.9.0-r0 (runner and helper 19.5.2, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.2 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"

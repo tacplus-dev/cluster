@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-05 by the looper (#8).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by the looper (#10).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.5`.
@@ -41,9 +41,12 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-05 by th
   re-pins the GitLab copy for #3, #4 and #7, after setting `GCP_WIF_PROVIDER` to `dev`'s provider (README, What the
   hub does, the move from `tacplus` to `dev`). The cluster-scoped objects a fleet's chart needs have no
   place in the render yet.
-- **Known vulnerabilities:** 11 accepted in `security-exceptions.yaml` until 2026-12-04 (#5), none with a fixed
+- **Known vulnerabilities:** 10 accepted in `security-exceptions.yaml` until 2026-12-04 (#5), none with a fixed
   release of its tool: kubectl v1.34.13 (x/net, x/text, otel), gke-gcloud-auth-plugin 0.5.21 and trivy 0.76.1
-  (x/net/html; trivy's x/crypto/openpgp), gitleaks v8.30.1 (xz). 20 accepted until 2026-12-05 (#9), in GitLab
+  (x/net/html; trivy's x/crypto/openpgp). GO-2026-6865 (klauspost/compress, fixed in v1.20.2) accepted in trivy
+  0.76.1 until 2026-12-06 (#10), no trivy release with it. gitleaks and OSV-Scanner are built with the fixed modules
+  instead (`ci/tools.sh`, #10): GO-2026-6865 and GO-2026-6888 (brotli v1.2.7), and gitleaks' xz (v0.5.15), none
+  accepted. 20 accepted until 2026-12-05 (#9), in GitLab
   Runner 19.5.2's runner and helper images, its latest release (libexpat, curl, go-jose/v4, x/net; docker-machine's
   x/net, x/text, x/crypto, grpc; the helper's miniperl, two CRITICAL, which the helper never runs). deploymentproxy
   0.2.1's image: none (2026-11-05). The CI image `build:2.5` (2.5.11, also `gitlab-runner/pin.yaml`'s `job:`): 7

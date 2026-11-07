@@ -24,15 +24,18 @@ here=$(cd "$(dirname "$0")/.." && pwd)
 # The toolchain every Go tool here is built with (fetched by go itself, checked against the checksum database), so
 # that their standard library is this one's, whatever the image's go is.
 go_toolchain=go1.27.3
-# module@version  h1 hash  package
+# module@version  h1 hash  package  [module@fixed-version...]
+# A tool built from source is built with each fixed module it names (the policy of tacplus-dev/cloud#24, #10): the
+# dependency's release with an advisory's fix, where no release of the tool has it yet. Drop each once the tool's
+# own pin requires it (or newer).
 go_tools=(
   "github.com/mikefarah/yq/v4@v4.54.1 h1:wFk+RhKFcx6fU6tkjC9z069vLTL4uDoXi9R4SytFB8s= github.com/mikefarah/yq/v4"
   "github.com/yannh/kubeconform@v0.7.0 h1:ZFfniR8VChrWQxaxTUGnNrxw8RIDkjVBrjdhXSamwjw= github.com/yannh/kubeconform/cmd/kubeconform"
-  "github.com/zricethezav/gitleaks/v8@v8.30.1 h1:PmEvCfVI7ti9dV3s5aMZUY7sS2GxRvG3yzih7E+cS3w= github.com/zricethezav/gitleaks/v8"
+  "github.com/zricethezav/gitleaks/v8@v8.30.1 h1:PmEvCfVI7ti9dV3s5aMZUY7sS2GxRvG3yzih7E+cS3w= github.com/zricethezav/gitleaks/v8 github.com/klauspost/compress@v1.20.2 github.com/andybalholm/brotli@v1.2.7 github.com/ulikunitz/xz@v0.5.15"
   "helm.sh/helm/v4@v4.3.1 h1:UndCoLe9UPmNoL7IvWzaUXveL7T5t/ijoorEmgJdI9g= helm.sh/helm/v4/cmd/helm"
 )
 security_go_tools=(
-  "github.com/google/osv-scanner/v2@v2.7.0 h1:7aOrJ9vB7qbzxC3R+QCXs03SHQiRuM80RJdqZhUEl2g= github.com/google/osv-scanner/v2/cmd/osv-scanner"
+  "github.com/google/osv-scanner/v2@v2.7.0 h1:7aOrJ9vB7qbzxC3R+QCXs03SHQiRuM80RJdqZhUEl2g= github.com/google/osv-scanner/v2/cmd/osv-scanner github.com/klauspost/compress@v1.20.2"
   "golang.org/x/vuln@v1.9.0 h1:12VaqnI9kJfqwRoPptxoqsUhQtdfrSbdksT7X/KY/sc= golang.org/x/vuln/cmd/govulncheck"
 )
 # kubectl at the cluster's minor (ci/validate.sh's schemas), from the Kubernetes release.
@@ -60,13 +63,23 @@ mkdir -p "$here/bin"
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 
-# go_tool "MODULE@VERSION H1 PACKAGE": the package built into bin/, once its module's hash is the pinned one.
+# go_tool "MODULE@VERSION H1 PACKAGE [FIX@VERSION...]": the package built into bin/, once its module's hash is the
+# pinned one. With fixes, in a module of its own that requires the package at its version and each fix (go install
+# pkg@version cannot raise a dependency): minimal version selection takes every other module as the tool's go.mod
+# has it, or as the fixes require, each checked against the checksum database.
 go_tool() {
-  local mv h1 pkg sum
-  read -r mv h1 pkg <<<"$1"
+  local mv h1 pkg fixes sum d
+  read -r mv h1 pkg fixes <<<"$1"
   sum=$(GOTOOLCHAIN=$go_toolchain go mod download -json "$mv" | jq -r .Sum)
   [ "$sum" = "$h1" ] || { echo "tools: $mv is $sum, not the pinned $h1" >&2; exit 1; }
-  GOTOOLCHAIN=$go_toolchain GOBIN="$here/bin" go install "$pkg@${mv#*@}"
+  if [ -z "$fixes" ]; then
+    GOTOOLCHAIN=$go_toolchain GOBIN="$here/bin" go install "$pkg@${mv#*@}"
+    return
+  fi
+  d=$(mktemp -d "$t/build.XXXXXX")
+  (cd "$d" && export GOTOOLCHAIN=$go_toolchain && go mod init tools.local/build 2>/dev/null &&
+    { go get "$pkg@${mv#*@}" $fixes 2>get.log || { cat get.log >&2; false; }; } && go build -o "$here/bin/" "$pkg") ||
+    { echo "tools: cannot build $pkg@${mv#*@} with $fixes" >&2; exit 1; }
 }
 # fetch URL SHA256 FILE: URL into FILE, if its SHA-256 is SHA256.
 fetch() {
