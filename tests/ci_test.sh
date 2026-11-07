@@ -11,7 +11,8 @@
 # their id_token; apply and the deletion job are in the protected environment cluster, and run what they say; a
 # failed apply fails the pipeline; drift runs only on a schedule and never applies. ci/pin.sh sets CLUSTER_COMMIT and nothing else, --check
 # accepts its output and refuses any other change, and the jobs refuse an empty CLUSTER_COMMIT. The security job has
-# no id_token, fetches the history, runs ci/security.sh, keeps its report pass or fail, and plan waits for it.
+# no id_token, fetches the history, runs ci/security.sh, keeps its report pass or fail, and plan waits for it. build.lock
+# pins the CI image by digest, gitlab-runner/pin.yaml's job:, and gates.yaml's full runs the render, validate and the tests.
 # Needs bash and yq.
 #
 #   tests/ci_test.sh
@@ -35,6 +36,18 @@ for j in "${jobs[@]}"; do
   [ "$(q ".[\"$j\"].tags // \"\"")" = "" ] || fail "$j: sets its own tags"
 done
 [ "$(q '.default.tags | join(",")')" = cluster ] && ok "every job runs on the runner tagged cluster" || fail "default tags: $(q '.default.tags')"
+# build.lock pins tacplus-dev/build's builds to the CI image by digest (#14), read as its plan reads it: the image
+# gitlab-runner/pin.yaml's job: already pins, of the CI file's line (build:2.6, a patch of it, by its digest). And
+# gates.yaml gives those builds the gates to run in it: its full set, the render, validate and the tests, as CI.
+lock=$(sed -n 's/^build_image:[[:space:]]*"\{0,1\}\([^"[:space:]]*\)"\{0,1\}[[:space:]]*$/\1/p' "$here/build.lock" 2>/dev/null | head -1)
+[[ $lock =~ ^[^@]+:[0-9.]+@sha256:[0-9a-f]{64}$ ]] && ok "build.lock pins an image by digest" || fail "build.lock's build_image: [$lock]"
+[ "$lock" = "$(yq -r '.job' "$here/gitlab-runner/pin.yaml")" ] && ok "build.lock pins gitlab-runner/pin.yaml's job image" ||
+  fail "build.lock's build_image [$lock] is not gitlab-runner/pin.yaml's job: $(yq -r '.job' "$here/gitlab-runner/pin.yaml")"
+[[ ${lock%@*} == "$(q '.default.image')".* ]] && ok "build.lock pins a patch of the CI image's line" ||
+  fail "build.lock's build_image [$lock] is not of the CI image $(q '.default.image')"
+gates='ci/tools.sh && export PATH=$PWD/bin:$PATH && ./render.sh deployments.yaml out && ci/validate.sh out && ci/checks.sh'
+[ "$(yq -r '.full.run // ""' "$here/gates.yaml" 2>/dev/null)" = "$gates" ] &&
+  ok "gates.yaml's full runs the render, validate and the tests" || fail "gates.yaml's full: [$(yq -r '.full.run' "$here/gates.yaml" 2>&1)]"
 
 # cond EXPR: whether the rules:if expression EXPR holds under the variables set: clauses joined by &&, each $VAR
 # (set and not empty), $VAR == "string", $VAR == $VAR or $VAR =~ /regex/, the forms the file uses. Any other

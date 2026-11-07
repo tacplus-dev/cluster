@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by the looper (#10, #11, #12, #15).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by the looper (#10, #11, #12, #14, #15).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -27,6 +27,10 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by th
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
   1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
   `ci/policy.sh`. Tests green (`ci/checks.sh`), here and in the CI image.
+- **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6.1's,
+  `gitlab-runner/pin.yaml`'s `job:`) and `gates.yaml` its one set, full (`ci/tools.sh`, the render, `ci/validate.sh
+  out`, `ci/checks.sh`), so tacplus-dev/build builds this repository in that image, with no Docker, and runs its
+  security checks; `tests/ci_test.sh` refuses a `build.lock` that is not that `job:`, of the CI image's line.
 - **Released / deployed:** the GitLab project runs pipelines on main: #2 reports Jody playing `apply` in pipeline
   3019831835 (job 17680247127) on 2026-11-02; its outcome is not recorded here yet. The lines below predate it.
 - **Known gaps:** the in-cluster runners are not registered or applied yet: the hub registers them as tacplus-dev

@@ -44,6 +44,7 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
 | `ci/*.sh` | The jobs' scripts: `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools). |
+| `build.lock`, `gates.yaml` | The build image by digest (the CI image), and the gates run in it (How a change reaches the cluster, below). |
 | `security-exceptions.yaml` | The security findings accepted, each until its expiry (Security checks, below). |
 | `tests/` | The tests (`ci/checks.sh` runs them all), their fixtures and stubs. |
 
@@ -76,7 +77,11 @@ Until the hub's steps below are done, `plan` stops with `kube: no cluster grant 
 
 ### How a change reaches the cluster
 
-1. A pull request here (to `deployments.yaml`, the pin, the render); the tests run as its gates.
+1. A pull request here (to `deployments.yaml`, the pin, the render); the tests run as its gates (the looper's land, or
+   `gates.yaml`'s `full`: `ci/tools.sh`, the render, `ci/validate.sh out` and `ci/checks.sh`). They run in the image
+   `build.lock` pins by digest, the CI image, with no Docker: tacplus-dev/build builds a commit only from that pin
+   (looper#71). To move it, change `build.lock` and `gitlab-runner/pin.yaml`'s `job:` together, of the CI file's
+   line (`tests/ci_test.sh` refuses them apart): a new digest is a change like any other, landed on the full gates.
 2. Once it is merged, a merge request in the GitLab project setting `.gitlab-ci.yml` to `ci/pin.sh <commit>`'s
    output, for that commit of main: `render` and `validate` run on it.
 3. Merged there, the pipeline on main runs `plan`, then `apply` of what it planned. Nobody plays it.
