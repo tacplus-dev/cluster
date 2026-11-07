@@ -11,3 +11,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-04 looper issue CI in the cluster: GitLab Runner (Kubernetes executor) via the cluster pipeline; builds on the spot pool, control jobs on the normal pool; no privileged pods (#6, 276d1f8)
 - 2026-11-05 looper issue Retarget the cluster pipeline to the new cluster in seabeam.net (project tacplus-dev, cluster dev); runners' token secrets there (#7, fbcc43a)
 - 2026-11-05 looper issue GitLab Runner 19.5.2's pinned images carry fixed HIGH/CRITICAL findings (helper: miniperl CRITICAL; libexpat, curl, go-jose, x/net), unscanned by the security job (#9, a9fdb76)
+- 2026-11-07 looper issue security fails on main: GO-2026-6865 (klauspost/compress) in gitleaks, osv-scanner, trivy and GO-2026-6888 (brotli) in gitleaks; no tool release has the fix (#10, 167746d)
