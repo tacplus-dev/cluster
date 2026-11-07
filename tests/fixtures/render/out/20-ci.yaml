@@ -475,7 +475,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner control (gitlab-runner/runners/control.yaml), tags arm64, autoscale, autoscale-16: GitLab Runner's chart 0.94.3.
+# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control: GitLab Runner's chart 0.94.3.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -753,7 +753,7 @@ spec:
         tacplus.dev/ci-runner: control
       annotations:
         checksum/configmap: 503b8ebb784960c3a68a59e211a8efb6a64c61444fb004b55a49ff1aa026605d
-        tacplus.dev/runner-tags: "arm64,autoscale,autoscale-16"
+        tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
         tacplus.dev/runner-token-secret: "gitlab-runner-control"
     spec:

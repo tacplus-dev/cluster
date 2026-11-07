@@ -21,8 +21,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by th
   named for what it destroys), `drift` (nightly, files an issue, never applies). CI in the cluster (#6):
   `out/20-ci.yaml`, the namespace `ci` with GitLab Runner's chart 0.94.3 (runner 19.5.3, #11; chart by archive digest,
   images by digest, `gitlab-runner/`, rendered by `helm template`, helm v4.3.1 pinned in `ci/tools.sh`) as two
-  runners, `build` (tags `arm64, build`, jobs on the spot pool only) and `control` (`arm64, autoscale,
-  autoscale-16`, the normal pool), per-runner requests, limits and ceilings; Roles in `ci` only; jobs as `ci-job`
+  runners, `build` (tags `arm64, build`, jobs on the spot pool only) and `control` (`arm64, control`, #13;
+  no VM runner's tag, the policy refuses one; the normal pool), per-runner requests, limits and ceilings; Roles in `ci` only; jobs as `ci-job`
   with no token, kept off the metadata server (NetworkPolicy); the admission policy `ci-pods` refusing privileged,
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
   1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in

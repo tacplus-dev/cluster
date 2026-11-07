@@ -1,15 +1,16 @@
-# The control runner: the tacplus-dev group's jobs tagged for the looper's kicker, reports, managers and scans
-# (`autoscale`; tacplus's reports, `autoscale-16`), each a pod on the normal pool: it tolerates no spot taint and
-# refuses a spot node by its label or GKE's. No privilege, no privilege escalation, no host path, no Docker socket;
-# agents never build (a build is a job of its own, on the build runner). A job may raise its requests and limits up
-# to the *_overwrite_max_allowed ceilings, which fit a c4a-standard-2 (2 CPUs, 8 GB) beside the platform; it may
-# not move its pod, its namespace or its account.
+# The control runner: the tacplus-dev group's jobs tagged `arm64, control` (the looper's kicker, reports, managers
+# and scans, once they move here: tacplus-dev/looper#84), each a pod on the normal pool. Its tags are its own, never
+# the VM runners' (`autoscale`, `autoscale-16`, `gce`: ci/policy.sh): GitLab gives a job to whichever runner holding
+# its tags asks first (#13). It tolerates no spot taint and refuses a spot node by its label or GKE's. No privilege,
+# no privilege escalation, no host path, no Docker socket; agents never build (a build is a job of its own, on the
+# build runner). A job may raise its requests and limits up to the *_overwrite_max_allowed ceilings, which fit a
+# c4a-standard-2 (2 CPUs, 8 GB) beside the platform; it may not move its pod, its namespace or its account.
 #
 #   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
 #   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
 #                   writes it into the Secret gitlab-runner-control at apply time
 tacplus:
-  tags: [arm64, autoscale, autoscale-16]
+  tags: [arm64, control]
   token: projects/tacplus-dev/secrets/gitlab-runner-control/versions/1
 concurrent: 8
 runners:

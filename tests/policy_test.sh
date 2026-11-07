@@ -9,8 +9,9 @@
 # namespace; an unlabelled namespace. In ci's file: privileged jobs or runners, a host path, the Docker socket, an
 # added capability, host networking, an image by tag only; build jobs off the spot pool or as root, control jobs
 # tolerating spot, landing on a spot node, Unconfined or escalating privilege; a job allowed to override its
-# placement, a job's token, no resource ceiling; build taking other tags; a token by latest; cluster RBAC, a `*`, a
-# resource the executor does not need, another namespace's account or object, a Secret. Needs bash, yq, jq, helm.
+# placement, a job's token, no resource ceiling; build taking other tags; a VM runner's tag (autoscale,
+# autoscale-16, gce) on any runner; a token by latest; cluster RBAC, a `*`, a resource the executor does not need,
+# another namespace's account or object, a Secret. Needs bash, yq, jq, helm.
 #
 #   tests/policy_test.sh
 set -uo pipefail
@@ -96,6 +97,8 @@ breach_ci "a job's token" "$(toml build 'automount_service_account_token = false
 breach_ci "no memory ceiling" "$(toml build 'memory_limit_overwrite_max_allowed = \"[^\"]*\"' '')" "no ceiling for memory_limit"
 breach_ci "a capability added to jobs" "$(toml build 'privileged = false' 'privileged = false\n    cap_add = [\"SYS_ADMIN\"]')" "gitlab-runner-build: its jobs add capabilities"
 breach_ci "build taking control's tags" "$(deployment build '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,build,autoscale\"" "takes build with other tags (arm64, build, autoscale)"
+breach_ci "control taking the VM runners' tags" "$(deployment control '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,control,autoscale-16\"" "gitlab-runner-control: takes a tag of the VM runners (autoscale-16)"
+breach_ci "build taking a VM runner's tag" "$(deployment build '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,gce\"" "gitlab-runner-build: takes a tag of the VM runners (gce)"
 breach_ci "a token by latest" "$(deployment control '.metadata.annotations."tacplus.dev/runner-token"') = \"projects/p-1234/secrets/t/versions/latest\"" "gitlab-runner-control's token \[projects/p-1234/secrets/t/versions/latest\] is not a Secret Manager version"
 breach_ci "a privileged runner manager" "$(deployment build '.spec.containers[0].securityContext.privileged') = true" "Deployment gitlab-runner-build: the container gitlab-runner-build is privileged"
 breach_ci "a host path in a runner manager" "$(deployment build '.spec.volumes') += [{\"name\": \"docker\", \"hostPath\": {\"path\": \"/var/run/docker.sock\"}}]" "the volume docker is a host path"

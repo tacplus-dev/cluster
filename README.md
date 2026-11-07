@@ -207,7 +207,7 @@ The chart is pinned by the SHA-256 of its archive, and the runner, helper and de
 | Runner | Tags | Its jobs' pods | Default requests / limits | Ceiling a job may raise them to |
 |---|---|---|---|---|
 | `build` | `arm64`, `build` | the spot pool only: node selector `spot=true`, toleration `spot=true:NoSchedule` | CPU 1 / 3, memory 4Gi / 8Gi | CPU 3500m, memory 12Gi (a c4a-standard-4) |
-| `control` | `arm64`, `autoscale`, `autoscale-16` (the looper's kicker, reports, managers, scans) | the normal pool: no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 250m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
+| `control` | `arm64`, `control` (the looper's kicker, reports, managers, scans) | the normal pool: no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 250m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
 
 A job raises its own with GitLab's variables (`KUBERNETES_CPU_REQUEST`, `KUBERNETES_MEMORY_LIMIT` and the rest) up
 to the ceiling; the helper container has its own small defaults. It may override nothing else: not its node
@@ -238,16 +238,19 @@ handled the GitLab way, with `retry:` in the pipeline files (`runner_system_fail
 
 `ci/policy.sh` checks all of it on the render (each runner's `config.toml` included): the pinned images, the
 namespace-scoped RBAC, the absence of privileged pods, host paths and the Docker socket, and that build pods land
-only on the tainted spot pool and other jobs never; `tests/policy_test.sh` breaks each rule and
-`tests/render_test.sh` checks the render.
+only on the tainted spot pool and other jobs never, and that no runner takes a VM runner's tag;
+`tests/policy_test.sh` breaks each rule and `tests/render_test.sh` checks the render.
 
 **A bump** of the chart: its version, url and digest and the three images in `gitlab-runner/pin.yaml` together, then
 `gitlab-runner/fetch.sh` (which refuses an archive or an image that is not the pinned digest, and a chart whose
 appVersion is not the images') and `UPDATE=1 tests/render_test.sh`; review the diff of `release/` and the fixture.
 
-**Moving jobs over** is tacplus-dev/looper's (the switch issue): a job tagged `arm64, autoscale` or `arm64, build`
-runs here once these runners are online and the VM runners holding the same tags are paused. The spot pool's size
-waits on tacplus-dev/cloud#7; this uses whatever pool exists.
+**Moving jobs over** is tacplus-dev/looper's (tacplus-dev/looper#84): a job moves here by switching its tags to
+`arm64, control` or `arm64, build`, these runners' own; no in-cluster runner holds a VM runner's tag (`autoscale`,
+`autoscale-16`, `gce`; `ci/policy.sh` refuses one), so a job still tagged for the VMs never lands here (#13). The
+GitLab runners' tags follow `tacplus.tags` (the hub's step 7); `control` stays paused until tacplus-dev/looper#84
+gives its pod what the looper's jobs need. The spot pool's size waits on tacplus-dev/cloud#7; this uses whatever
+pool exists.
 
 ## Security checks
 
