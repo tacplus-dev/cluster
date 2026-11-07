@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by the looper (#10, #11, #12).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by the looper (#10, #11, #12, #15).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -46,12 +46,13 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by th
   (x/net/html; trivy's x/crypto/openpgp). GO-2026-6865 (klauspost/compress, fixed in v1.20.2) accepted in trivy
   0.76.1 until 2026-12-06 (#10), no trivy release with it. gitleaks and OSV-Scanner are built with the fixed modules
   instead (`ci/tools.sh`, #10): GO-2026-6865 and GO-2026-6888 (brotli v1.2.7), and gitleaks' xz (v0.5.15), none
-  accepted. 13 accepted until 2026-12-05 (#9, #11), in GitLab
+  accepted. 14 accepted until 2026-12-05 (#9, #11, #15), in GitLab
   Runner 19.5.3's runner and helper images, its latest release (libexpat, four with CVE-2026-115506, #11; go-jose/v4,
-  x/net; the helper's miniperl, two CRITICAL, which the helper never runs); the bump to 19.5.3 (#11) cleared curl's
-  and docker-machine's, and their 8 entries are gone. Not accepted, so failing the job (2026-11-07): Trivy's
-  CVE-2026-123158 (the runner's openssh 10.3_p1-r1) and CVE-2026-78661 (x/net/html: the runner, the helper, the CI
-  image's gh), published since (#15). deploymentproxy
-  0.2.1's image: none (2026-11-05). The CI image `build:2.6` (2.6.1, also `gitlab-runner/pin.yaml`'s `job:`, #12): only gh's CVE-2026-78661 above (#15);
+  x/net; the helper's miniperl, two CRITICAL, which the helper never runs; the runner's openssh, CVE-2026-123158, #15,
+  which the Kubernetes executor never runs); the bump to 19.5.3 (#11) cleared curl's and docker-machine's, and their
+  8 entries are gone. CVE-2026-78661 (x/net/html, fixed in v0.62.0) accepted until 2026-12-06 (#15) in the runner's
+  gitlab-runner and docker-machine, the helper's gitlab-runner-helper and the CI image's `gh`, until the next GitLab
+  Runner release and tacplus-dev/tacplus#350. deploymentproxy
+  0.2.1's image: none (2026-11-05). The CI image `build:2.6` (2.6.1, also `gitlab-runner/pin.yaml`'s `job:`, #12): only gh's CVE-2026-78661, accepted above (#15);
   #8's 7 Debian CVEs in `build:2.5` went with the move. The job has not run in GitLab yet (no runner).
 - **Blocked on:** the hub's steps above (no issue).

@@ -63,6 +63,9 @@ the looper then marks it `promoted` or `declined` here with the date.
   docker-machine and the CI image's `gh`), beside #11's CVE-2026-115506. Neither is #10's; the nightly scan should
   file them, with #11 and #12 their likely homes.
   Update 2026-11-07 (#11): filed as #15; still failing the job after #11's bump to 19.5.3.
+  Update 2026-11-07 (#15): both accepted (Jody's decision on #15), CVE-2026-123158 until 2026-12-05 with its
+  siblings and CVE-2026-78661 until 2026-12-06; remove them with the next GitLab Runner release and, for the CI
+  image's `gh` (build:2.6.1 since #12, x/net v0.60.0 still), tacplus-dev/tacplus#350.
 - **The CI image's gcloud SDK** (2026-11-04, #5): `ghcr.io/tacplus-dev/tacplus/build:2.5` carries Cloud SDK 549.0.0
   (2025-12), whose kubectl dispatcher and gke-gcloud-auth-plugin are built with Go 1.22 to 1.24 (61 to 82
   govulncheck findings each). This pipeline no longer runs them (#5 pins its own), but other jobs in the image may:

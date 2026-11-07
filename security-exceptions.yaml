@@ -22,8 +22,12 @@
 # entries). 19.5.3 fixed curl's and docker-machine's (#11 removed their entries); these remain:
 #
 #   runner and helper               CVE-2026-113351 115506 117610 118370 (libexpat), 116587 (go-jose/v4),
-#                                   78669 (x/net)
+#                                   78669 78661 (x/net; 78661 in docker-machine too) (#15)
+#   runner                          CVE-2026-123158 (openssh) (#15)
 #   helper                          CVE-2026-42496 8376 (CRITICAL), 42497 48962 57432 57433 9538 (miniperl)
+#
+# And in the CI image's gh (ghcr.io/tacplus-dev/tacplus/build:2.6, also gitlab-runner/pin.yaml's job:, #12),
+# CVE-2026-78661 (#15), until tacplus-dev/tacplus#350 ships a gh built with x/net v0.62.0.
 exceptions:
   - id: GO-2026-5158
     reason: "otel baggage header length (kubectl v1.34.13, otel v1.41.0): kubectl takes no baggage header from anyone but the cluster's API server, over TLS. Fixed in otel v1.42.0; no kubectl 1.34 release with it yet."
@@ -93,6 +97,14 @@ exceptions:
     reason: "x/net v0.58.0 (gitlab-runner, gitlab-runner-helper 19.5.3): it is reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in v0.60.0; GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
+  - id: CVE-2026-123158
+    reason: "OpenSSH password authentication bypass (runner 19.5.3, openssh-client 10.3_p1-r1, alpine 3.24.3; fixed in 10.3_p1-r2): the runner's Kubernetes executor never runs ssh, and the CVE concerns password authentication. GitLab Runner 19.5.3 is the latest release, none with it yet."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#15, 2026-11-07)"
+    expires: 2026-12-05
+  - id: CVE-2026-78661
+    reason: "x/net/html DoS on crafted HTML (gitlab-runner and gitlab-runner-helper 19.5.3 x/net v0.58.0, docker-machine 19.5.3 v0.60.0; the CI image's gh, build:2.6, v0.60.0): the runner reaches it only talking to gitlab.com and to Kubernetes, over verified TLS; docker-machine is never run; no job here has gh parse HTML from outside. Fixed in v0.62.0; GitLab Runner 19.5.3 is the latest release, none with it yet, and the CI image's gh waits for tacplus-dev/tacplus#350."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#15, 2026-11-07)"
+    expires: 2026-12-06
   - id: CVE-2026-42496
     reason: "miniperl, CRITICAL (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
