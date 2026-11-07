@@ -1,0 +1,1 @@
+- 2026-11-07 looper issue CI image and runners' default job image pinned to build:2.5; tacplus 2.6 is the latest line (and build:2.6 has none of #8's CVEs) (#12)
