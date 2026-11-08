@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by the looper (#10, #11, #12, #14, #15).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-08 by the looper (#10, #11, #12, #14, #15, #16).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -27,7 +27,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by th
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
   1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
   `ci/policy.sh`. Tests green (`ci/checks.sh`), here and in the CI image.
-- **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6.1's,
+- **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6.2's since #16,
   `gitlab-runner/pin.yaml`'s `job:`) and `gates.yaml` its one set, full (`ci/tools.sh`, the render, `ci/validate.sh
   out`, `ci/checks.sh`), so tacplus-dev/build builds this repository in that image, with no Docker, and runs its
   security checks; `tests/ci_test.sh` refuses a `build.lock` that is not that `job:`, of the CI image's line.
@@ -48,7 +48,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by th
 - **Known vulnerabilities:** 10 accepted in `security-exceptions.yaml` until 2026-12-04 (#5), none with a fixed
   release of its tool: kubectl v1.34.13 (x/net, x/text, otel), gke-gcloud-auth-plugin 0.5.21 and trivy 0.76.1
   (x/net/html; trivy's x/crypto/openpgp). GO-2026-6865 (klauspost/compress, fixed in v1.20.2) accepted in trivy
-  0.76.1 until 2026-12-06 (#10), no trivy release with it. gitleaks and OSV-Scanner are built with the fixed modules
+  0.76.1 until 2026-12-06 (#10), no trivy release with it (still found, #16). gitleaks and OSV-Scanner are built with the fixed modules
   instead (`ci/tools.sh`, #10): GO-2026-6865 and GO-2026-6888 (brotli v1.2.7), and gitleaks' xz (v0.5.15), none
   accepted. 14 accepted until 2026-12-05 (#9, #11, #15), in GitLab
   Runner 19.5.3's runner and helper images, its latest release (libexpat, four with CVE-2026-115506, #11; go-jose/v4,
@@ -57,6 +57,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-07 by th
   8 entries are gone. CVE-2026-78661 (x/net/html, fixed in v0.62.0) accepted until 2026-12-06 (#15) in the runner's
   gitlab-runner and docker-machine, the helper's gitlab-runner-helper and the CI image's `gh`, until the next GitLab
   Runner release and tacplus-dev/tacplus#350. deploymentproxy
-  0.2.1's image: none (2026-11-05). The CI image `build:2.6` (2.6.1, also `gitlab-runner/pin.yaml`'s `job:`, #12): only gh's CVE-2026-78661, accepted above (#15);
-  #8's 7 Debian CVEs in `build:2.5` went with the move. The job has not run in GitLab yet (no runner).
+  0.2.1's image: none (2026-11-05). The CI image `build:2.6` (2.6.2 since #16, also `gitlab-runner/pin.yaml`'s `job:`, #12): only gh's CVE-2026-78661,
+  accepted above (#15), and zlib1g's CVE-2026-85091 and CVE-2026-76844 (the latter Trivy's DB matching a webpack
+  advisory to zlib), accepted until 2026-12-06 (#16): 2.6.2 has the fixed zlib1g (1-1+deb13u1) on amd64 only, its
+  arm64 image still v2.6.1's (tacplus-dev/tacplus#369). #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
 - **Blocked on:** the hub's steps above (no issue).

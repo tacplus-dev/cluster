@@ -65,7 +65,10 @@ the looper then marks it `promoted` or `declined` here with the date.
   Update 2026-11-07 (#11): filed as #15; still failing the job after #11's bump to 19.5.3.
   Update 2026-11-07 (#15): both accepted (Jody's decision on #15), CVE-2026-123158 until 2026-12-05 with its
   siblings and CVE-2026-78661 until 2026-12-06; remove them with the next GitLab Runner release and, for the CI
-  image's `gh` (build:2.6.1 since #12, x/net v0.60.0 still), tacplus-dev/tacplus#350.
+  image's `gh` (build:2.6.2 since #16, x/net v0.60.0 still), tacplus-dev/tacplus#350.
+  Update 2026-11-08 (#16): the CI image's zlib1g CVE-2026-85091 and CVE-2026-76844 accepted until 2026-12-06 (hub);
+  build:2.6.2 fixes them on amd64 only, its arm64 image is still v2.6.1's: move the pin to the first build:2.6.x
+  whose arm64 image has zlib1g 1-1+deb13u1 (tacplus-dev/tacplus#369) and remove both entries.
 - **The CI image's gcloud SDK** (2026-11-04, #5): `ghcr.io/tacplus-dev/tacplus/build:2.5` carries Cloud SDK 549.0.0
   (2025-12), whose kubectl dispatcher and gke-gcloud-auth-plugin are built with Go 1.22 to 1.24 (61 to 82
   govulncheck findings each). This pipeline no longer runs them (#5 pins its own), but other jobs in the image may:
@@ -89,6 +92,12 @@ the looper then marks it `promoted` or `declined` here with the date.
 - **Runner managers apart from their jobs** (2026-11-04, #6): the managers and their token Secrets share `ci` with
   the job pods. Job pods hold no Kubernetes token, so they cannot read those Secrets, but the chart's
   `runners.jobNamespace` would put the jobs in a namespace of their own (`ci-jobs`), with the managers' Role there.
+- **`ci/security.sh` refusing a partial tool set** (2026-11-08, #16): #16 was filed saying GO-2026-6865 (trivy
+  0.76.1's klauspost/compress) was an exception no finding needed; with `ci/tools.sh security`, govulncheck still finds
+  `fse.Compress` in trivy 0.76.1 (arm64 and amd64), so the exception stays. The likeliest cause: a run with `bin/*`
+  from `ci/tools.sh` without `security` has no `bin/trivy`, so trivy's binary is never scanned and its exceptions look
+  stale. The script could take its binaries from ci/tools.sh's list and fail when one is missing, rather than
+  scanning whatever `bin/*` holds.
 
 ## Promoted / declined
 - **A security report of the pipeline's own** (2026-11-04, nightly scan): no job checks the Go tools `ci/tools.sh`

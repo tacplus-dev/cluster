@@ -28,6 +28,10 @@
 #
 # And in the CI image's gh (ghcr.io/tacplus-dev/tacplus/build:2.6, also gitlab-runner/pin.yaml's job:, #12),
 # CVE-2026-78661 (#15), until tacplus-dev/tacplus#350 ships a gh built with x/net v0.62.0.
+# And in its Debian zlib1g and zlib1g-dev (1:1.3.dfsg+really1.3.1-1+b1, fixed in 1-1+deb13u1), CVE-2026-85091 and
+# CVE-2026-76844 (#16): build:2.6.2 (since #16) has the fix on amd64 only; its arm64 image, the one the cluster runs, is
+# still v2.6.1's (tacplus-dev/tacplus#369). Track: move build.lock and pin.yaml's job: to the first build:2.6.x whose
+# arm64 image has it, and remove both entries.
 exceptions:
   - id: GO-2026-5158
     reason: "otel baggage header length (kubectl v1.34.13, otel v1.41.0): kubectl takes no baggage header from anyone but the cluster's API server, over TLS. Fixed in otel v1.42.0; no kubectl 1.34 release with it yet."
@@ -133,3 +137,11 @@ exceptions:
     reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
     expires: 2026-12-05
+  - id: CVE-2026-85091
+    reason: "zlib heap buffer overflow in gz_vacate() (the CI image build:2.6.2's arm64 image, zlib1g and zlib1g-dev 1:1.3.dfsg+really1.3.1-1+b1, fixed in 1-1+deb13u1): no job here decompresses untrusted input; the jobs read this repository, the pinned tools and images by digest, and the cluster. No build:2.6.x arm64 image with the fix yet (tacplus-dev/tacplus#369)."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#16, 2026-11-07)"
+    expires: 2026-12-06
+  - id: CVE-2026-76844
+    reason: "matched by Trivy's DB to zlib1g and zlib1g-dev 1:1.3.dfsg+really1.3.1-1+b1 (the CI image build:2.6.2's arm64 image, fixed in 1-1+deb13u1), though its title is a webpack-dev-middleware path traversal: no job here serves files with webpack, nor decompresses untrusted input. No build:2.6.x arm64 image with the fix yet (tacplus-dev/tacplus#369)."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#16, 2026-11-07)"
+    expires: 2026-12-06
