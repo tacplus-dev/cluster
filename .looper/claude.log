@@ -1,0 +1,8 @@
+= init
+> Bash git status --short && git log --oneline -3 && cat build.lock && gh issue view 14 --repo tacplus-dev/cluster --comments | tail -20
+< 8deb773 ROADMAP: #17 for the test IdP (fleet-seatrials#27) d18dd5a HISTORY.md: #16 (looper) eb24474 CI image's zlib1g CVE-2026-85091 and CVE-2026-76844 accepted until 2026-12-06; pin build:2.6.2 (#16) # The build image of tacplus-dev/cluster, by digest (#14; looper#71): tacplus build 2.6 at v2.6.2's...
+Clean checkout, nothing uncommitted. Check commit statuses on main first, then start a build.
+> Bash for c in d18dd5a 8deb773; do echo "== $c"; gh api repos/tacplus-dev/cluster/commits/$(git rev-parse $c)/statuses --jq '.[] | "\(.context) \(.state) \(.target_url) \(.created_at) \(.description)"'; done; gh issue view 33 --repo tacplus-dev/cloud --json state,title
+< == d18dd5a == 8deb773 {"state":"OPEN","title":"gitlab stack: no nightly build schedule for tacplus-dev/cluster, pinned by build.lock since cluster#14"}
+> Bash /usr/local/bin/repo-looper --help 2>&1 | head -40; nohup /usr/local/bin/repo-looper --repo cluster --issue 14 --build > /tmp/build14.log 2>&1 & echo PID $!
+< repo-looper: the looper of one tacplus-dev repository. It runs in the looper container, as jobs of the GitLab looper pipeline, and only while the repository has work: a job per issue, its report, and a manager per repository, which alone merges to its main (looper#70).    repo-looper --repo NAME --i...
