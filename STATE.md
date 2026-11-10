@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-08 by the looper (#10, #11, #12, #14, #15, #16).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-10 by the looper (#18).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -61,4 +61,6 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-08 by th
   accepted above (#15), and zlib1g's CVE-2026-85091 and CVE-2026-76844 (the latter Trivy's DB matching a webpack
   advisory to zlib), accepted until 2026-12-06 (#16): 2.6.2 has the fixed zlib1g (1-1+deb13u1) on amd64 only, its
   arm64 image still v2.6.1's (tacplus-dev/tacplus#369). #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
-- **Blocked on:** the hub's steps above (no issue).
+- **Blocked on:** the hub's steps above, #18 (Jody's by hand: GitLab's group runners need an Owner): runners
+  58541760 (`build`) and 58541761 (`control`) exist in GitLab, paused; `tacplus-looper-bot` needs Reporter here for
+  the recap.

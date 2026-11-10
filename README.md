@@ -153,7 +153,9 @@ Before the first pipeline:
 2. **The project:** `main` protected; the protected environment `cluster`, deployable by Jody and by the account
    whose merges start the pipelines on main (the hub's): GitLab runs an automatic job in a protected environment only
    for a pipeline started by one of its deployers, so `apply` fails for anyone else's; pipeline variables allowed to the Owner role only (Settings > CI/CD > Variables, "Minimum role to use pipeline
-   variables"), for a deletion pipeline's two; `.gitlab-ci.yml` from `ci/pin.sh <commit of main>`.
+   variables"), for a deletion pipeline's two; `.gitlab-ci.yml` from `ci/pin.sh <commit of main>`;
+   `tacplus-looper-bot` a member with the Reporter role, so the looper's recap reads this project's pipelines and
+   jobs (it gets a 404 without it; #18).
 3. **Its variables** (protected, never group variables): `GCP_WIF_PROVIDER`
    (`projects/1038314073791/locations/global/workloadIdentityPools/gitlab-com/providers/tacplus-dev-cluster`), and
    for `drift`, `TACPLUS_READER_APP_ID` and `TACPLUS_READER_INSTALLATION_ID`.
@@ -168,7 +170,9 @@ Before the first pipeline:
    created in GitLab as a **group runner of tacplus-dev** with its `tacplus.tags` and "run untagged jobs" off, its
    authentication token (`glrt-...`) stored as the version of the Secret Manager secret its `tacplus.token` names
    (`gitlab-runner-build` and `gitlab-runner-control` in `tacplus-dev`, version 1), and `cluster-admin-pipeline`
-   allowed to read those two secrets (`roles/secretmanager.secretAccessor` on each). A new token is a new version
+   allowed to read those two secrets (`roles/secretmanager.secretAccessor` on each). The runners are GitLab's
+   58541760 (`build`) and 58541761 (`control`), registered paused (#18); tacplus-dev/build's scheduled jobs need
+   `build` unpaused once `apply` has written its token. A new token is a new version
    and a pull request moving `tacplus.token` to it. Until both are readable, `apply` fails after applying the rest,
    saying `runner-tokens: Secret Manager refused <version>`.
 8. **The pools:** the spot pool labelled `spot=true` and tainted `spot=true:NoSchedule` (tacplus-dev/cloud#7's
