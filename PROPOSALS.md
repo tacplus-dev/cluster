@@ -98,6 +98,12 @@ the looper then marks it `promoted` or `declined` here with the date.
   from `ci/tools.sh` without `security` has no `bin/trivy`, so trivy's binary is never scanned and its exceptions look
   stale. The script could take its binaries from ci/tools.sh's list and fail when one is missing, rather than
   scanning whatever `bin/*` holds.
+- **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still
+  names jody1-328023's key, and cloud#30 cannot revoke the App's old key or drain jody1-328023 until no signer uses
+  it. The new key's version 1 is imported (tacplus-dev/cloud#38, closed). One variable in the pinned file, README's
+  runbook and a test, then the hub's re-pin. `ci/drift.sh` mints only when it finds drift, so the proof cloud waits
+  on could take weeks; minting every night (or on `drift: none` too) would show it the first night. Approved in the
+  hub triage; it needs its ROADMAP.md entry. Links: #19, tacplus-dev/cloud#30, tacplus-dev/cloud#38.
 
 ## Promoted / declined
 - **A security report of the pipeline's own** (2026-11-04, nightly scan): no job checks the Go tools `ci/tools.sh`
