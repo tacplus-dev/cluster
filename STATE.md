@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by the looper (#20).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by the looper (#19).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -18,7 +18,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by th
   `security-exceptions.yaml` enforced; every pipeline, nightly too; `plan` waits for it), `plan`, `apply` (#3: automatic on main once `plan`
   succeeds, applying the render `plan` saved; protected `cluster`, never deletes; not in a deletion pipeline), the
   deletion job (#2: only in a deletion pipeline, run on main from the web form or the API with `DELETE_DEPLOYMENT` and `DELETE_CONFIRM` both the deployment's name; manual, protected,
-  named for what it destroys), `drift` (nightly, files an issue, never applies). CI in the cluster (#6):
+  named for what it destroys), `drift` (nightly, files an issue, never applies; #19: mints its tacplus-reader token every
+  night through tacplus-ci's KMS key `tacplus-reader`, saying so, and nothing here names jody1-328023's key). CI in the cluster (#6):
   `out/20-ci.yaml`, the namespace `ci` with GitLab Runner's chart 0.94.3 (runner 19.5.3, #11; chart by archive digest,
   images by digest, `gitlab-runner/`, rendered by `helm template`, helm v4.3.1 pinned in `ci/tools.sh`) as two
   runners, `build` (tags `arm64, build`, jobs on the spot pool only) and `control` (`arm64, control`, #13;
@@ -43,7 +44,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by th
   No pipeline has run: the hub owes the runner (tag `cluster`), the project's variables and
   environment (now deployable by the account whose merges start main's pipelines too, for the automatic `apply`),
   the cluster grant, and the drift issue's app permission and KMS binding (README, What the hub does); the hub
-  re-pins the GitLab copy for #3, #4, #7 and #12, after setting `GCP_WIF_PROVIDER` to `dev`'s provider (README, What the
+  re-pins the GitLab copy for #3, #4, #7, #12 and #19 (the drift job's key: its first mint through `tacplus-ci` is
+  the proof tacplus-dev/cloud#30 waits on to revoke the app's old key), after setting `GCP_WIF_PROVIDER` to `dev`'s provider (README, What the
   hub does, the move from `tacplus` to `dev`). The cluster-scoped objects a fleet's chart needs have no
   place in the render yet.
 - **Known vulnerabilities:** 10 accepted in `security-exceptions.yaml` until 2026-12-04 (#5), none with a fixed

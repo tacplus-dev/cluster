@@ -5,7 +5,8 @@
 # The nightly drift check (the drift job, on a schedule): ci/plan.sh on the render OUT, and when anything differs,
 # an issue on github.com/tacplus-dev/cluster saying what, filed through the tacplus-reader app (github_app_token in
 # ci/lib.sh, issues: write on this repository alone). One open issue at a time: while it is open, a new drift is a
-# comment on it, and the same drift again is nothing. It never applies.
+# comment on it, and the same drift again is nothing. It never applies. The token is minted every night, drift or
+# not, and its key named in the log (#19): a key or a binding KMS refuses fails the next night, not the first drift.
 #
 #   ci/drift.sh OUT     # sources ci/lib.sh; needs what ci/plan.sh needs, and curl, jq, openssl
 set -euo pipefail
@@ -20,6 +21,8 @@ die() { echo "drift: $*" >&2; exit 1; }
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 PLAN_SUMMARY=$tmp/summary "$here/plan.sh" "$out"
+token=$(github_app_token "${repo#*/}" '{"issues":"write"}') || die "no GitHub token to file a drift: any drift is in this job's log only"
+echo "drift: a tacplus-reader token minted through $TACPLUS_READER_KMS_KEY"
 [ -s "$tmp/summary" ] || { echo "drift: none"; exit 0; }
 
 mark="drift-sha256:$(sha256sum < "$tmp/summary" | cut -c1-16)"
@@ -35,7 +38,6 @@ mark="drift-sha256:$(sha256sum < "$tmp/summary" | cut -c1-16)"
   echo "<!-- $mark -->"
 } > "$tmp/body"
 
-token=$(github_app_token "${repo#*/}" '{"issues":"write"}') || die "no GitHub token to file the drift: it is in this job's log only"
 ( umask 077; printf 'Authorization: Bearer %s\n' "$token" > "$tmp/auth" )
 gh_api() { # gh_api METHOD PATH [BODY_FILE]
   local code

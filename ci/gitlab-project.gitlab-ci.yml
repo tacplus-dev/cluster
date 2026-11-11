@@ -40,7 +40,8 @@ variables:
   CLUSTER: dev
   ZONE: us-central1-a
   # The tacplus-reader app's key, in Cloud KMS (github_app_token in ci/lib.sh): the drift job files its issue with it.
-  TACPLUS_READER_KMS_KEY: projects/jody1-328023/locations/us/keyRings/looper/cryptoKeys/tacplus-reader
+  # tacplus-dev/cloud's ci stack lets this project's jobs sign with it directly, as their federated principal (#19).
+  TACPLUS_READER_KMS_KEY: projects/tacplus-ci/locations/us-central1/keyRings/looper/cryptoKeys/tacplus-reader
 
 workflow:
   rules:

@@ -69,7 +69,7 @@ that commit (it is public: no credential).
 | `plan` | main (push, web, API) | `kubectl diff` against `dev`, then per unit (deploymentproxy, each deployment, `ci`) what is added, changed or removed; a deployment whose entry is gone is listed as kept. Saves the render it diffed and its summary (`plan.txt`). |
 | `apply` | main, **automatically** once `plan` succeeds, protected environment `cluster`; not in a deletion pipeline | Applies the render `plan` saved: plans again, then applies server-side, then writes the runners' tokens from Secret Manager (`ci/runner-tokens.sh`), then waits for deploymentproxy and the runners. Never deletes or prunes. A failed apply fails the pipeline. |
 | `DELETE deployment: removes tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)` | a deletion pipeline only (below), **manual**, protected environment `cluster` (Jody only) | Deletes the deployment `DELETE_DEPLOYMENT`: `tac-<name>` and its tenant namespaces (`ci/delete-deployment.sh`). |
-| `drift` | the nightly schedule | `plan`; if anything differs, an issue here (one open at a time; a new drift is a comment). Never applies. |
+| `drift` | the nightly schedule | `plan`, then the tacplus-reader app's token, minted every night (below, What the hub does, step 5); if anything differs, an issue here (one open at a time; a new drift is a comment). Never applies. |
 
 The cluster jobs run only on main, because Workload Identity Federation admits only this project's protected main:
 a merge request gets `render`, `validate` and `security`, and its `plan`, then `apply`, run once it is merged.
@@ -163,8 +163,12 @@ Before the first pipeline:
    `roles/container.clusterViewer` on `tacplus-dev`, tacplus-dev/cloud's) and is cluster-admin on `dev` (a
    ClusterRoleBinding of `cluster-admin` to the User `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`).
 5. **The drift issue:** the tacplus-reader app installed on `tacplus-dev/cluster` with Issues read and write, and
-   this project's federated principal allowed to sign with its KMS key `tacplus-reader` (`roles/cloudkms.signer`),
-   or `TACPLUS_READER_SA` set to a service account that may. Until then `drift` fails, saying which refused.
+   this project's federated principal (through `tacplus-dev-cluster`, step 3) allowed to sign with the app's KMS key
+   `tacplus-reader` in `tacplus-ci` (key ring `looper`, us-central1; version 1, imported), `roles/cloudkms.signer`:
+   tacplus-dev/cloud's ci stack binds it (its README, The GitHub Apps' keys; #19), so no `TACPLUS_READER_SA` is
+   set. `drift` mints its token every night, drift or not, and says so: `drift: a tacplus-reader token minted
+   through projects/tacplus-ci/...`. Until the key and its binding hold, `drift` fails, saying which refused. The key
+   is the pinned file's `TACPLUS_READER_KMS_KEY`: a new one reaches the job when the hub re-pins (step 2).
 6. **The schedule:** nightly, on main.
 7. **The in-cluster runners** ([CI in the cluster](#ci-in-the-cluster)): each runner of `gitlab-runner/runners/`
    created in GitLab as a **group runner of tacplus-dev** with its `tacplus.tags` and "run untagged jobs" off, its
@@ -185,8 +189,7 @@ Then a pipeline on main: `render`, `validate`, `security`, `plan` and `apply` gr
 addendum "a new cluster in seabeam.net"), in order: the hub sets `GCP_WIF_PROVIDER` to the provider above; the
 change retargeting this repository (`GCP_PROJECT`, `CLUSTER`, `GCP_DEPLOY_SA`, seatrials' `deployAccount`, the
 runners' tokens) lands; the hub re-pins `.gitlab-ci.yml`; the pipeline on main applies to `dev`. The old cluster
-`tacplus` in `jody1-328023` is then unused, and Jody deletes it. The drift job's KMS key stays in `jody1-328023`
-until it moves (tacplus-dev/cloud#15).
+`tacplus` in `jody1-328023` is then unused, and Jody deletes it.
 
 ### The first apply
 

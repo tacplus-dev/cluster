@@ -13,6 +13,7 @@
 # accepts its output and refuses any other change, and the jobs refuse an empty CLUSTER_COMMIT. The security job has
 # no id_token, fetches the history, runs ci/security.sh, keeps its report pass or fail, and plan waits for it. build.lock
 # pins the CI image by digest, gitlab-runner/pin.yaml's job:, and gates.yaml's full runs the render, validate and the tests.
+# drift signs with tacplus-ci's tacplus-reader, and no file names a KMS key in jody1-328023.
 # Needs bash and yq.
 #
 #   tests/ci_test.sh
@@ -192,5 +193,11 @@ for r in "$here"/gitlab-runner/runners/*.yaml; do
 done
 others=$(yq '.deployments[].deployAccount | select(test("@tacplus-dev\\.iam\\.gserviceaccount\\.com$") | not)' "$here/deployments.yaml")
 [ -z "$others" ] && ok "the runners' tokens and the deployments' accounts are in tacplus-dev" || fail "deploy accounts outside tacplus-dev: $others"
+# The drift job signs with tacplus-ci's tacplus-reader (#19; tacplus-dev/cloud#30), and nothing here names
+# jody1-328023's key any more.
+[ "$(q '.variables.TACPLUS_READER_KMS_KEY')" = projects/tacplus-ci/locations/us-central1/keyRings/looper/cryptoKeys/tacplus-reader ] &&
+  ok "drift signs with tacplus-ci's tacplus-reader" || fail "TACPLUS_READER_KMS_KEY is $(q '.variables.TACPLUS_READER_KMS_KEY')"
+old_key=$(grep -rlIE --exclude-dir=.git --exclude-dir=bin --exclude-dir=out 'projects/jody1-328023/[^ ]*cryptoKeys' "$here")
+[ -z "$old_key" ] && ok "no file names a KMS key in jody1-328023" || fail "a KMS key in jody1-328023 in: $old_key"
 
 [ "$failed" = 0 ] && echo "ci_test: all passed" || { echo "ci_test: failed"; exit 1; }

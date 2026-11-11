@@ -14,8 +14,9 @@
 #   - a removed entry: plan lists it as removed and kept; apply runs no delete and no prune, and the namespace stays;
 #   - delete-deployment refuses no name, no DELETE_CONFIRM or one that differs, a bad name, a listed deployment, an
 #     unlabelled namespace; it deletes the deployment's namespace and its tenant namespaces, and nothing else;
-#   - drift: nothing when in sync; an issue when it differs; a comment for a new drift; nothing for the same one;
-#     it never applies.
+#   - drift: its token minted every night, saying through which key, so a refused key fails it even in sync; nothing
+#     filed when in sync; an issue when it differs; a comment for a new drift; nothing for the same one; it never
+#     applies.
 #
 # Needs bash, yq, jq, openssl.
 #
@@ -168,7 +169,7 @@ rm -f "$KSTUB/keep-tenants" "$KSTUB/ns/tac-other" "$KSTUB/ns/tac-alpha-b7654321"
 
 # drift, against stub gcloud, KMS and GitHub (tests/stub/curl keeps GitHub's issues in $GSTUB).
 export GSTUB=$work/g GCP_ID_TOKEN=id-token GCP_WIF_PROVIDER=projects/1/locations/global/workloadIdentityPools/p/providers/g \
-  TACPLUS_READER_KMS_KEY=projects/p/locations/us/keyRings/looper/cryptoKeys/tacplus-reader \
+  TACPLUS_READER_KMS_KEY=projects/p/locations/us-central1/keyRings/looper/cryptoKeys/tacplus-reader \
   TACPLUS_READER_APP_ID=1 TACPLUS_READER_INSTALLATION_ID=2 KMS_API=https://kms.stub GITHUB_API=https://github.stub \
   CI_PIPELINE_URL=https://gitlab.com/tacplus-dev/cluster/-/pipelines/1 CLUSTER_COMMIT=0123456789abcdef0123456789abcdef01234567
 mkdir -p "$GSTUB/issues"
@@ -177,6 +178,13 @@ touch "$GSTUB/allow"
 : > "$KSTUB/log"
 run drift "$here/ci/drift.sh" "$work/out" && grep -qx 'drift: none' "$work/drift" && [ -z "$(ls "$GSTUB/issues")" ] &&
   ok "drift: in sync, nothing is filed" || fail "drift in sync: $(cat "$work/drift")"
+grep -qx "drift: a tacplus-reader token minted through $TACPLUS_READER_KMS_KEY" "$work/drift" &&
+  [ "$(wc -l < "$GSTUB/token-requests")" = 1 ] && ! grep -q ghs_stub "$work/drift" &&
+  ok "drift: in sync, it still mints its token, saying through which key, never printing it" || fail "drift in sync, the token: $(cat "$work/drift")"
+rm -f "$GSTUB/allow"
+run drift "$here/ci/drift.sh" "$work/out" && fail "drift in sync without a token succeeded" ||
+  { grep -q 'GitHub refused the tacplus-reader app a token for cluster' "$work/drift" && ok "drift: in sync, a refused token fails, saying so" || fail "in sync, a refused token: $(cat "$work/drift")"; }
+touch "$GSTUB/allow"
 cp -R "$work/out" "$work/drifted"
 yq -i '(select(.kind == "Role" and .metadata.name == "fleet-deploy") | .rules[0].verbs) = ["get"]' "$work/drifted/10-deployment-beta-2.yaml"
 run drift "$here/ci/drift.sh" "$work/drifted" && grep -q 'drift: filed tacplus-dev/cluster#1' "$work/drift" &&

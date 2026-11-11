@@ -98,14 +98,21 @@ the looper then marks it `promoted` or `declined` here with the date.
   from `ci/tools.sh` without `security` has no `bin/trivy`, so trivy's binary is never scanned and its exceptions look
   stale. The script could take its binaries from ci/tools.sh's list and fail when one is missing, rather than
   scanning whatever `bin/*` holds.
+- **The reader key's version from KMS, not `cryptoKeyVersions/1`** (2026-11-11, #19): `github_app_token` signs
+  `cryptoKeyVersions/1` of `TACPLUS_READER_KMS_KEY`, the version imported for tacplus-dev/cloud#30. A key imported
+  again (a new private key on the app, a rotation) is version 2, and the drift job would sign with the old one until
+  this file changes. Reading the key's primary version (`cryptoKeys.get`: likely a viewer's binding beside the
+  signer's, tacplus-dev/cloud's) or taking the version from the variable would follow it. Links: #19,
+  tacplus-dev/cloud README (The GitHub Apps' keys).
+
+## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still
   names jody1-328023's key, and cloud#30 cannot revoke the App's old key or drain jody1-328023 until no signer uses
   it. The new key's version 1 is imported (tacplus-dev/cloud#38, closed). One variable in the pinned file, README's
   runbook and a test, then the hub's re-pin. `ci/drift.sh` mints only when it finds drift, so the proof cloud waits
   on could take weeks; minting every night (or on `drift: none` too) would show it the first night. Approved in the
   hub triage; it needs its ROADMAP.md entry. Links: #19, tacplus-dev/cloud#30, tacplus-dev/cloud#38.
-
-## Promoted / declined
+  **Promoted** 2026-11-11: Jody, on #19 (cloud#30); built in #19: the key in tacplus-ci, minted every night.
 - **A security report of the pipeline's own** (2026-11-04, nightly scan): no job checks the Go tools `ci/tools.sh`
   builds (yq v4.54.1, kubeconform v0.7.0) for known vulnerabilities, and the README has no "Security checks"
   section, so the nightly scan has no build report to read and runs the auditor itself. Tonight's
