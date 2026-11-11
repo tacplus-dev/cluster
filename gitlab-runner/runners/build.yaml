@@ -18,6 +18,8 @@ runners:
   config: |
     [[runners]]
       executor = "kubernetes"
+      # uid 1000 has no home in the job image, so HOME would be / (#20): HOME is the emptyDir below instead.
+      environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
         image = "{{ .Values.pinned.job }}"
@@ -39,6 +41,9 @@ runners:
         helper_cpu_limit = "1"
         helper_memory_request = "128Mi"
         helper_memory_limit = "512Mi"
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "home"
+          mount_path = "/tmp/home"
         [runners.kubernetes.pod_labels]
           "tacplus.dev/ci-runner" = "build"
         [runners.kubernetes.node_selector]

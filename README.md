@@ -229,7 +229,8 @@ handled the GitLab way, with `retry:` in the pipeline files (`runner_system_fail
   container (tacplus-dev/tacplus#315): every container of a build pod runs as uid 1000, and the build container
   alone is `Unconfined` for seccomp and AppArmor, as rootless BuildKit needs (GitLab's docs: "Set seccomp and
   AppArmor profiles"), with no capability added. Control jobs run with seccomp `RuntimeDefault` and no privilege
-  escalation. Besides the policy on the render, the cluster itself refuses any pod in `ci` that is privileged, has
+  escalation. uid 1000 has no home in the job image, so both runners give each job `HOME=/tmp/home`, an emptyDir
+  (#20). Besides the policy on the render, the cluster itself refuses any pod in `ci` that is privileged, has
   a host path, the host's network, PID or IPC, a host port or an added capability (the admission policy
   `ci-pods`), whoever creates it.
 - **Namespace-scoped RBAC.** Each runner's service account holds a Role in `ci` only, with what the Kubernetes

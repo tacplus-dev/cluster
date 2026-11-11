@@ -5,7 +5,8 @@
 # Tests render.sh against fixtures: tests/fixtures/render/deployments.yaml renders to exactly
 # tests/fixtures/render/out/ (one file for deploymentproxy, one per deployment, one for ci); the images are pinned by
 # digest (deploymentproxy's, and the runners' and their jobs' in ci); ci's RBAC is in ci only; build jobs select and
-# tolerate the spot pool and control jobs never; each runner's pods name its token's version, and no token is in it;
+# tolerate the spot pool and control jobs never; each runner's jobs have HOME on an emptyDir; each runner's pods name
+# its token's version, and no token is in it;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
 # is; deployments.yaml itself renders and passes ci/policy.sh; a removed entry renders nothing for it; a release
 # file or chart file that does not match its checksum, every malformed entry, and a runner file that names its token
@@ -47,8 +48,9 @@ runner_pin=$here/gitlab-runner/pin.yaml
 images=$(yq ea '[select(.kind == "Deployment") | .spec.template.spec | (.containers + (.initContainers // []))[] | .image] | unique | join(" ")' "$ci")
 [ "$images" = "$(yq '.runner' "$runner_pin")" ] && [[ $images == *@sha256:* ]] &&
   ok "the runners run the pinned runner image, by digest: $images" || fail "the runners' images are [$images]"
-runner_toml() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.template.toml"' "$ci" |
-  yq -p toml ".runners[0].kubernetes | $2"; }
+runner_cfg() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.template.toml"' "$ci" |
+  yq -p toml ".runners[0] | $2"; }
+runner_toml() { runner_cfg "$1" ".kubernetes | $2"; }
 jobs=$(for r in build control; do runner_toml $r '.image + " " + .helper_image'; done | sort -u)
 [ "$jobs" = "$(yq '.job + " " + .helper' "$runner_pin")" ] &&
   ok "every runner's jobs default to the pinned job image, with the pinned helper, by digest" || fail "the jobs' images are [$jobs]"
@@ -61,6 +63,14 @@ jobs=$(for r in build control; do runner_toml $r '.image + " " + .helper_image';
   [ "$(runner_toml control '[(.node_selector // {}) | keys[], (.node_tolerations // {}) | keys[]] | map(select(test("spot"))) | length')" = 0 ] &&
   [ "$(runner_toml control '.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms[0].match_expressions[] | select(.key == "spot") | .operator + " " + .values[0]')" = "NotIn true" ] &&
   ok "build jobs select and tolerate the tainted spot pool; control jobs never tolerate it and refuse a spot node" || fail "the jobs' placement"
+# A job runs as a user with no home in the job image (uid 1000), so each runner gives it HOME on an emptyDir of its
+# own, writable and there before the script runs (#20: git config --global wrote //.gitconfig).
+for r in build control; do
+  home=$(runner_cfg $r '(.environment // [])[] | select(test("^HOME=")) | sub("^HOME="; "")')
+  [ -n "$home" ] && [ "$home" != / ] &&
+    [ "$(H=$home runner_toml $r '[(.volumes.empty_dir // [])[] | select(.mount_path == strenv(H))] | length')" = 1 ] &&
+    ok "$r jobs have HOME=$home, an emptyDir" || fail "$r jobs' HOME is [$home], or no emptyDir is mounted there"
+done
 [ "$(yq ea '[select(.kind == "Deployment") | .spec.template.metadata.annotations."tacplus.dev/runner-token"] | join(" ")' "$ci")" = \
   "$(yq '.tacplus.token' "$here/gitlab-runner/runners/build.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/control.yaml")" ] &&
   ok "each runner's pods name its token's Secret Manager version" || fail "the runners' token versions"

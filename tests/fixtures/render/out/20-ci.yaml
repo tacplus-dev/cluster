@@ -165,6 +165,8 @@ data:
   config.template.toml: |
     [[runners]]
       executor = "kubernetes"
+      # uid 1000 has no home in the job image, so HOME would be / (#20): HOME is the emptyDir below instead.
+      environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:2.6.2@sha256:8e651ce55b23c066d32e882161f11b69a1b5a607dbce8446924635cf715854d9"
@@ -186,6 +188,9 @@ data:
         helper_cpu_limit = "1"
         helper_memory_request = "128Mi"
         helper_memory_limit = "512Mi"
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "home"
+          mount_path = "/tmp/home"
         [runners.kubernetes.pod_labels]
           "tacplus.dev/ci-runner" = "build"
         [runners.kubernetes.node_selector]
@@ -361,7 +366,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build
       annotations:
-        checksum/configmap: 347c237300b018dc93a5f12a8288808af965f8936fca1afdecc14761879a1ffa
+        checksum/configmap: 15bf93872579ea54ad3be8e74ec8bfcb848458fb5eb08f134fcdc9d99658e229
         tacplus.dev/runner-tags: "arm64,build"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build/versions/1"
         tacplus.dev/runner-token-secret: "gitlab-runner-build"
@@ -557,6 +562,8 @@ data:
   config.template.toml: |
     [[runners]]
       executor = "kubernetes"
+      # uid 1000 has no home in the job image, so HOME would be / (#20): HOME is the emptyDir below instead.
+      environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:2.6.2@sha256:8e651ce55b23c066d32e882161f11b69a1b5a607dbce8446924635cf715854d9"
@@ -578,6 +585,9 @@ data:
         helper_cpu_limit = "500m"
         helper_memory_request = "64Mi"
         helper_memory_limit = "256Mi"
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "home"
+          mount_path = "/tmp/home"
         [runners.kubernetes.pod_labels]
           "tacplus.dev/ci-runner" = "control"
         [runners.kubernetes.node_selector]
@@ -752,7 +762,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: f3ee61d9253491ff3b7fb7bc57572b40546d6e5cfee02adfa6074de34703998e
+        checksum/configmap: f8dbd8209b55d888f5e1a734df11c7ecd1213512696b450c52b4b6b933dcb444
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
         tacplus.dev/runner-token-secret: "gitlab-runner-control"

@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-10 by the looper (#18).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by the looper (#20).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -22,7 +22,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-10 by th
   `out/20-ci.yaml`, the namespace `ci` with GitLab Runner's chart 0.94.3 (runner 19.5.3, #11; chart by archive digest,
   images by digest, `gitlab-runner/`, rendered by `helm template`, helm v4.3.1 pinned in `ci/tools.sh`) as two
   runners, `build` (tags `arm64, build`, jobs on the spot pool only) and `control` (`arm64, control`, #13;
-  no VM runner's tag, the policy refuses one; the normal pool), per-runner requests, limits and ceilings; Roles in `ci` only; jobs as `ci-job`
+  no VM runner's tag, the policy refuses one; the normal pool), per-runner requests, limits and ceilings; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
+  the job image, and `git config --global` failed on `//.gitconfig`); Roles in `ci` only; jobs as `ci-job`
   with no token, kept off the metadata server (NetworkPolicy); the admission policy `ci-pods` refusing privileged,
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
   1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
@@ -61,6 +62,9 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-10 by th
   accepted above (#15), and zlib1g's CVE-2026-85091 and CVE-2026-76844 (the latter Trivy's DB matching a webpack
   advisory to zlib), accepted until 2026-12-06 (#16): 2.6.2 has the fixed zlib1g (1-1+deb13u1) on amd64 only, its
   arm64 image still v2.6.1's (tacplus-dev/tacplus#369). #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
+- **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
+  matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
+  (#20).
 - **Blocked on:** the hub's steps above, #18 (Jody's by hand: GitLab's group runners need an Owner): runners
   58541760 (`build`) and 58541761 (`control`) exist in GitLab, paused; `tacplus-looper-bot` needs Reporter here for
   the recap.

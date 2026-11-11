@@ -83,7 +83,7 @@ deployment() { echo "(select(.kind == \"Deployment\" and .metadata.name == \"git
 ci_role='(select(.kind == "Role" and .metadata.name == "gitlab-runner-build") | .rules)'
 breach_ci "privileged jobs" "$(toml build 'privileged = false' 'privileged = true')" "runner gitlab-runner-build: its jobs are privileged"
 breach_ci "a host path in a job" "$(toml control 'privileged = false' 'privileged = false\n    [[runners.kubernetes.volumes.host_path]]\n      name = \"var\"\n      mount_path = \"/var\"\n      host_path = \"/var\"\n  [runners.kubernetes.ignored]')" "gitlab-runner-control: its jobs mount a host path"
-breach_ci "the Docker socket in a job" "$(toml control 'executor = \"kubernetes\"' 'executor = \"kubernetes\"\n  environment = [\"DOCKER_HOST=unix:///var/run/docker.sock\"]')" "gitlab-runner-control: its jobs reach the Docker socket"
+breach_ci "the Docker socket in a job" "$(toml control '\"HOME=/tmp/home\"' '\"HOME=/tmp/home\", \"DOCKER_HOST=unix:///var/run/docker.sock\"')" "gitlab-runner-control: its jobs reach the Docker socket"
 breach_ci "a job image by tag only" "$(toml build 'helper_image = \"[^\"]*\"' 'helper_image = \"registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:latest\"')" "its helper_image \[registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:latest\] is not pinned by digest"
 breach_ci "build jobs not selecting spot" "$(toml build '\"spot\" = \"true\"' '\"pool\" = \"any\"')" "gitlab-runner-build: its build jobs do not select the spot pool"
 breach_ci "build jobs not tolerating spot" "$(toml build '\"spot=true\" = \"NoSchedule\"' '\"other=true\" = \"NoSchedule\"')" "gitlab-runner-build: its build jobs do not tolerate the spot pool"
