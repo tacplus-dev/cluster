@@ -6,7 +6,8 @@
 # its namespace is a breach: a `*` verb, resource or group; a cluster-scoped resource (nodes, namespaces,
 # clusterroles, CRDs) in a Role; escalate, bind, impersonate; non-resource URLs; a ClusterRole or
 # ClusterRoleBinding; a RoleBinding to a ClusterRole or to another namespace's service account; a Role in another
-# namespace; an unlabelled namespace. In ci's file: privileged jobs or runners, a host path, the Docker socket, an
+# namespace; an unlabelled namespace; no deploy Role or binding; deploymentproxy's Role without its operator binding
+# or the binding without the Role (a deployment without an operator has neither, and keeps the rules). In ci's file: privileged jobs or runners, a host path, the Docker socket, an
 # added capability, host networking, an image by tag only; build jobs off the spot pool or as root, control jobs
 # tolerating spot, landing on a spot node, Unconfined or escalating privilege; a job allowed to override its
 # placement, a job's token, no resource ceiling; build taking other tags; a VM runner's tag (autoscale,
@@ -56,6 +57,17 @@ breach "a Group" '(select(.kind == "RoleBinding" and .metadata.name == "fleet-de
 breach "a Role in another namespace" '(select(.kind == "Role" and .metadata.name == "fleet-deploy") | .metadata.namespace) = "tac-beta-2"' "in \[tac-beta-2\]"
 breach "an unlabelled namespace" '(select(.kind == "Namespace") | .metadata.labels) = {}' "labelled tacplus.dev/deployment=\[\]"
 breach "another namespace" '(select(.kind == "Namespace") | .metadata.name) = "kube-system"' "the Namespace kube-system"
+dp='.metadata.name == "deploymentproxy-tenantnamespaces"'
+breach "deploymentproxy's Role without its binding" "del(select(.kind == \"RoleBinding\" and $dp))" "the Role deploymentproxy-tenantnamespaces without its RoleBinding"
+breach "the operator's binding without deploymentproxy's Role" "del(select(.kind == \"Role\" and $dp))" "the RoleBinding deploymentproxy-tenantnamespaces without its Role"
+breach "no deploy Role" 'del(select(.kind == "Role" and .metadata.name == "fleet-deploy"))' "no Role fleet-deploy"
+breach "no deploy binding" 'del(select(.kind == "RoleBinding" and .metadata.name == "fleet-deploy"))' "no RoleBinding fleet-deploy"
+
+# A deployment without an operator: neither deploymentproxy's Role nor its binding keeps the rules.
+rm -rf "$work/bad" && cp -R "$work/good" "$work/bad"
+yq -i "del(select($dp))" "$work/bad/10-deployment-alpha.yaml"
+"$here/ci/policy.sh" "$work/bad" > "$work/log" 2>&1 && ok "a deployment without an operator keeps the rules" ||
+  fail "a deployment without an operator: $(cat "$work/log")"
 
 # deploymentproxy's file: nothing namespaced outside deploymentproxy.
 rm -rf "$work/bad" && cp -R "$work/good" "$work/bad"

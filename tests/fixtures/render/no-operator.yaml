@@ -1,0 +1,7 @@
+# One entry without an operator (a deployment nothing asks deploymentproxy for tenant namespaces for, as test-idp):
+# its namespace and its deploy account's Role only.
+deployments:
+  - name: gamma
+    deployAccount: gamma-deploy@example-project.iam.gserviceaccount.com
+    gitlabProject: tacplus-dev/fleet-gamma
+    quota: {}

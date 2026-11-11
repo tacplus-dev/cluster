@@ -1,11 +1,11 @@
 # The deployments on the cluster `dev`, one entry each (README, Adding a deployment). For each, the pipeline
 # applies the namespace tac-<name> labelled tacplus.dev/deployment=<name>, deploymentproxy's Role for its operator
-# account, and its deploy account's Role and RoleBinding in tac-<name> only (render.sh).
+# account if it has one, and its deploy account's Role and RoleBinding in tac-<name> only (render.sh).
 #
 #   name           the deployment: at most 16 characters of [a-z0-9-], starting with a letter
 #   deployAccount  the Google service account the fleet's pipeline deploys as
 #   operator       the service account of the deployment's operator, in tac-<name>, that asks deploymentproxy for
-#                  tenant namespaces
+#                  tenant namespaces; optional: without one, no deploymentproxy Role and no operator binding
 #   gitlabProject  the GitLab project whose pipeline deploys it (an annotation on the namespace)
 #   quota          its tenant namespaces' ResourceQuota, merged over deploymentproxy's default; {} is the default
 #
@@ -14,5 +14,11 @@ deployments:
   - name: seatrials
     deployAccount: seatrials-deploy@tacplus-dev.iam.gserviceaccount.com
     operator: operator
+    gitlabProject: tacplus-dev/fleet-seatrials
+    quota: {}
+  # The test IdP (fleet-seatrials#27): no operator, so no deploymentproxy Role; no NetworkPolicy either (Jody,
+  # 2026-11-07: its bearer tokens isolate it, not reachability).
+  - name: test-idp
+    deployAccount: test-idp-deploy@tacplus-dev.iam.gserviceaccount.com
     gitlabProject: tacplus-dev/fleet-seatrials
     quota: {}

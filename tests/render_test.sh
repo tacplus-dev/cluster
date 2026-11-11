@@ -7,7 +7,9 @@
 # digest (deploymentproxy's, and the runners' and their jobs' in ci); ci's RBAC is in ci only; build jobs select and
 # tolerate the spot pool and control jobs never; each runner's pods name its token's version, and no token is in it;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
-# is; deployments.yaml itself renders and passes ci/policy.sh; a removed entry renders nothing for it; a release
+# is; deployments.yaml itself renders and passes ci/policy.sh, test-idp with its namespace and deploy Role only; a
+# deployment without an operator has no deploymentproxy Role and no operator binding; a removed entry renders
+# nothing for it; a release
 # file or chart file that does not match its checksum, every malformed entry, and a runner file that names its token
 # by latest or sets what only gitlab-runner/values.yaml sets, is refused with a message. Needs bash, yq and helm.
 #
@@ -87,6 +89,26 @@ else
 fi
 ns=$(yq 'select(.kind == "Namespace") | .metadata.labels."tacplus.dev/deployment"' "$work/real/10-deployment-seatrials.yaml" 2>/dev/null)
 [ "$ns" = seatrials ] && ok "seatrials: tac-seatrials labelled tacplus.dev/deployment=seatrials" || fail "seatrials' namespace label is [$ns]"
+objects() { yq -N '.kind + " " + (.metadata.namespace // "") + " " + .metadata.name' "$1" 2>/dev/null | tr '\n' ','; }
+[ "$(objects "$work/real/10-deployment-test-idp.yaml")" = "Namespace  tac-test-idp,Role tac-test-idp fleet-deploy,RoleBinding tac-test-idp fleet-deploy," ] &&
+  [ "$(yq 'select(.kind == "RoleBinding") | .subjects[0].name' "$work/real/10-deployment-test-idp.yaml")" = test-idp-deploy@tacplus-dev.iam.gserviceaccount.com ] &&
+  ok "test-idp: its namespace and the deploy Role only, bound to test-idp-deploy" ||
+  fail "test-idp renders: $(objects "$work/real/10-deployment-test-idp.yaml")"
+
+# A deployment without an operator: its namespace and the deploy account's Role only, no deploymentproxy Role nor
+# operator binding; the rest of it as with one, and it passes ci/policy.sh.
+if "$here/render.sh" "$fixtures/no-operator.yaml" "$work/no-operator" > "$work/log" 2>&1; then
+  g=$work/no-operator/10-deployment-gamma.yaml
+  [ "$(objects "$g")" = "Namespace  tac-gamma,Role tac-gamma fleet-deploy,RoleBinding tac-gamma fleet-deploy," ] &&
+    ! grep -q -e tenantnamespaces -e ServiceAccount "$g" &&
+    diff <(yq 'select(.kind != "Namespace")' "$g") \
+         <(yq 'select(.metadata.name == "fleet-deploy")' "$fixtures/out/10-deployment-alpha.yaml" | sed 's/tac-alpha/tac-gamma/; s/alpha-deploy/gamma-deploy/') >/dev/null &&
+    ok "no operator: the namespace and the deploy Role only" || fail "no operator renders: $(objects "$g")"
+  "$here/ci/policy.sh" "$work/no-operator" > "$work/policy" 2>&1 &&
+    ok "no operator: passes ci/policy.sh" || fail "no operator: ci/policy.sh: $(cat "$work/policy")"
+else
+  fail "render.sh failed on no-operator.yaml: $(cat "$work/log")"
+fi
 
 # A release file that does not match its checksum is refused.
 cp -R "$here/." "$work/tree" 2>/dev/null; rm -rf "$work/tree/out"
@@ -164,6 +186,8 @@ refused "a deploy account that is not a Google service account" "deployments:
 $(entry x 'deployAccount: someone@gmail.com')" "someone@gmail.com"
 refused "an operator account that is not a name" "deployments:
 $(entry x 'operator: Op/erator')" "Op/erator"
+refused "an empty operator account" "deployments:
+$(entry x 'operator: ""')" "operator \[\] is not a service account name"
 refused "no GitLab project" "deployments:
 $(entry x 'gitlabProject: -')" "gitlabProject"
 refused "a quota that is not a map of strings" "deployments:

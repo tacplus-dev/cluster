@@ -13,9 +13,9 @@ by Jody 2026-11-02).
 - **deploymentproxy:** its namespace, CRDs, ClusterRole and Deployment, pinned to a release line.
 - **`deployments.yaml`:** one entry per deployment. For each, it applies:
   - the namespace `tac-<deployment>`, labelled `tacplus.dev/deployment=<deployment>`;
-  - deploymentproxy's per-deployment Role;
+  - deploymentproxy's per-deployment Role, if the deployment has an operator;
   - the fleet deploy account's namespace-scoped Role and RoleBinding;
-  - the fleet `operator` service account's binding.
+  - the fleet `operator` service account's binding, if it has one (`operator` is optional: test-idp has none).
 - **CI in the cluster** (the namespace `ci`): GitLab Runner with the Kubernetes executor, one runner for builds
   (spot pool) and one for control work (normal pool), registered to the tacplus-dev group ([CI in the
   cluster](#ci-in-the-cluster)).
@@ -99,7 +99,7 @@ A pull request adding its entry to `deployments.yaml` (the file says what each f
 ```yaml
   - name: <deployment>            # at most 16 characters of [a-z0-9-], starting with a letter
     deployAccount: <name>-deploy@tacplus-dev.iam.gserviceaccount.com
-    operator: operator
+    operator: operator            # optional: none, no deploymentproxy Role and no operator binding
     gitlabProject: tacplus-dev/fleet-<fleet>
     quota: {}                     # deploymentproxy's default; or e.g. {pods: "50"}, quantities quoted
 ```
