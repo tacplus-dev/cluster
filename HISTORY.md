@@ -17,3 +17,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-07 looper issue CI image and runners' default job image pinned to build:2.5; tacplus 2.6 is the latest line (and build:2.6 has none of #8's CVEs) (#12)
 - 2026-11-07 looper issue security fails on main: CVE-2026-123158 (openssh) in GitLab Runner 19.5.3's runner and CVE-2026-78661 (x/net/html) in the runner, helper and CI image's gh (#15)
 - 2026-11-08 looper issue security fails on main: CVE-2026-85091 and CVE-2026-76844 (zlib1g) in the CI image build:2.6.1 (#16)
+- 2026-11-11 looper issue In-cluster build jobs fail at once: HOME is / for run_as_user 1000 (git config --global: //.gitconfig Permission denied) (#20)
