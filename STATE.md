@@ -29,7 +29,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by th
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
   1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
   `ci/policy.sh`. Tests green (`ci/checks.sh`), here and in the CI image.
-- **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6.2's since #16,
+- **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6.10's since 2026-11-12, OpenEXR-free (tacplus#554); 2.6.2's since #16 before that,
   `gitlab-runner/pin.yaml`'s `job:`) and `gates.yaml` its one set, full (`ci/tools.sh`, the render, `ci/validate.sh
   out`, `ci/checks.sh`), so tacplus-dev/build builds this repository in that image, with no Docker, and runs its
   security checks; `tests/ci_test.sh` refuses a `build.lock` that is not that `job:`, of the CI image's line.

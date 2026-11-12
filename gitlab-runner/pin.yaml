@@ -17,4 +17,4 @@ runner: registry.gitlab.com/gitlab-org/gitlab-runner:alpine-v19.5.3@sha256:25adb
 # The helper container of every job pod (clones, caches, artifacts), the same version.
 helper: registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:v19.5.3@sha256:3e3f338637600789b42a97b0942a686e3b734a01181cd7bc74250ffa39b44810
 # A job's image when its job names none: the tacplus build image the pipelines already run.
-job: ghcr.io/tacplus-dev/tacplus/build:2.6.2@sha256:8e651ce55b23c066d32e882161f11b69a1b5a607dbce8446924635cf715854d9
+job: ghcr.io/tacplus-dev/tacplus/build:2.6.10@sha256:828add1a92dbe5788c6d0b300141c2a57ef5864cbba79abccf66c7457795f85b

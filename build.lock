@@ -1,6 +1,6 @@
-# The build image of tacplus-dev/cluster, by digest (#14; looper#71): tacplus build 2.6 at v2.6.2's digest, the image
+# The build image of tacplus-dev/cluster, by digest (#14; looper#71): tacplus build 2.6 at v2.6.10's digest, the image
 # the CI jobs run (ci/gitlab-project.gitlab-ci.yml's default.image, build:2.6, is that digest) and
 # gitlab-runner/pin.yaml's job:, in which this repository's gates (gates.yaml) already run. It is no tacplus project,
 # so it has no tacplus.lock; the build pipeline reads this pin the way it reads one. Moved with pin.yaml's job:, never
 # alone (tests/ci_test.sh): a new digest is a change like any other, landed on the full gates.
-build_image: ghcr.io/tacplus-dev/tacplus/build:2.6.2@sha256:8e651ce55b23c066d32e882161f11b69a1b5a607dbce8446924635cf715854d9
+build_image: ghcr.io/tacplus-dev/tacplus/build:2.6.10@sha256:828add1a92dbe5788c6d0b300141c2a57ef5864cbba79abccf66c7457795f85b
