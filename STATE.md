@@ -59,7 +59,12 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by th
   which the Kubernetes executor never runs); the bump to 19.5.3 (#11) cleared curl's and docker-machine's, and their
   8 entries are gone. CVE-2026-78661 (x/net/html, fixed in v0.62.0) accepted until 2026-12-06 (#15) in the runner's
   gitlab-runner and docker-machine, the helper's gitlab-runner-helper and the CI image's `gh`, until the next GitLab
-  Runner release and tacplus-dev/tacplus#350. deploymentproxy
+  Runner release and tacplus-dev/tacplus#350. 4 accepted until 2026-11-25 (#21, the hub's interim): git's
+  CVE-2026-114466, -111760 and -105437 (2.54.0-r0) in the runner and helper images, and GO-2026-6859 (net/http,
+  Trivy's CVE-2026-97054) in their binaries, docker-machine, kubectl and gke-gcloud-auth-plugin; by then this
+  repository is to build those images itself (PROPOSALS.md; cloud's `ci-images` registry first). Every Go tool
+  `ci/tools.sh` builds, Trivy too since #21, is built with go1.27.4. GO-2026-5932's entry names the runner images
+  too. deploymentproxy
   0.2.1's image: none (2026-11-05). The CI image `build:2.6` (2.6.2 since #16, also `gitlab-runner/pin.yaml`'s `job:`, #12): only gh's CVE-2026-78661,
   accepted above (#15), and zlib1g's CVE-2026-85091 and CVE-2026-76844 (the latter Trivy's DB matching a webpack
   advisory to zlib), accepted until 2026-12-06 (#16): 2.6.2 has the fixed zlib1g (1-1+deb13u1) on amd64 only, its

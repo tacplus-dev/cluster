@@ -22,8 +22,8 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 # The toolchain every Go tool here is built with (fetched by go itself, checked against the checksum database), so
-# that their standard library is this one's, whatever the image's go is.
-go_toolchain=go1.27.3
+# that their standard library is this one's, whatever the image's go is: go1.27.4, with GO-2026-6859's fix (#21).
+go_toolchain=go1.27.4
 # module@version  h1 hash  package  [module@fixed-version...]
 # A tool built from source is built with each fixed module it names (the policy of tacplus-dev/cloud#24, #10): the
 # dependency's release with an advisory's fix, where no release of the tool has it yet. Drop each once the tool's
@@ -37,6 +37,9 @@ go_tools=(
 security_go_tools=(
   "github.com/google/osv-scanner/v2@v2.7.0 h1:7aOrJ9vB7qbzxC3R+QCXs03SHQiRuM80RJdqZhUEl2g= github.com/google/osv-scanner/v2/cmd/osv-scanner github.com/klauspost/compress@v1.20.2"
   "golang.org/x/vuln@v1.9.0 h1:12VaqnI9kJfqwRoPptxoqsUhQtdfrSbdksT7X/KY/sc= golang.org/x/vuln/cmd/govulncheck"
+  # Trivy's release binary is built with go1.27.3, without GO-2026-6859's fix: built here instead, as
+  # tacplus-dev/cloud#39 builds it (#21).
+  "github.com/aquasecurity/trivy@v0.76.1 h1:xzXcxZpfkZpTxAHzfuG3KS5BRP17KG70+c0uFFwZUU4= github.com/aquasecurity/trivy/cmd/trivy"
 )
 # kubectl at the cluster's minor (ci/validate.sh's schemas), from the Kubernetes release.
 kubectl_version=v1.34.13
@@ -48,14 +51,11 @@ gke_plugin_version=0.5.21
 gke_plugin_build=20261030071842
 gke_plugin_sha256_amd64=b8d3bf3ebce3aff0146d85457146869ea66da7dc62d291e176cb88b6e73dd452
 gke_plugin_sha256_arm64=773ce0d886108cc47d19816449948b4187bc2b54bb26ec55729e2f34e3f45dcc
-trivy_version=0.76.1
-trivy_sha256_amd64=c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
-trivy_sha256_arm64=e174dff2a6dba5e3ae41f8d0537a6324405bd08132497340304c6b20e0f16a1f
 
 case ${1:-} in "") security=no ;; security) security=yes ;; *) echo "usage: ci/tools.sh [security]" >&2; exit 2 ;; esac
 case $(uname -m) in
-  x86_64|amd64) arch=amd64 plugin_arch=x86_64 trivy_arch=64bit ;;
-  aarch64|arm64) arch=arm64 plugin_arch=arm trivy_arch=ARM64 ;;
+  x86_64|amd64) arch=amd64 plugin_arch=x86_64 ;;
+  aarch64|arm64) arch=arm64 plugin_arch=arm ;;
   *) echo "tools: no pinned tools for $(uname -m)" >&2; exit 1 ;;
 esac
 sha() { local v=${1}_sha256_$arch; echo "${!v}"; }
@@ -96,9 +96,5 @@ tar -xzf "$t/plugin.tar.gz" -C "$t" bin/gke-gcloud-auth-plugin
 install -m 0755 "$t/bin/gke-gcloud-auth-plugin" "$here/bin/gke-gcloud-auth-plugin"
 if [ "$security" = yes ]; then
   for g in "${security_go_tools[@]}"; do go_tool "$g"; done
-  fetch "https://github.com/aquasecurity/trivy/releases/download/v$trivy_version/trivy_${trivy_version}_Linux-$trivy_arch.tar.gz" \
-    "$(sha trivy)" "$t/trivy.tar.gz"
-  tar -xzf "$t/trivy.tar.gz" -C "$t" trivy
-  install -m 0755 "$t/trivy" "$here/bin/trivy"
 fi
 echo "bin/: $(ls "$here/bin" | tr '\n' ' ')"

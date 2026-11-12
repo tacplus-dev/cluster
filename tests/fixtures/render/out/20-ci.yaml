@@ -366,7 +366,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build
       annotations:
-        checksum/configmap: 15bf93872579ea54ad3be8e74ec8bfcb848458fb5eb08f134fcdc9d99658e229
+        checksum/configmap: e88cd3e7a154feeac8ca44a641fef1d15f6f1432975d8b0593c1ed80fc5fc068
         tacplus.dev/runner-tags: "arm64,build"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build/versions/1"
         tacplus.dev/runner-token-secret: "gitlab-runner-build"
@@ -762,7 +762,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: f8dbd8209b55d888f5e1a734df11c7ecd1213512696b450c52b4b6b933dcb444
+        checksum/configmap: 6c67e5c105b0d45dce6bcc8d04ed74346ed711047831bce287ed8a9cf6f6999c
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
         tacplus.dev/runner-token-secret: "gitlab-runner-control"

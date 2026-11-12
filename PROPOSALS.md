@@ -57,7 +57,9 @@ the looper then marks it `promoted` or `declined` here with the date.
   modules (`go get <module>@<fixed>`), each checked against the checksum database. Left: the result's `go.sum` is
   not pinned in the repository (the versions are, and the checksum database checks every module), and Trivy is
   still a release binary, excepted for GO-2026-6865 until 2026-12-06; building it here too would drop that
-  entry and #5's trivy ones, at the cost of a build upstream never tested.
+  entry and #5's trivy ones, at the cost of a build upstream never tested. Update 2026-11-12 (#21): Trivy is built
+  here now (go1.27.4, for GO-2026-6859), but with its own go.mod's modules; giving it compress v1.20.2 and x/net
+  v0.62.0 as gitleaks has them would drop GO-2026-6865, 6860 and 6866 for it.
 - **New findings in the pinned images** (2026-11-07, seen while verifying #10): the security job also fails on
   CVE-2026-123158 (openssh 10.3_p1-r1 in the runner image) and CVE-2026-78661 (x/net/html, in the runner, helper,
   docker-machine and the CI image's `gh`), beside #11's CVE-2026-115506. Neither is #10's; the nightly scan should
@@ -104,6 +106,25 @@ the looper then marks it `promoted` or `declined` here with the date.
   this file changes. Reading the key's primary version (`cryptoKeys.get`: likely a viewer's binding beside the
   signer's, tacplus-dev/cloud's) or taking the version from the variable would follow it. Links: #19,
   tacplus-dev/cloud README (The GitHub Apps' keys).
+
+- **Our own GitLab Runner and helper images** (2026-11-12, #21; the hub's decision on #21): upstream's 19.5.3 images
+  are built with go1.26.10 and git 2.54.0-r0, and no newer release exists, so #21's interim entries (the three git
+  CVEs, GO-2026-6859) run until 2026-11-25. Then: (1) an Artifact Registry repository `ci-images` in `tacplus-dev`,
+  from tacplus-dev/cloud's `dev` stack, `cluster-admin-pipeline` its writer, the cluster's nodes its readers; (2) a
+  `runner-images` job here (main only, before `plan`, no container runtime): `ci/runner-images.sh` builds
+  gitlab-runner and gitlab-runner-helper at v19.5.3 (`33227fd4`) with go1.27.4, x/net v0.62.0 and go-jose v4.1.6,
+  assembles each with `crane` on a pinned `alpine:3.24` digest (git 2.54.1-r0, libexpat 2.10.0-r0, miniperl
+  5.42.3-r0, openssh 10.3_p1-r2), without docker-machine, and pushes only the digest `pin.yaml` names; the first
+  land proves the build reproducible before `pin.yaml` points at it, and `tests/ci_test.sh` pairs those digests with
+  the runner commit and cloud's build (one release in both places, 19.5.3). That also drops #9's, #11's and #15's
+  entries for these images.
+- **The zlib entries build 2.6.10 no longer needs** (2026-11-12, seen in #21): the security job lists CVE-2026-85091
+  and CVE-2026-76844 under "Exceptions no finding needs": 2.6.10 (823eae0) has the fixed zlib1g. Remove them, and
+  STATE.md's line on them.
+- **A render fixture test for a pin change** (2026-11-12, #21): 823eae0 edited `pin.yaml`'s `job:` and the fixture's
+  image lines by hand, leaving the `checksum/configmap` annotations helm derives from them stale, so
+  `tests/render_test.sh` failed on main until #21 regenerated it. A land runs the gates, so this came in another way;
+  `UPDATE=1 tests/render_test.sh` is the only right way to move the fixture.
 
 ## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still
