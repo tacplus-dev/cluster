@@ -32,6 +32,9 @@
 # Needs bash, git, go (the toolchain is fetched by the go command), crane and yq (ci/tools.sh), curl, jq, tar,
 # sha256sum, openssl, and https to gitlab.com, the Go module proxy, Docker Hub and dl-cdn.alpinelinux.org.
 set -euo pipefail
+# The same files, modes and order whoever builds: what this writes is 0755/0644, what it unpacks keeps its own modes.
+umask 022
+export LC_ALL=C
 here=$(cd "$(dirname "$0")/.." && pwd)
 pin=$here/gitlab-runner/pin.yaml
 yq=${YQ:-yq}
@@ -147,7 +150,7 @@ sum=apk_tools_sha256_$host
 curl -fsSL --retry 3 -o "$tmp/apk-tools-static.apk" "$alpine/main/$host/apk-tools-static-$apk_tools.apk"
 echo "${!sum}  $tmp/apk-tools-static.apk" | sha256sum -c --quiet - >/dev/null 2>&1 ||
   die "apk-tools-static $apk_tools ($host) is not the pinned sha256 ${!sum}"
-mkdir "$tmp/apk" && tar -xzf "$tmp/apk-tools-static.apk" -C "$tmp/apk" sbin/apk.static 2>/dev/null
+mkdir "$tmp/apk" && tar -xzf "$tmp/apk-tools-static.apk" --no-same-owner -C "$tmp/apk" sbin/apk.static 2>/dev/null
 apk() { "$tmp/apk/sbin/apk.static" --root "$1" --arch aarch64 --no-cache --repositories-file /dev/null \
   -X "$alpine/main" -X "$alpine/community" "${@:2}"; }
 
@@ -170,8 +173,10 @@ for key in "${todo[@]}"; do
   image=$("$yq" -e ".$key" "$pin")
   root=$tmp/$key/root
   mkdir -p "$root"
-  crane export --platform linux/arm64 "$alpine_image" - | tar -x -C "$root" 2>/dev/null ||
-    die "cannot export $alpine_image (linux/arm64)"
+  # Docker Hub's, or the same digest from Google's mirror of it when Docker Hub refuses (its anonymous pull limit).
+  { crane export --platform linux/arm64 "$alpine_image" - ||
+      crane export --platform linux/arm64 "mirror.gcr.io/${alpine_image#docker.io/}" -; } |
+    tar -x --same-permissions --no-same-owner -C "$root" 2>/dev/null || die "cannot export $alpine_image (linux/arm64)"
   mapfile -t pkgs < <("$yq" -e ".build.packages.$key[]" "$pin")
   # Upstream's base images: apk upgrade, then the packages (each pinned name=version, checked after the add).
   apk "$root" --no-scripts --no-interactive upgrade > "$tmp/apk.log" 2>&1 &&
