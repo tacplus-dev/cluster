@@ -19,3 +19,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-08 looper issue security fails on main: CVE-2026-85091 and CVE-2026-76844 (zlib1g) in the CI image build:2.6.1 (#16)
 - 2026-11-11 looper issue In-cluster build jobs fail at once: HOME is / for run_as_user 1000 (git config --global: //.gitconfig Permission denied) (#20)
 - 2026-11-11 looper issue The tacplus-reader key moves to tacplus-ci: TACPLUS_READER_KMS_KEY (cloud#30) (#19, 4e42608; gates: full)
+- 2026-11-13 looper issue Security: the pinned GitLab Runner and helper images (19.5.3) carry GO-2026-6859 and HIGH git CVEs; cluster's security job fails (#21, 7acaac7; gates: full)
