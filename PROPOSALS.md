@@ -52,6 +52,8 @@ the looper then marks it `promoted` or `declined` here with the date.
   Update 2026-11-07 (#11): bumped to 19.5.3 (chart 0.94.3), CVE-2026-115506 accepted next to its libexpat siblings,
   and the 8 entries no finding needed any more removed; 13 remain until 2026-12-05, for the next release with
   libexpat 2.10.0-r0, go-jose/v4 4.1.6, x/net 0.60.0 and miniperl 5.42.3-r0.
+  Update 2026-11-13 (#21): moot for the runner and helper, which are built here now (below); all 13 entries are gone.
+  A GitLab Runner release is still a bump of `build:` too (README, Our GitLab Runner images).
 - **The Go tools built with their vulnerable dependencies raised** (2026-11-06, nightly scan, #10): done for the
   tools built here (#10): `ci/tools.sh` builds gitleaks and OSV-Scanner in a module of their own with the fixed
   modules (`go get <module>@<fixed>`), each checked against the checksum database. Left: the result's `go.sum` is
@@ -83,6 +85,8 @@ the looper then marks it `promoted` or `declined` here with the date.
   together, then `fetch.sh` and the fixture. As `deploymentproxy/bump.sh` does from a tag (#4), a
   `gitlab-runner/bump.sh <chart version>` could resolve the archive's digest from charts.gitlab.io's index and the
   images' digests from the chart's appVersion, then fetch and regenerate the fixture.
+  Update 2026-11-13 (#21): the runner and helper images are ours now, so a bump also moves `build:` (commit, branch,
+  `base_images`) and rebuilds; see the next-but-one entry for the more frequent Alpine-only bump.
 - **A narrower profile than Unconfined for builds** (2026-11-04, #6): rootless BuildKit's build container is
   Unconfined for seccomp and AppArmor. Once tacplus-dev/tacplus#315 settles the build image, a `Localhost` seccomp
   profile allowing only what rootlesskit needs (unshare, mount, the user namespace calls) would replace it, or user
@@ -118,6 +122,26 @@ the looper then marks it `promoted` or `declined` here with the date.
   land proves the build reproducible before `pin.yaml` points at it, and `tests/ci_test.sh` pairs those digests with
   the runner commit and cloud's build (one release in both places, 19.5.3). That also drops #9's, #11's and #15's
   entries for these images.
+  Done 2026-11-13 (#21): `ci/runner-images.sh`, the `runner-images` job, `pin.yaml`'s `build:` and our digests, the
+  security job scanning the job's layouts, `fetch.sh` pairing the release with cloud's; 17 entries removed. The
+  first push is the first pipeline on main after cloud's `apply:dev` creates `ci-images`.
+- **An Alpine-only bump of our runner images, by script** (2026-11-13, #21): Alpine keeps only each package's latest
+  build, so `ci/runner-images.sh` stops reproducing the pinned digests whenever Alpine v3.24 updates a package in
+  either image (about weekly), and the nightly gates say so. The bump is mechanical: the new versions into
+  `build.packages`, the new digests into `runner:` and `helper:`, the fixture. A `ci/runner-images.sh --bump` (or the
+  nightly scan filing it) would rewrite those from its own output, as `deploymentproxy/bump.sh` does, and a land's
+  gates prove the new digests on another machine. Until then it is by hand (README, Our GitLab Runner images). The
+  image already pushed keeps running meanwhile: the job on main pulls a digest the registry has instead of
+  building it.
+- **GO-2026-6859 in kubectl and gke-gcloud-auth-plugin after 2026-11-25** (2026-11-13, #21): the interim entry
+  (CVE-2026-97054) now covers only kubectl v1.34.13 (go1.26.10) and gke-gcloud-auth-plugin 0.5.21 (go1.27.3), no
+  release of either with the fix, and it expires on 2026-11-25 as the hub dated it. Before then: a kubectl 1.34
+  patch and a Cloud SDK component built with go1.26.11+/go1.27.4, or kubectl built here from its tag with go1.27.4
+  (as Trivy is since #21), or a new dated decision.
+- **tacplus-dev/cloud's jobs on our helper image** (2026-11-13, #21): cloud's VM runners still pull upstream's
+  `gitlab-runner-helper:arm64-v19.5.3` (its `stacks/ci/main.tf` `helper_image`; cloud's PROPOSALS "the jobs' helper
+  image built here"). Ours is in `ci-images`, the same release; cloud's VMs would need `ci-images` reader for their
+  account. A cloud issue, once the cluster pipeline has pushed it.
 - **The zlib entries build 2.6.10 no longer needs** (2026-11-12, seen in #21): the security job lists CVE-2026-85091
   and CVE-2026-76844 under "Exceptions no finding needs": 2.6.10 (823eae0) has the fixed zlib1g. Remove them, and
   STATE.md's line on them.

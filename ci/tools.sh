@@ -14,6 +14,7 @@
 #   bin/kubectl                 the cluster jobs (ci_kube in ci/lib.sh)
 #   bin/gke-gcloud-auth-plugin  kubectl's credentials for GKE (ci_kube)
 #   bin/gitleaks                the security job, tests/security_test.sh
+#   bin/crane                   ci/runner-images.sh: our GitLab Runner images, assembled and pushed
 #   with `security`, the security job's scanners as well:
 #   bin/osv-scanner bin/govulncheck bin/trivy
 #
@@ -33,6 +34,7 @@ go_tools=(
   "github.com/yannh/kubeconform@v0.7.0 h1:ZFfniR8VChrWQxaxTUGnNrxw8RIDkjVBrjdhXSamwjw= github.com/yannh/kubeconform/cmd/kubeconform"
   "github.com/zricethezav/gitleaks/v8@v8.30.1 h1:PmEvCfVI7ti9dV3s5aMZUY7sS2GxRvG3yzih7E+cS3w= github.com/zricethezav/gitleaks/v8 github.com/klauspost/compress@v1.20.2 github.com/andybalholm/brotli@v1.2.7 github.com/ulikunitz/xz@v0.5.15"
   "helm.sh/helm/v4@v4.3.1 h1:UndCoLe9UPmNoL7IvWzaUXveL7T5t/ijoorEmgJdI9g= helm.sh/helm/v4/cmd/helm"
+  "github.com/google/go-containerregistry@v0.22.1 h1:RZuuSYhTvlDvtsK+NkutoCZ//C0X2ebLK8X8l3ULs84= github.com/google/go-containerregistry/cmd/crane"
 )
 security_go_tools=(
   "github.com/google/osv-scanner/v2@v2.7.0 h1:7aOrJ9vB7qbzxC3R+QCXs03SHQiRuM80RJdqZhUEl2g= github.com/google/osv-scanner/v2/cmd/osv-scanner github.com/klauspost/compress@v1.20.2"

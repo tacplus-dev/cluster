@@ -13,7 +13,9 @@
 #   gitleaks                  the tree, and every commit of the history
 #   Trivy                     IMAGE, the image the jobs run in (its platform: this machine's); and each image the
 #                             tree's pins deploy, by digest, for linux/arm64 (the cluster's): gitlab-runner/pin.yaml's
-#                             runner, helper and job, deploymentproxy/pin.yaml's image
+#                             runner, helper and job, deploymentproxy/pin.yaml's image; our GitLab Runner images
+#                             (pin.yaml's build.registry, private) from SECURITY_IMAGES/<runner|helper>, the
+#                             runner-images job's OCI layouts (ci/runner-images.sh), each the digest its pin names
 #
 # The policy (looper-scan's): a secret fails, and so does a HIGH or CRITICAL finding with a fixed version, unless
 # an unexpired entry of the commit's security-exceptions.yaml names it (its id or an alias: a CVE, a GHSA). An
@@ -22,7 +24,8 @@
 # reports go to SECURITY_OUT (default ./security): findings.json (every finding, with excepted and blocking),
 # summary.md, verdict, raw/ (each tool's own JSON). Exits 1 on a fail.
 #
-#   ci/security.sh REPO IMAGE BINARY...   # needs git, jq, tar and the tools (ci/tools.sh security) on the PATH
+#   [SECURITY_IMAGES=DIR] ci/security.sh REPO IMAGE BINARY...
+#                                         # needs git, jq, tar and the tools (ci/tools.sh security) on the PATH
 set -uo pipefail
 [ $# -ge 2 ] || { echo "usage: ci/security.sh REPO IMAGE BINARY..." >&2; exit 2; }
 repo=$(cd "$1" && pwd) image=$2
@@ -102,11 +105,13 @@ elif gitleaks git --no-banner --redact --exit-code 0 -f json -r "$out/raw/gitlea
     "CRITICAL"; true; ("commit " + .Commit[0:12] + " " + .File + ":" + (.StartLine | tostring)); .Description)]' "$out/raw/gitleaks-history.json"
 else problems+=("gitleaks on the history: $(tail -1 "$out/raw/gitleaks-history.log")"); fi
 
-# trivy_image NAME IMAGE PLATFORM: Trivy on IMAGE for PLATFORM, its report raw/NAME.json.
+# trivy_image NAME IMAGE PLATFORM [LAYOUT]: Trivy on IMAGE for PLATFORM (or on LAYOUT, IMAGE's OCI layout), its
+# report raw/NAME.json.
 trivy_image() {
-  local name=$1 img=$2 platform=$3
-  log "trivy: $img ($platform)"
-  if trivy image -q --scanners vuln --platform "$platform" --format json -o "$out/raw/$name.json" "$img" 2>"$out/raw/$name.log"; then
+  local name=$1 img=$2 platform=$3 args
+  if [ -n "${4:-}" ]; then args=(--format json -o "$out/raw/$name.json" --input "$4"); log "trivy: $img (its layout $4)"
+  else args=(--platform "$platform" --format json -o "$out/raw/$name.json" "$img"); log "trivy: $img ($platform)"; fi
+  if trivy image -q --scanners vuln "${args[@]}" 2>"$out/raw/$name.log"; then
     norm "$name" '[.[0].Results[]? | .Target as $t | (.Vulnerabilities // [])[]
       | finding("trivy"; "sca"; .VulnerabilityID; []; (.Severity // "UNKNOWN"); ((.FixedVersion // "") != "");
                 (.PkgName + "@" + (.InstalledVersion // "") + " (" + $image + ": " + $t + ")"); .Title)]' \
@@ -118,7 +123,9 @@ case $(uname -m) in x86_64|amd64) platform=linux/amd64 ;; aarch64|arm64) platfor
 trivy_image trivy-image "$image" "$platform"
 # Trivy on each image the commit deploys, by the digest its pin names, for the cluster's platform (arm64): GitLab
 # Runner's runner, helper and job (gitlab-runner/pin.yaml) and deploymentproxy's (deploymentproxy/pin.yaml). A pin
-# file the tree has must name each, by digest.
+# file the tree has must name each, by digest. Our images (in pin.yaml's build.registry: #21) are scanned from their
+# layouts in SECURITY_IMAGES, which must be their pinned digests.
+ours=$(sed -n 's/^  registry:[[:space:]]*\([^[:space:]#]*\).*/\1/p' "$t/tree/gitlab-runner/pin.yaml" 2>/dev/null | head -1)
 i=0
 for pin in gitlab-runner/pin.yaml:runner gitlab-runner/pin.yaml:helper gitlab-runner/pin.yaml:job deploymentproxy/pin.yaml:image; do
   f=${pin%%:*} key=${pin#*:}
@@ -127,6 +134,16 @@ for pin in gitlab-runner/pin.yaml:runner gitlab-runner/pin.yaml:helper gitlab-ru
   img=$(sed -n "s/^$key:[[:space:]]*\([^[:space:]#]*\).*/\1/p" "$t/tree/$f" | head -1)
   if [ -z "$img" ]; then problems+=("$f: no \"$key:\" image to scan"); continue; fi
   case $img in *@sha256:*) ;; *) problems+=("$f: its $key image $img is not by digest"); continue ;; esac
+  if [ -n "$ours" ] && [[ $img == "$ours"/* ]]; then
+    layout=${SECURITY_IMAGES:-}/$key
+    got=$(jq -r '.manifests[0].digest' "$layout/index.json" 2>/dev/null)
+    if [ -z "${SECURITY_IMAGES:-}" ] || [ "$got" != "${img#*@}" ]; then
+      problems+=("$f: its $key image $img is not in SECURITY_IMAGES (${SECURITY_IMAGES:-not set}/$key is [${got}]): ci/runner-images.sh builds it")
+      continue
+    fi
+    trivy_image "trivy-deployed-$i-$key" "$img" linux/arm64 "$layout"
+    continue
+  fi
   trivy_image "trivy-deployed-$i-$key" "$img" linux/arm64
 done
 

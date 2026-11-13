@@ -1,7 +1,9 @@
 # The gate map of tacplus-dev/cluster (#14; tacplus-dev/looper README: Gates scaled to the diff): the gates a land
 # and the build pipeline run, in the image build.lock pins, with no Docker and no credential. One set, full: the
 # pinned tools into bin/ (ci/tools.sh), the render, validate and the tests (ci/checks.sh), as the render and validate
-# jobs run them.
+# jobs run them; and our GitLab Runner images' build (ci/runner-images.sh, #21), refused unless each is the digest
+# gitlab-runner/pin.yaml pins, when their recipe differs from the main the land is on (or there is none: the nightly
+# scan builds them, so an Alpine package that moved shows the next day).
 full:
-  run: ci/tools.sh && export PATH=$PWD/bin:$PATH && ./render.sh deployments.yaml out && ci/validate.sh out && ci/checks.sh
-  minutes: 30
+  run: ci/tools.sh && export PATH=$PWD/bin:$PATH && ./render.sh deployments.yaml out && ci/validate.sh out && ci/checks.sh && ci/runner-images.sh --if-changed "${LOOPER_GATES_BASE:-}" images
+  minutes: 45

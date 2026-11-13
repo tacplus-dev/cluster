@@ -37,13 +37,13 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `deploymentproxy/pin.yaml` | deploymentproxy's release: line `0.2`, tag, commit, image by digest, the manifests it applies. |
 | `deploymentproxy/release/` | Those manifests as fetched (`deploymentproxy/fetch.sh`), with their `SHA256SUMS`. Never edited. |
 | `deploymentproxy/bump.sh` | A bump to a release of the line, from its tag: the pin, the release, the render fixture. |
-| `gitlab-runner/pin.yaml` | GitLab Runner's chart (version, archive digest) and its images, the runner's, the helper's and the jobs' default, by digest. |
+| `gitlab-runner/pin.yaml` | GitLab Runner's chart (version, archive digest) and its images, the runner's, the helper's and the jobs' default, by digest; the runner's and the helper's recipe (`build:`, ours: [Our GitLab Runner images](#our-gitlab-runner-images)). |
 | `gitlab-runner/release/` | The chart as fetched (`gitlab-runner/fetch.sh`), with its `SHA256SUMS`. Never edited. |
 | `gitlab-runner/values.yaml` | The chart's values every runner shares: the runner manager's pod, its Role in `ci`, its placement. |
 | `gitlab-runner/runners/<runner>.yaml` | One runner each (`build`, `control`): its tags, its token's Secret Manager version, its jobs' `config.toml`. |
 | `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
-| `ci/*.sh` | The jobs' scripts: `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools). |
+| `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools). |
 | `build.lock`, `gates.yaml` | The build image by digest (the CI image), and the gates run in it (How a change reaches the cluster, below). |
 | `security-exceptions.yaml` | The security findings accepted, each until its expiry (Security checks, below). |
 | `tests/` | The tests (`ci/checks.sh` runs them all), their fixtures and stubs. |
@@ -63,7 +63,8 @@ that commit (it is public: no credential).
 
 | Job | When | What |
 |---|---|---|
-| `render` | every push and merge request | Builds or fetches the pinned tools (`ci/tools.sh`: yq, kubeconform, helm, kubectl, gke-gcloud-auth-plugin, gitleaks), checks the project's `.gitlab-ci.yml` is this repository's with only `CLUSTER_COMMIT` set (`ci/pin.sh --check`), renders into `out/`. |
+| `render` | every push and merge request | Builds or fetches the pinned tools (`ci/tools.sh`: yq, kubeconform, helm, crane, kubectl, gke-gcloud-auth-plugin, gitleaks), checks the project's `.gitlab-ci.yml` is this repository's with only `CLUSTER_COMMIT` set (`ci/pin.sh --check`), renders into `out/`. |
+| `runner-images` | every push and merge request, and the nightly schedule | Our GitLab Runner runner and helper images ([below](#our-gitlab-runner-images), `ci/runner-images.sh`), refused unless each is `gitlab-runner/pin.yaml`'s digest. On main, as `cluster-admin-pipeline`: an image `ci-images` has is pulled, any other built and pushed. Its images are the artifact `src/images/` the `security` job scans; `plan` waits for it. |
 | `validate` | every push and merge request | kubeconform and `ci/policy.sh` on `out/`, `deploymentproxy/release` against its release and `gitlab-runner/release` against its chart and images (each `fetch.sh --check`), the tests. |
 | `security` | every pipeline: every push and merge request, and the nightly schedule | The security checks (below). Fails the pipeline on a secret or an unaccepted HIGH or CRITICAL finding with a fix; `plan`, so `apply`, waits for it. Its report is the artifact `src/security/`. |
 | `plan` | main (push, web, API) | `kubectl diff` against `dev`, then per unit (deploymentproxy, each deployment, `ci`) what is added, changed or removed; a deployment whose entry is gone is listed as kept. Saves the render it diffed and its summary (`plan.txt`). |
@@ -72,7 +73,8 @@ that commit (it is public: no credential).
 | `drift` | the nightly schedule | `plan`, then the tacplus-reader app's token, minted every night (below, What the hub does, step 5); if anything differs, an issue here (one open at a time; a new drift is a comment). Never applies. |
 
 The cluster jobs run only on main, because Workload Identity Federation admits only this project's protected main:
-a merge request gets `render`, `validate` and `security`, and its `plan`, then `apply`, run once it is merged.
+a merge request gets `render`, `runner-images` (which builds, and pushes nothing), `validate` and `security`, and its
+`plan`, then `apply`, run once it is merged.
 Until the hub's steps below are done, `plan` stops with `kube: no cluster grant yet` (or GCP's refusal, saying so).
 
 ### How a change reaches the cluster
@@ -183,7 +185,12 @@ Before the first pipeline:
    answer; tacplus-dev/cloud's `dev` stack makes them so), the normal pool neither; Workload Identity on the cluster and its pools (`GKE_METADATA`), and NetworkPolicy enforced (Dataplane V2, as
    tacplus-dev/cloud's `dev` cluster has), for the `ci` namespace's NetworkPolicy to hold.
 
-Then a pipeline on main: `render`, `validate`, `security`, `plan` and `apply` green.
+9. **Our runner images' registry** (#21): tacplus-dev/cloud's `dev` stack applied with `ci-images`
+   (tacplus-dev/cloud#45: `us-central1-docker.pkg.dev/tacplus-dev/ci-images`, `cluster-admin-pipeline` its only
+   writer, the nodes' `gke-nodes` its reader), and `.gitlab-ci.yml` re-pinned (step 2) to a commit with the
+   `runner-images` job. Until then `runner-images` fails on main (the registry refuses it), and `plan` waits.
+
+Then a pipeline on main: `render`, `runner-images`, `validate`, `security`, `plan` and `apply` green.
 
 **The move from `tacplus` to `dev`** (#7; `tacplus-dev/roadmap:decisions/only-vms-are-k8s-nodes-2026-11-04.md`,
 addendum "a new cluster in seabeam.net"), in order: the hub sets `GCP_WIF_PROVIDER` to the provider above; the
@@ -254,9 +261,46 @@ namespace-scoped RBAC, the absence of privileged pods, host paths and the Docker
 only on the tainted spot pool and other jobs never, and that no runner takes a VM runner's tag;
 `tests/policy_test.sh` breaks each rule and `tests/render_test.sh` checks the render.
 
-**A bump** of the chart: its version, url and digest and the three images in `gitlab-runner/pin.yaml` together, then
-`gitlab-runner/fetch.sh` (which refuses an archive or an image that is not the pinned digest, and a chart whose
-appVersion is not the images') and `UPDATE=1 tests/render_test.sh`; review the diff of `release/` and the fixture.
+**A bump** of the chart: its version, url and digest, the job image and our runner and helper images' release
+(below) in `gitlab-runner/pin.yaml` together, then `gitlab-runner/fetch.sh` (which refuses an archive or an image
+that is not the pinned digest, and a chart whose appVersion is not the images') and `UPDATE=1
+tests/render_test.sh`; review the diff of `release/` and the fixture.
+
+### Our GitLab Runner images
+
+The runner manager's image and the jobs' helper image are built here (#21; the hub's decision on #21), not
+upstream's: GitLab's 19.5.3 images are built with go1.26.10 (GO-2026-6859) and git 2.54.0-r0, and no newer release
+exists. `ci/runner-images.sh` builds GitLab Runner's release at its commit (`gitlab-runner/pin.yaml`'s `build:`)
+with go1.27.4, x/net v0.62.0, klauspost/compress v1.20.2 and go-jose v4.1.6, the recipe of tacplus-dev/cloud's
+`ci/runner.sh` for the VM manager's runner (so the runner binary's SHA-256 is cloud's `runner_sha256`), and puts
+each binary on `alpine:3.24` (pinned by digest) with upstream's packages, files and config, from its base images'
+Dockerfiles at the release's `RUNNER_IMAGES_VERSION` (`build.base_images`), without docker-machine (the
+Kubernetes executor never runs it). There is no container runtime: Alpine's static `apk` installs the packages into
+the root file system, unprivileged and without their scripts (the script does what those would: `/etc/gitconfig`'s
+git-lfs filter, `/bin/bash` in `/etc/shells`, the certificates' links), each package checked against Alpine's signed
+index, and `crane` assembles the image, one layer, on a registry of its own on localhost. linux/arm64 only, the
+cluster's.
+
+- **Reproducible.** Every file's time is the runner commit's, every owner root but the runner's home, the layer
+  sorted: the image's digest is the build's identity. The build refuses an image whose digest is not the one
+  `runner:` or `helper:` names, and a package whose version is not `build.packages`'.
+- **Pushed once.** The `runner-images` job on main pushes an image to tacplus-dev/cloud's `ci-images` only when the
+  registry does not have that digest, and only that digest; otherwise it pulls it. The cluster's nodes read the
+  registry (`gke-nodes`); nothing else is pushed to it from here.
+- **Checked in the gates.** `gates.yaml`'s full builds both images whenever their recipe (the script, or
+  `pin.yaml`'s `build:`, `runner:` or `helper:`) differs from the main a land is on, so a new digest is proven on the
+  build job's machine before it lands; the nightly scan builds them too.
+- **One release with tacplus-dev/cloud.** `gitlab-runner/fetch.sh` (the `validate` job) refuses a `build:` whose
+  version, commit or runner SHA-256 is not cloud's `stacks/ci/main.tf` runner block on main. A runner bump in either
+  repository names the other's issue.
+
+**A bump** (a new GitLab Runner release, a newer `alpine:3.24`, or a package Alpine has replaced: Alpine keeps only
+each package's latest build, so the build stops being reproducible when one changes, and says which): change
+`build:` (version, commit and branch; `base_images` to the release's `RUNNER_IMAGES_VERSION`; `alpine`; the
+packages' versions), run `ci/runner-images.sh images` (it prints each binary's SHA-256 and each image's digest and
+packages when they are not the pinned ones), put the new SHA-256s and digests in `pin.yaml`, run it again (it must
+now pass), then `UPDATE=1 tests/render_test.sh`. The land's gates build it again, on another machine, and must
+agree. Then remove the `security-exceptions.yaml` entries the `security` job lists as needed by no finding.
 
 **Moving jobs over** is tacplus-dev/looper's (tacplus-dev/looper#84): a job moves here by switching its tags to
 `arm64, control` or `arm64, build`, these runners' own; no in-cluster runner holds a VM runner's tag (`autoscale`,
@@ -274,9 +318,9 @@ job (`ci/security.sh`) runs in every pipeline, so on every push and merge reques
 | Tool | On |
 |---|---|
 | OSV-Scanner | the tree's dependency manifests and lock files (none today: shell and YAML) |
-| `govulncheck -mode=binary` | every pinned tool binary the pipeline runs, `bin/`: yq, kubeconform, helm, kubectl, gke-gcloud-auth-plugin, gitleaks, osv-scanner, govulncheck, trivy |
+| `govulncheck -mode=binary` | every pinned tool binary the pipeline runs, `bin/`: yq, kubeconform, helm, crane, kubectl, gke-gcloud-auth-plugin, gitleaks, osv-scanner, govulncheck, trivy |
 | gitleaks | the tree, and every commit of its history (the job fetches it whole) |
-| Trivy | the CI image the jobs run in (`CI_JOB_IMAGE`, `ghcr.io/tacplus-dev/tacplus/build:2.6`), for the runner's platform; and each image the commit deploys, by the digest its pin names, for linux/arm64 (the cluster's): `gitlab-runner/pin.yaml`'s `runner`, `helper` and `job`, `deploymentproxy/pin.yaml`'s `image` (#9) |
+| Trivy | the CI image the jobs run in (`CI_JOB_IMAGE`, `ghcr.io/tacplus-dev/tacplus/build:2.6`), for the runner's platform; and each image the commit deploys, by the digest its pin names, for linux/arm64 (the cluster's): `gitlab-runner/pin.yaml`'s `runner`, `helper` and `job`, `deploymentproxy/pin.yaml`'s `image` (#9); our runner and helper images from the `runner-images` job's OCI layouts (`SECURITY_IMAGES`), each its pinned digest, so this job needs no credential for the private registry (#21) |
 
 The tools are pinned in `ci/tools.sh`, each by its version and a SHA-256: the Go ones built at their module's
 version with a pinned Go toolchain, the module checked against its go.sum hash (h1:, a SHA-256) and the checksum

@@ -6,7 +6,8 @@
 # report; a secret fails the job, planted in the tree or only in the history (gitleaks itself, not a stub), and so
 # does a shallow clone, whose history it cannot read; a HIGH or CRITICAL finding with a fix fails, from
 # govulncheck on a binary, OSV-Scanner on the tree, Trivy on the image or on an image the tree's pins deploy (each
-# by its digest, for linux/arm64; a pin without its image, or not by digest, fails), unless an unexpired exception names it
+# by its digest, for linux/arm64; a pin without its image, or not by digest, fails; our GitLab Runner images, in pin.yaml's
+# build.registry, from SECURITY_IMAGES' layouts, refused unless each is its pinned digest), unless an unexpired exception names it
 # (by its id or an alias); an expired exception fails the job, with or without its finding, and so does an entry
 # with a field missing or one too many, or a tool that cannot run; a finding without a fix, or below HIGH, passes.
 # This repository's own files hold no secret, and its security-exceptions.yaml reads, each entry with its four fields. OSV-Scanner, govulncheck
@@ -161,6 +162,33 @@ fails "a pin without its image" 'deploymentproxy/pin.yaml: no "image:" image to 
 pins
 printf 'image: registry.example/deploymentproxy:0.2.1\n' > "$work/repo/deploymentproxy/pin.yaml" && commit "a tag only"
 fails "a pinned image not by digest" "not by digest"
+
+# Our GitLab Runner images (#21), in pin.yaml's build.registry: private, so scanned from SECURITY_IMAGES' layouts
+# (the runner-images job's), each refused unless it is the digest its pin names.
+repo
+pins
+ours=(registry.ours/ci/gitlab-runner:alpine-v1@sha256:5555 registry.ours/ci/gitlab-runner-helper:v1@sha256:6666)
+printf 'chart:\n  name: gitlab-runner\nrunner: %s\nhelper: %s\njob: %s\nbuild:\n  version: v1\n  registry: registry.ours/ci\n' \
+  "${ours[@]}" "${deployed[2]}" > "$work/repo/gitlab-runner/pin.yaml" && commit "our images"
+layout() { mkdir -p "$work/images/$1" && jq -nc --arg d "$2" '{schemaVersion: 2, manifests: [{digest: $d}]}' > "$work/images/$1/index.json"; }
+layout runner sha256:5555 && layout helper sha256:6666
+export SECURITY_IMAGES=$work/images
+passes "our images, from their layouts"
+grep -q -- "image -q --scanners vuln --format json -o .* --input $work/images/runner\$" "$SSTUB/trivy.log" &&
+  grep -q -- "--input $work/images/helper\$" "$SSTUB/trivy.log" && ! grep -q "registry.ours" "$SSTUB/trivy.log" &&
+  ok "Trivy scans our images from their layouts, never from the registry" || fail "trivy ran: $(cat "$SSTUB/trivy.log")"
+jq -nc '{Results: [{Target: "alpine 3.24.4", Vulnerabilities: [
+  {VulnerabilityID: "CVE-2026-7777", PkgName: "git", InstalledVersion: "2.54.1-r0", FixedVersion: "2.54.2-r0", Severity: "HIGH"}]}]}' \
+  > "$SSTUB/trivy-helper.json"
+fails "our image's HIGH with a fix" "CVE-2026-7777"
+jq -e --arg image "${ours[1]}" '[.[] | select(.blocking)] | .[0].where == "git@2.54.1-r0 (\($image): alpine 3.24.4)"' \
+  "$work/security/findings.json" >/dev/null && ok "the finding names our pinned image" ||
+  fail "our image's finding: $(cat "$work/security/findings.json")"
+rm "$SSTUB/trivy-helper.json"
+layout helper sha256:7777
+fails "a layout that is not the pinned digest" "helper image ${ours[1]} is not in SECURITY_IMAGES"
+unset SECURITY_IMAGES
+fails "our images without SECURITY_IMAGES" "runner image ${ours[0]} is not in SECURITY_IMAGES"
 
 repo
 jq -nc --arg root "$work/repo" '{results:[{source: {path: "/tmp/x/go.sum"}, packages: [{package: {name: "golang.org/x/crypto", version: "v0.1.0"},

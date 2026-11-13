@@ -12,9 +12,30 @@ chart:
   url: https://gitlab-charts.s3.amazonaws.com/gitlab-runner-0.94.3.tgz
   index: https://charts.gitlab.io/index.yaml
   digest: sha256:0a7b8ae7b3a76560f5331de479372d166ee95571e51c2c62754560e295151757
-# The runner manager (the chart's Deployment): the chart's appVersion, its alpine variant.
-runner: registry.gitlab.com/gitlab-org/gitlab-runner:alpine-v19.5.3@sha256:25adb59339aebbee89050b2d3fd0d193a30c1860c70fd4d98d1c8b1e154914a3
-# The helper container of every job pod (clones, caches, artifacts), the same version.
-helper: registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:v19.5.3@sha256:3e3f338637600789b42a97b0942a686e3b734a01181cd7bc74250ffa39b44810
+# The runner manager (the chart's Deployment): the chart's appVersion, its alpine variant, our build (build: below).
+runner: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.5.3@sha256:1b200b08d5b4e591bd87170155fed2ca967a4b48207ddc24669d1ea057340f24
+# The helper container of every job pod (clones, caches, artifacts), the same version, our build.
+helper: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.5.3@sha256:8390c302a69075fd7c1ce1c54b4a51501e6411b075e67b189777cec47303211e
+# The runner and helper images' recipe (ci/runner-images.sh, #21): GitLab Runner's release (the chart's appVersion),
+# built with go1.27.4 and the fixed modules, on alpine:3.24, into tacplus-dev/cloud's registry ci-images (its dev
+# stack; cluster-admin-pipeline its only writer, the cluster's nodes its readers). One release with tacplus-dev/cloud
+# (its stacks/ci/main.tf runner block: the same commit, the same runner SHA-256; gitlab-runner/fetch.sh checks it):
+# a bump here names the cloud issue that moves its pins. A bump of anything here, or of an Alpine package, is new
+# digests for runner: and helper: (README, Our GitLab Runner images).
+build:
+  version: v19.5.3
+  branch: 19-5-stable
+  commit: 33227fd48c5b411d0b49a74e129d187728abcc3b
+  runner_sha256: b4e9583669395f4b84e333ffdda4f02662cdbc609c0ff9d8683779638404fb34
+  helper_sha256: bc1a399c5baed6e56aa1c8b8e426a887b7e64174b140a1446a81bad76823e027
+  # gitlab-org/ci-cd/runner-tools/base-images v0.0.60, the release's RUNNER_IMAGES_VERSION: its Dockerfiles'
+  # entrypoints, helper scripts and packages.
+  base_images: a3ea507634355958cc7ff8b46d5cdefb93247211
+  alpine: docker.io/library/alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+  registry: us-central1-docker.pkg.dev/tacplus-dev/ci-images
+  # Each image's packages as upstream's Dockerfile adds them, at the versions the digests were built with.
+  packages:
+    runner: [bash=5.3.9-r1, ca-certificates=20261020-r0, git=2.54.1-r0, git-lfs=3.7.1-r2, tzdata=2026f-r0, openssh-client-default=10.3_p1-r2, curl=8.23.0-r0, dumb-init=1.2.5-r4, openrc=0.63.2-r0]
+    helper: [ca-certificates=20261020-r0, curl=8.23.0-r0, git=2.54.1-r0, git-lfs=3.7.1-r2, busybox=1.37.0-r31, zlib=1.4-r0, pcre2=10.49-r0, bash=5.3.9-r1, miniperl=5.42.3-r0, coreutils=9.11-r0, dumb-init=1.2.5-r4]
 # A job's image when its job names none: the tacplus build image the pipelines already run.
 job: ghcr.io/tacplus-dev/tacplus/build:2.6.10@sha256:828add1a92dbe5788c6d0b300141c2a57ef5864cbba79abccf66c7457795f85b

@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by the looper (#19).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-13 by the looper (#21).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -21,7 +21,11 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by th
   named for what it destroys), `drift` (nightly, files an issue, never applies; #19: mints its tacplus-reader token every
   night through tacplus-ci's KMS key `tacplus-reader`, saying so, and nothing here names jody1-328023's key). CI in the cluster (#6):
   `out/20-ci.yaml`, the namespace `ci` with GitLab Runner's chart 0.94.3 (runner 19.5.3, #11; chart by archive digest,
-  images by digest, `gitlab-runner/`, rendered by `helm template`, helm v4.3.1 pinned in `ci/tools.sh`) as two
+  images by digest, `gitlab-runner/`, rendered by `helm template`, helm v4.3.1 pinned in `ci/tools.sh`); the runner
+  and helper images our own build since #21 (`ci/runner-images.sh`: 19.5.3 at `33227fd4` with go1.27.4, x/net v0.62.0,
+  go-jose v4.1.6 and compress v1.20.2, the runner binary SHA-256-identical to tacplus-dev/cloud's; on `alpine:3.24`,
+  no docker-machine; reproducible, refused unless the pinned digest; the job `runner-images` pushes them on main to
+  cloud's `ci-images`, the security job scans its OCI layouts, the gates build them when their recipe changes) as two
   runners, `build` (tags `arm64, build`, jobs on the spot pool only) and `control` (`arm64, control`, #13;
   no VM runner's tag, the policy refuses one; the normal pool), per-runner requests, limits and ceilings; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
   the job image, and `git config --global` failed on `//.gitconfig`); Roles in `ci` only; jobs as `ci-job`
@@ -41,6 +45,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by th
   saying so. Rootless BuildKit is not in the build image yet (tacplus-dev/tacplus#315), and the looper's jobs move
   over in tacplus-dev/looper's switch issue. The `ci` NetworkPolicy holds only where NetworkPolicy is enforced
   (Dataplane V2: tacplus-dev/cloud's `dev` cluster has it).
+  `runner-images` needs tacplus-dev/cloud's `apply:dev` to have created `ci-images` (cloud#45, landed) before it
+  can push on main (README, What the hub does, 9); nothing has pushed or pulled our images yet.
   No pipeline has run: the hub owes the runner (tag `cluster`), the project's variables and
   environment (now deployable by the account whose merges start main's pipelines too, for the automatic `apply`),
   the cluster grant, and the drift issue's app permission and KMS binding (README, What the hub does); the hub
@@ -54,17 +60,12 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-11 by th
   0.76.1 until 2026-12-06 (#10), no trivy release with it (still found, #16). gitleaks and OSV-Scanner are built with the fixed modules
   instead (`ci/tools.sh`, #10): GO-2026-6865 and GO-2026-6888 (brotli v1.2.7), and gitleaks' xz (v0.5.15), none
   accepted. 14 accepted until 2026-12-05 (#9, #11, #15), in GitLab
-  Runner 19.5.3's runner and helper images, its latest release (libexpat, four with CVE-2026-115506, #11; go-jose/v4,
-  x/net; the helper's miniperl, two CRITICAL, which the helper never runs; the runner's openssh, CVE-2026-123158, #15,
-  which the Kubernetes executor never runs); the bump to 19.5.3 (#11) cleared curl's and docker-machine's, and their
-  8 entries are gone. CVE-2026-78661 (x/net/html, fixed in v0.62.0) accepted until 2026-12-06 (#15) in the runner's
-  gitlab-runner and docker-machine, the helper's gitlab-runner-helper and the CI image's `gh`, until the next GitLab
-  Runner release and tacplus-dev/tacplus#350. 4 accepted until 2026-11-25 (#21, the hub's interim): git's
-  CVE-2026-114466, -111760 and -105437 (2.54.0-r0) in the runner and helper images, and GO-2026-6859 (net/http,
-  Trivy's CVE-2026-97054) in their binaries, docker-machine, kubectl and gke-gcloud-auth-plugin; by then this
-  repository is to build those images itself (PROPOSALS.md; cloud's `ci-images` registry first). Every Go tool
-  `ci/tools.sh` builds, Trivy too since #21, is built with go1.27.4. GO-2026-5932's entry names the runner images
-  too. deploymentproxy
+  Our runner and helper images (#21): only GO-2026-5932 (x/crypto/openpgp, no fixed release), in its
+  entry; #9's, #11's, #15's and #21's 17 entries for upstream's images are gone. CVE-2026-78661 (x/net/html, fixed in
+  v0.62.0) accepted until 2026-12-06 (#15) in the CI image's `gh`, until tacplus-dev/tacplus#350. GO-2026-6859
+  (net/http, Trivy's CVE-2026-97054) accepted until 2026-11-25 in kubectl v1.34.13 and gke-gcloud-auth-plugin 0.5.21
+  only, no release of either with the fix (PROPOSALS.md). Every Go tool `ci/tools.sh` builds, Trivy too since #21,
+  is built with go1.27.4. deploymentproxy
   0.2.1's image: none (2026-11-05). The CI image `build:2.6` (2.6.2 since #16, also `gitlab-runner/pin.yaml`'s `job:`, #12): only gh's CVE-2026-78661,
   accepted above (#15), and zlib1g's CVE-2026-85091 and CVE-2026-76844 (the latter Trivy's DB matching a webpack
   advisory to zlib), accepted until 2026-12-06 (#16): 2.6.2 has the fixed zlib1g (1-1+deb13u1) on amd64 only, its

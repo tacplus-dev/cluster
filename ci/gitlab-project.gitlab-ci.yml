@@ -8,6 +8,10 @@
 # this repository out at that commit: it is public, so with no credential. Runbook: README.
 #
 #   render             the tools (ci/tools.sh), the copy checked (ci/pin.sh --check), ./render.sh into out/
+#   runner-images      our GitLab Runner runner and helper images (ci/runner-images.sh): built and refused unless
+#                      each is gitlab-runner/pin.yaml's digest; on main, as cluster-admin-pipeline, pushed to
+#                      tacplus-dev/cloud's ci-images when the registry does not have it yet, else pulled; the
+#                      security job scans them, and plan waits for it
 #   validate           kubeconform and ci/policy.sh on out/, deploymentproxy's release and GitLab Runner's chart
 #                      checked, the tests (ci/checks.sh)
 #   security           OSV-Scanner on the tree, govulncheck on the pinned tools, gitleaks on the tree and its history,
@@ -21,7 +25,7 @@
 #                      deployment DELETE_DEPLOYMENT
 #   drift              the nightly schedule: plan, and an issue on github.com/tacplus-dev/cluster if it differs; never applies
 #
-# render, validate and security run on every push and merge request, and nightly. The cluster jobs run on main only,
+# render, runner-images, validate and security run on every push and merge request, and nightly. The cluster jobs run on main only,
 # where Workload Identity Federation admits this project (its provider's condition: protected main) as
 # cluster-admin-pipeline, the only holder of cluster-admin on dev. No key file and no GitHub token is stored:
 # the id_token is exchanged for each job. The only pipeline variables are a deletion pipeline's: DELETE_DEPLOYMENT
@@ -84,6 +88,30 @@ render:
     paths: [src/bin/, src/out/]
     expire_in: 1 week
 
+# Our GitLab Runner images (#21; README, Our GitLab Runner images), the ones gitlab-runner/pin.yaml's runner: and
+# helper: name by digest, as OCI layouts in images/ for the security job. Outside main, built with no credential and
+# refused unless each is the pinned digest. On main, as cluster-admin-pipeline (ci-images' only writer): an image the
+# registry has is pulled, not built; any other is built, refused unless it is the pinned digest, then pushed, so it is
+# there before apply deploys it.
+runner-images:
+  extends: .cluster
+  stage: render
+  needs: [render]
+  script:
+    - |
+      cd src && export PATH=$PWD/bin:$PATH
+      if [ "$CI_COMMIT_BRANCH" = main ]; then
+        source ci/lib.sh && ci_gcp
+        export DOCKER_CONFIG=$(mktemp -d)
+        gcloud auth print-access-token | crane auth login us-central1-docker.pkg.dev -u oauth2accesstoken --password-stdin
+        ci/runner-images.sh --push images
+      else
+        ci/runner-images.sh images
+      fi
+  artifacts:
+    paths: [src/images/]
+    expire_in: 1 week
+
 validate:
   stage: validate
   needs: [render]
@@ -93,16 +121,17 @@ validate:
 # The security checks (ci/security.sh): in every pipeline, so on every push and merge request and on the nightly
 # schedule. They fail on any secret, and on a HIGH or CRITICAL finding with a fix that no unexpired entry of
 # security-exceptions.yaml accepts; plan, and so apply, waits for them. Their JSON report is the job's artifact,
-# kept whether it passes or fails. The history is fetched in full for gitleaks; no credential is in this job.
+# kept whether it passes or fails. The history is fetched in full for gitleaks; no credential is in this job: our
+# GitLab Runner images are scanned from runner-images' artifact, by their pinned digests.
 security:
   stage: validate
-  needs: []
+  needs: [runner-images]
   script:
     - |
       cd src
       git fetch -q --unshallow https://github.com/tacplus-dev/cluster.git "$CLUSTER_COMMIT"
       ci/tools.sh security
-      PATH=$PWD/bin:$PATH ci/security.sh . "$CI_JOB_IMAGE" bin/*
+      PATH=$PWD/bin:$PATH SECURITY_IMAGES=images ci/security.sh . "$CI_JOB_IMAGE" bin/*
   artifacts:
     when: always
     paths: [src/security/]
@@ -111,7 +140,7 @@ security:
 plan:
   extends: .cluster
   stage: plan
-  needs: [render, validate, { job: security, artifacts: false }]
+  needs: [render, validate, { job: runner-images, artifacts: false }, { job: security, artifacts: false }]
   rules:
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(push|web|api)$/
   script:

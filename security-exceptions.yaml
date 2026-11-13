@@ -18,21 +18,10 @@
 # ulikunitz/xz v0.5.15, osv-scanner v2.7.0 with compress v1.20.2, so none of them needs an entry. And all of them,
 # trivy too since #21, with go1.27.4, so that GO-2026-6859 (net/http) is not theirs.
 #
-# And found by Trivy in GitLab Runner's images (gitlab-runner/pin.yaml; #9, and #11 for 19.5.3), GitLab's latest
-# release, none with the fix (track: bump chart, runner and helper to the first release with them, and remove these
-# entries). 19.5.3 fixed curl's and docker-machine's (#11 removed their entries); these remain:
-#
-#   runner and helper               CVE-2026-113351 115506 117610 118370 (libexpat), 116587 (go-jose/v4),
-#                                   78669 78661 (x/net; 78661 in docker-machine too) (#15)
-#   runner                          CVE-2026-123158 (openssh) (#15)
-#   helper                          CVE-2026-42496 8376 (CRITICAL), 42497 48962 57432 57433 9538 (miniperl)
-#   runner and helper               CVE-2026-114466 111760 105437 (git 2.54.0-r0), CVE-2026-97054 (GO-2026-6859,
-#                                   Go 1.26.10's net/http; docker-machine's 1.27.3 too), GO-2026-5932 (x/crypto
-#                                   v0.57.0, in the entry of trivy's) (#21)
-#
-# #21's entries are the interim the hub decided: until 2026-11-25, or until this repository's runner-images job builds
-# the runner and the helper with go1.27.4 on a current alpine:3.24 (which has git 2.54.1-r0) and pin.yaml points at
-# them, whichever is first. Then remove them, with #9's, #11's and #15's entries for those images.
+# GitLab Runner's runner and helper images are our build since #21 (ci/runner-images.sh: go1.27.4, x/net v0.62.0,
+# go-jose v4.1.6, on alpine:3.24 with git 2.54.1-r0, libexpat 2.10.0-r0, miniperl 5.42.3-r0, openssh 10.3_p1-r2; no
+# docker-machine), so #9's, #11's, #15's and #21's entries for upstream's images are gone. Trivy finds one thing
+# in them: GO-2026-5932 (x/crypto v0.58.0, openpgp, no fixed release), in the entry of trivy's.
 #
 # And in the CI image's gh (ghcr.io/tacplus-dev/tacplus/build:2.6, also gitlab-runner/pin.yaml's job:, #12),
 # CVE-2026-78661 (#15), until tacplus-dev/tacplus#350 ships a gh built with x/net v0.62.0.
@@ -46,7 +35,7 @@ exceptions:
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
     expires: 2026-12-04
   - id: GO-2026-5932
-    reason: "x/crypto/openpgp, unmaintained (trivy 0.76.1, x/crypto v0.57.0; gitlab-runner, gitlab-runner-helper and docker-machine 19.5.3, v0.57.0, #21): the job's trivy reads one image, the CI image, and no OpenPGP key or message from outside; the runner and the helper call no openpgp code, and docker-machine is never run. No fixed release (x/crypto has only a pseudo-version past it), as tacplus handles it."
+    reason: "x/crypto/openpgp, unmaintained (trivy 0.76.1, x/crypto v0.57.0; gitlab-runner and gitlab-runner-helper 19.5.3, our build, v0.58.0, #21): the job's trivy reads one image, the CI image, and no OpenPGP key or message from outside; the runner and the helper call no openpgp code. No fixed release (x/crypto has only a pseudo-version past it), as tacplus handles it."
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04; the runner images: hub, tacplus-dev/cluster#21, 2026-11-12)"
     expires: 2026-12-04
   - id: GO-2026-6603
@@ -85,80 +74,12 @@ exceptions:
     reason: "klauspost/compress panic on two-block frames (trivy 0.76.1, compress v1.20.1; a release binary, not built here): the job's trivy decodes only the CI image's and the pinned images' layers, from their registries, and its own vulnerability database. Fixed in compress v1.20.2; no trivy release with it yet (0.76.2 still has v1.20.1)."
     decided_by: "jodydadescott (tacplus-dev/cluster#10, 2026-11-06)"
     expires: 2026-12-06
-  - id: CVE-2026-113351
-    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.3, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-117610
-    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.3, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-118370
-    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.3, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-115506
-    reason: "libexpat 2.9.0-r0 (runner and helper 19.5.3, alpine 3.24.3): its XML parsing and the runner's other libraries are reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in 2.10.0-r0; GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (tacplus-dev/cluster#11, 2026-11-06)"
-    expires: 2026-12-05
-  - id: CVE-2026-116587
-    reason: "go-jose/v4 v4.1.4 (gitlab-runner and gitlab-runner-helper 19.5.3): it is reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in v4.1.6; GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-78669
-    reason: "x/net v0.58.0 (gitlab-runner, gitlab-runner-helper 19.5.3): it is reached only by the runner talking to gitlab.com and to Kubernetes, over verified TLS. Fixed in v0.60.0; GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-123158
-    reason: "OpenSSH password authentication bypass (runner 19.5.3, openssh-client 10.3_p1-r1, alpine 3.24.3; fixed in 10.3_p1-r2): the runner's Kubernetes executor never runs ssh, and the CVE concerns password authentication. GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#15, 2026-11-07)"
-    expires: 2026-12-05
   - id: CVE-2026-78661
-    reason: "x/net/html DoS on crafted HTML (gitlab-runner and gitlab-runner-helper 19.5.3 x/net v0.58.0, docker-machine 19.5.3 v0.60.0; the CI image's gh, build:2.6, v0.60.0): the runner reaches it only talking to gitlab.com and to Kubernetes, over verified TLS; docker-machine is never run; no job here has gh parse HTML from outside. Fixed in v0.62.0; GitLab Runner 19.5.3 is the latest release, none with it yet, and the CI image's gh waits for tacplus-dev/tacplus#350."
+    reason: "x/net/html DoS on crafted HTML (the CI image's gh, build:2.6, x/net v0.60.0): no job here has gh parse HTML from outside. Fixed in v0.62.0; the CI image's gh waits for tacplus-dev/tacplus#350. (GitLab Runner's runner and helper are built with v0.62.0 since #21.)"
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#15, 2026-11-07)"
     expires: 2026-12-06
-  - id: CVE-2026-42496
-    reason: "miniperl, CRITICAL (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-8376
-    reason: "miniperl, CRITICAL (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-42497
-    reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-48962
-    reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-57432
-    reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-57433
-    reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-9538
-    reason: "miniperl, HIGH (helper 19.5.3, miniperl 5.42.2-r1, fixed in 5.42.3-r0): the helper runs no perl here. Its entrypoint (/entrypoint under dumb-init) is bash, then the runner's generated shell and gitlab-runner-helper; the image has no perl script (only git's .sample hooks, never run) and update-ca-certificates is a binary. Only a job's own hooks:pre_get_sources_script could run perl there, and that is its author's code in its own pod, which could run anything anyway. GitLab Runner 19.5.3 is the latest release, none with it yet."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#9, 2026-11-05)"
-    expires: 2026-12-05
-  - id: CVE-2026-114466
-    reason: "git CVE-2026-114466 (runner and helper 19.5.3, git 2.54.0-r0 and git-init-template, alpine 3.24.3; fixed in 2.54.1-r0): git in the helper clones only this group's own repositories, from gitlab.com over verified TLS, and the runner manager runs no git. GitLab Runner 19.5.3 is the latest release, none with it yet. Until 2026-11-25 or until the runner-images job's images replace upstream's in pin.yaml, whichever is first."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12)"
-    expires: 2026-11-25
-  - id: CVE-2026-111760
-    reason: "git CVE-2026-111760 (runner and helper 19.5.3, git 2.54.0-r0 and git-init-template, alpine 3.24.3; fixed in 2.54.1-r0): git in the helper clones only this group's own repositories, from gitlab.com over verified TLS, and the runner manager runs no git. GitLab Runner 19.5.3 is the latest release, none with it yet. Until 2026-11-25 or until the runner-images job's images replace upstream's in pin.yaml, whichever is first."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12)"
-    expires: 2026-11-25
-  - id: CVE-2026-105437
-    reason: "git CVE-2026-105437 (runner and helper 19.5.3, git 2.54.0-r0 and git-init-template, alpine 3.24.3; fixed in 2.54.1-r0): git in the helper clones only this group's own repositories, from gitlab.com over verified TLS, and the runner manager runs no git. GitLab Runner 19.5.3 is the latest release, none with it yet. Until 2026-11-25 or until the runner-images job's images replace upstream's in pin.yaml, whichever is first."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12)"
-    expires: 2026-11-25
   - id: CVE-2026-97054
-    reason: "GO-2026-6859, an HTTP/1 server crash in net/http (gitlab-runner and gitlab-runner-helper 19.5.3, go1.26.10; docker-machine 19.5.3 and gke-gcloud-auth-plugin 0.5.21, go1.27.3; kubectl v1.34.13, go1.26.10; fixed in go1.26.11 and go1.27.4): nothing untrusted reaches their HTTP surface; the runner and the helper talk only to gitlab.com and to Kubernetes, over verified TLS, docker-machine is never run, and kubectl and its auth plugin serve no HTTP. GitLab Runner 19.5.3 is the latest release, built with go1.26.10, and no kubectl 1.34 or plugin release has the fix yet. Until 2026-11-25 or until the runner-images job's images replace upstream's in pin.yaml, whichever is first; the tools built here are built with go1.27.4 (ci/tools.sh)."
+    reason: "GO-2026-6859, an HTTP/1 server crash in net/http (gke-gcloud-auth-plugin 0.5.21, go1.27.3; kubectl v1.34.13, go1.26.10; fixed in go1.26.11 and go1.27.4): kubectl and its auth plugin serve no HTTP, and nothing untrusted reaches them; no kubectl 1.34 or plugin release has the fix yet. The tools built here, and GitLab Runner's runner and helper since #21, are built with go1.27.4 (ci/tools.sh, ci/runner-images.sh); the hub's interim for upstream's runner images ended with them."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12; kubectl and its plugin as #5 decided their other findings: no release of the tool with the fix)"
     expires: 2026-11-25
   - id: CVE-2026-85091

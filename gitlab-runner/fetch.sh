@@ -12,6 +12,10 @@
 #
 # Refused: an archive whose SHA-256 is not the pinned digest, or not the digest charts.gitlab.io's index gives that
 # version; a chart whose appVersion is not the images' version; an image whose tag no longer has the pinned digest.
+# Our runner and helper images (pin.yaml's build:, #21) are in a private registry and are their build's
+# (ci/runner-images.sh refuses any other digest), so their tags are not read: their release must be the chart's
+# appVersion, and the release, commit and runner SHA-256 tacplus-dev/cloud's manager runs (its stacks/ci/main.tf
+# runner block on main: one release in both places).
 # Needs bash, curl, jq, yq (mikefarah v4), sha256sum, tar.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
@@ -54,6 +58,16 @@ live_digest() {
       -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
       "https://$registry/v2/$path/manifests/$tag" | tr -d '\r' | sed -n 's/^docker-content-digest: *//Ip'
 }
+ours=$("$yq" -e '.build.registry' "$pin")
+build_version=$("$yq" -e '.build.version' "$pin")
+[ "$build_version" = "v$app" ] || die "the images' build is GitLab Runner $build_version, not the chart's appVersion $app"
+cloud_main=${CLOUD_MAIN_TF:-https://raw.githubusercontent.com/tacplus-dev/cloud/main/stacks/ci/main.tf}
+curl -fsSL --retry 3 -o "$t/cloud.tf" "$cloud_main" || die "no tacplus-dev/cloud runner block at $cloud_main"
+cloud() { sed -n "/^  runner = {/,/^  }/s/^    $1 *= *\"\(.*\)\"$/\1/p" "$t/cloud.tf"; }
+for k in version:version commit:commit runner_sha256:runner_sha256; do
+  [ "$(cloud "${k#*:}")" = "$("$yq" -e ".build.${k%%:*}" "$pin")" ] ||
+    die "the images' build.${k%%:*} is $("$yq" -e ".build.${k%%:*}" "$pin"), tacplus-dev/cloud's runner ${k#*:} is [$(cloud "${k#*:}")]: one release in both places"
+done
 for key in runner helper job; do
   image=$("$yq" -e ".$key" "$pin")
   [[ $image =~ ^[a-z0-9.-]+/[a-z0-9/._-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$ ]] ||
@@ -62,6 +76,7 @@ for key in runner helper job; do
     runner) [[ ${image%@*} == *:alpine-v"$app" ]] || die "the runner image $image is not the chart's appVersion $app" ;;
     helper) [[ ${image%@*} == *:v"$app" ]] || die "the helper image $image is not the chart's appVersion $app" ;;
   esac
+  [[ $image != "$ours"/* ]] || continue
   live=$(live_digest "$image") || live=
   [ "$live" = "${image#*@}" ] || die "${image%@*} is [${live}], not the pinned ${image#*@}"
 done
@@ -71,7 +86,7 @@ mv "$t/SHA256SUMS" "$t/x/$name/SHA256SUMS"
 if [ "${1:-}" = --check ]; then
   (cd "$release" && sha256sum --quiet -c SHA256SUMS) || die "release/ does not match its SHA256SUMS"
   diff -u "$release/SHA256SUMS" "$t/x/$name/SHA256SUMS" || die "release/ is not $name $version ($digest): run gitlab-runner/fetch.sh"
-  echo "$name $version ($digest, app $app): release/ matches, $(wc -l < "$release/SHA256SUMS") files; the images' tags have their digests"
+  echo "$name $version ($digest, app $app): release/ matches, $(wc -l < "$release/SHA256SUMS") files; the job image's tag has its digest; our images' build is tacplus-dev/cloud's runner release"
 else
   rm -rf "$release"
   cp -R "$t/x/$name" "$release"
