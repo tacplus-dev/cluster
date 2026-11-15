@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-13 by the looper (#21).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-15 by the looper (#24).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -33,7 +33,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-13 by th
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
   1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
   `ci/policy.sh`. Tests green (`ci/checks.sh`), here and in the CI image.
-- **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6.10's since 2026-11-12, OpenEXR-free (tacplus#554); 2.6.2's since #16 before that,
+- **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6.12's since 2026-11-15, #24; 2.6.10's, OpenEXR-free (tacplus#554), from 2026-11-12; 2.6.2's since #16 before that,
   `gitlab-runner/pin.yaml`'s `job:`) and `gates.yaml` its one set, full (`ci/tools.sh`, the render, `ci/validate.sh
   out`, `ci/checks.sh`), so tacplus-dev/build builds this repository in that image, with no Docker, and runs its
   security checks; `tests/ci_test.sh` refuses a `build.lock` that is not that `job:`, of the CI image's line.
@@ -66,10 +66,9 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-13 by th
   only, no release of either with the fix (PROPOSALS.md). Every Go tool `ci/tools.sh` builds, Trivy too since #21,
   is built with go1.27.4. deploymentproxy
   0.2.2's image (#22): only GO-2026-6859 (Trivy's CVE-2026-97054, its go1.27.3), with no severity, so not failing the
-  policy (2026-11-15). The CI image `build:2.6` (2.6.2 since #16, also `gitlab-runner/pin.yaml`'s `job:`, #12): only gh's CVE-2026-78661,
-  accepted above (#15), and zlib1g's CVE-2026-85091 and CVE-2026-76844 (the latter Trivy's DB matching a webpack
-  advisory to zlib), accepted until 2026-12-06 (#16): 2.6.2 has the fixed zlib1g (1-1+deb13u1) on amd64 only, its
-  arm64 image still v2.6.1's (tacplus-dev/tacplus#369). #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
+  policy (2026-11-15). The CI image `build:2.6` (2.6.12 since #24, also `gitlab-runner/pin.yaml`'s `job:`, #12): only gh's CVE-2026-78661,
+  accepted above (#15); 2.6.10's six linux-libc-dev CVEs went with the move to 2.6.12 (#24), and #16's zlib1g
+  exceptions with 2.6.10, which had the fix. #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
