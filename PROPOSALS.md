@@ -80,9 +80,6 @@ the looper then marks it `promoted` or `declined` here with the date.
   Update 2026-11-07 (#15): both accepted (Jody's decision on #15), CVE-2026-123158 until 2026-12-05 with its
   siblings and CVE-2026-78661 until 2026-12-06; remove them with the next GitLab Runner release and, for the CI
   image's `gh` (build:2.6.2 since #16, x/net v0.60.0 still), tacplus-dev/tacplus#350.
-  Update 2026-11-08 (#16): the CI image's zlib1g CVE-2026-85091 and CVE-2026-76844 accepted until 2026-12-06 (hub);
-  build:2.6.2 fixes them on amd64 only, its arm64 image is still v2.6.1's: move the pin to the first build:2.6.x
-  whose arm64 image has zlib1g 1-1+deb13u1 (tacplus-dev/tacplus#369) and remove both entries.
 - **The CI image's gcloud SDK** (2026-11-04, #5): `ghcr.io/tacplus-dev/tacplus/build:2.5` carries Cloud SDK 549.0.0
   (2025-12), whose kubectl dispatcher and gke-gcloud-auth-plugin are built with Go 1.22 to 1.24 (61 to 82
   govulncheck findings each). This pipeline no longer runs them (#5 pins its own), but other jobs in the image may:
@@ -152,9 +149,6 @@ the looper then marks it `promoted` or `declined` here with the date.
   `gitlab-runner-helper:arm64-v19.5.3` (its `stacks/ci/main.tf` `helper_image`; cloud's PROPOSALS "the jobs' helper
   image built here"). Ours is in `ci-images`, the same release; cloud's VMs would need `ci-images` reader for their
   account. A cloud issue, once the cluster pipeline has pushed it.
-- **The zlib entries build 2.6.10 no longer needs** (2026-11-12, seen in #21): the security job lists CVE-2026-85091
-  and CVE-2026-76844 under "Exceptions no finding needs": 2.6.10 (823eae0) has the fixed zlib1g. Remove them, and
-  STATE.md's line on them.
 - **A render fixture test for a pin change** (2026-11-12, #21): 823eae0 edited `pin.yaml`'s `job:` and the fixture's
   image lines by hand, leaving the `checksum/configmap` annotations helm derives from them stale, so
   `tests/render_test.sh` failed on main until #21 regenerated it. A land runs the gates, so this came in another way;
@@ -167,6 +161,8 @@ the looper then marks it `promoted` or `declined` here with the date.
   `line` and says "behind: v0.2.2" without failing, and the same for `build.lock`'s digest against the CI image's
   `build:2.6` tag, would make the lag visible on every pipeline, and the nightly scan's issue a formality. Links: #22,
   tacplus-dev/deploymentproxy README (Releases), tacplus-dev/tacplus#180.
+  Update 2026-11-15 (#24): `build.lock` moved to 2.6.12 (its arm64 image scanned clean of fixed HIGH and CRITICAL
+  findings); v2.6.13 was published the same day and `build:2.6` is already its digest, so the pin is behind again.
 
 ## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still

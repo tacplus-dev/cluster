@@ -169,7 +169,7 @@ data:
       environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
-        image = "ghcr.io/tacplus-dev/tacplus/build:2.6.10@sha256:828add1a92dbe5788c6d0b300141c2a57ef5864cbba79abccf66c7457795f85b"
+        image = "ghcr.io/tacplus-dev/tacplus/build:2.6.12@sha256:d4be2c7a77aad5af473a0317ab21f497680a30d8c1e47f30b76e157f5eb3eef7"
         helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.5.3@sha256:4fd17a4cc4c500eb256c937c0a96408220649dbf42e265b722368bb82f2723c9"
         service_account = "ci-job"
         automount_service_account_token = false
@@ -366,7 +366,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build
       annotations:
-        checksum/configmap: 339451385981d7e55117cfbce8e5dff4ca1faa1f7ba57418b354d1b73fa2cb79
+        checksum/configmap: 336f3b9d91761a2674ff0c29c7f30e430d634356657fe68cd376186ff90ea9bf
         tacplus.dev/runner-tags: "arm64,build"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build/versions/1"
         tacplus.dev/runner-token-secret: "gitlab-runner-build"
@@ -566,7 +566,7 @@ data:
       environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
-        image = "ghcr.io/tacplus-dev/tacplus/build:2.6.10@sha256:828add1a92dbe5788c6d0b300141c2a57ef5864cbba79abccf66c7457795f85b"
+        image = "ghcr.io/tacplus-dev/tacplus/build:2.6.12@sha256:d4be2c7a77aad5af473a0317ab21f497680a30d8c1e47f30b76e157f5eb3eef7"
         helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.5.3@sha256:4fd17a4cc4c500eb256c937c0a96408220649dbf42e265b722368bb82f2723c9"
         service_account = "ci-job"
         automount_service_account_token = false
@@ -762,7 +762,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: 565f3a28c3f8610d21c03fe545b066cfce5990c8f829a6c2857738ab6f9d9b5e
+        checksum/configmap: 4bee92ffd35473b51634e397ad6211f66a80038deeb50f3a3cad2b9143b9b124
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
         tacplus.dev/runner-token-secret: "gitlab-runner-control"
