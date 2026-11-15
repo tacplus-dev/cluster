@@ -76,6 +76,10 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-15 by th
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
-- **Blocked on:** the hub's steps above, #18 (Jody's by hand: GitLab's group runners need an Owner): runners
-  58541760 (`build`) and 58541761 (`control`) exist in GitLab, paused; `tacplus-looper-bot` needs Reporter here for
-  the recap.
+- **Blocked on:** a green `apply` on main (#18). The hub's by-hand steps are done (checked by the hub, 2026-11-15):
+  project runners, `main` and the environment `cluster` protected, the three protected variables,
+  `tacplus-looper-bot` a Reporter, runners 58541760 (`build`) and 58541761 (`control`) tacplus-dev group runners
+  (`arm64, build` and `arm64, control`, untagged off, still paused), and both token secrets' version 1 readable by
+  `cluster-admin-pipeline`. main's last pipeline before #14 and #24 (3057232314, 2026-11-12) was red in `security`,
+  so `plan` and `apply` never ran; main's security run at 0f72a6b is clean. After a green `apply`: unpause `build`,
+  keep `control` paused until tacplus-dev/looper#84, turn on the nightly schedule 4547285.
