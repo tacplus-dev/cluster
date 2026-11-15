@@ -62,6 +62,10 @@ the looper then marks it `promoted` or `declined` here with the date.
   entry and #5's trivy ones, at the cost of a build upstream never tested. Update 2026-11-12 (#21): Trivy is built
   here now (go1.27.4, for GO-2026-6859), but with its own go.mod's modules; giving it compress v1.20.2 and x/net
   v0.62.0 as gitleaks has them would drop GO-2026-6865, 6860 and 6866 for it.
+  Update 2026-11-15 (nightly scan): filed as #23: Trivy v0.76.2 (2026-11-05) requires x/net v0.62.0 itself, and
+  compress v1.20.2 as a fix module builds in; so built, govulncheck finds no symbol in the binary (GO-2026-5932 at
+  module level only). The same run shows crane (v0.22.1, compress v1.19.2) carrying GO-2026-6865's symbols too,
+  accepted by the entry that names only Trivy: the fix module for it as well (#23).
 - **New findings in the pinned images** (2026-11-07, seen while verifying #10): the security job also fails on
   CVE-2026-123158 (openssh 10.3_p1-r1 in the runner image) and CVE-2026-78661 (x/net/html, in the runner, helper,
   docker-machine and the CI image's `gh`), beside #11's CVE-2026-115506. Neither is #10's; the nightly scan should
@@ -149,6 +153,14 @@ the looper then marks it `promoted` or `declined` here with the date.
   image lines by hand, leaving the `checksum/configmap` annotations helm derives from them stale, so
   `tests/render_test.sh` failed on main until #21 regenerated it. A land runs the gates, so this came in another way;
   `UPDATE=1 tests/render_test.sh` is the only right way to move the fixture.
+- **A pin behind its line, said by the gates** (2026-11-15, nightly scan, #22): `deploymentproxy/pin.yaml` declares
+  the line 0.2 and pinned v0.2.1 for six days after v0.2.2 (deploymentproxy#14, Jody's no-NetworkPolicy decision)
+  was the line's highest patch; nothing here notices, since `fetch.sh --check` only proves the pin consistent with
+  itself. deploymentproxy's README (tacplus#180) defines a line as its highest patch, so a check in `validate` (or
+  `deploymentproxy/fetch.sh --check`, with the network it already uses) that compares `tag` with the releases of
+  `line` and says "behind: v0.2.2" without failing, and the same for `build.lock`'s digest against the CI image's
+  `build:2.6` tag, would make the lag visible on every pipeline, and the nightly scan's issue a formality. Links: #22,
+  tacplus-dev/deploymentproxy README (Releases), tacplus-dev/tacplus#180.
 
 ## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still
