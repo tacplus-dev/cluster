@@ -55,11 +55,10 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-13 by th
   hub does, the move from `tacplus` to `dev`). The cluster-scoped objects a fleet's chart needs have no
   place in the render yet.
 - **Known vulnerabilities:** 10 accepted in `security-exceptions.yaml` until 2026-12-04 (#5), none with a fixed
-  release of its tool: kubectl v1.34.13 (x/net, x/text, otel), gke-gcloud-auth-plugin 0.5.21 and trivy 0.76.1
-  (x/net/html; trivy's x/crypto/openpgp). GO-2026-6865 (klauspost/compress, fixed in v1.20.2) accepted in trivy
-  0.76.1 until 2026-12-06 (#10), no trivy release with it (still found, #16). gitleaks and OSV-Scanner are built with the fixed modules
-  instead (`ci/tools.sh`, #10): GO-2026-6865 and GO-2026-6888 (brotli v1.2.7), and gitleaks' xz (v0.5.15), none
-  accepted. 14 accepted until 2026-12-05 (#9, #11, #15), in GitLab
+  release of its tool: kubectl v1.34.13 (x/net, x/text, otel) and gke-gcloud-auth-plugin 0.5.21 (x/net/html), and
+  x/crypto/openpgp (GO-2026-5932) in our runner images. gitleaks, OSV-Scanner, crane and trivy (v0.76.2, x/net v0.62.0
+  its own, #23) are built with the fixed modules instead (`ci/tools.sh`, #10, #23): GO-2026-6865 (compress v1.20.2)
+  and GO-2026-6888 (brotli v1.2.7), and gitleaks' xz (v0.5.15), none accepted. 14 accepted until 2026-12-05 (#9, #11, #15), in GitLab
   Our runner and helper images (#21): only GO-2026-5932 (x/crypto/openpgp, no fixed release), in its
   entry; #9's, #11's, #15's and #21's 17 entries for upstream's images are gone. CVE-2026-78661 (x/net/html, fixed in
   v0.62.0) accepted until 2026-12-06 (#15) in the CI image's `gh`, until tacplus-dev/tacplus#350. GO-2026-6859
