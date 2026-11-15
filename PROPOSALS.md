@@ -72,6 +72,7 @@ the looper then marks it `promoted` or `declined` here with the date.
   showed no zlib1g finding, and the summary listed CVE-2026-85091 and CVE-2026-76844 as needed by no finding; the
   same run's Trivy scan of the CI image itself timed out, so it proves nothing yet. If the security job agrees,
   tacplus-dev/tacplus#369 is done for us and #16's two entries go.
+  Update 2026-11-15 (#24): the security job agreed (#24's report); both entries gone with the move to build 2.6.12.
 - **New findings in the pinned images** (2026-11-07, seen while verifying #10): the security job also fails on
   CVE-2026-123158 (openssh 10.3_p1-r1 in the runner image) and CVE-2026-78661 (x/net/html, in the runner, helper,
   docker-machine and the CI image's `gh`), beside #11's CVE-2026-115506. Neither is #10's; the nightly scan should
