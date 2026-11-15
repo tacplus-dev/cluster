@@ -110,9 +110,10 @@ rules:
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [rolebindings]
     verbs: [get, list, watch, create, update, patch, delete]
+  # Only to remove the NetworkPolicies earlier versions kept in tenant namespaces (#14); it creates none.
   - apiGroups: [networking.k8s.io]
     resources: [networkpolicies]
-    verbs: [get, list, watch, create, update, patch, delete]
+    verbs: [delete]
   - apiGroups: [""]
     resources: [resourcequotas]
     verbs: [get, list, watch, create, update, patch, delete]
@@ -142,8 +143,7 @@ subjects:
     namespace: deploymentproxy
 ---
 # reservedTids: the all-digit tids accepted (all others are refused); people is 00000001, restore 00000002.
-# sharedTids: reserved tids whose tenant namespace every tenant namespace of the same deployment may reach
-# (and which accepts them); never across deployments. people is not shared: the deployment namespace calls it.
+# sharedTids: no effect since #14 (deploymentproxy keeps no NetworkPolicies); still accepted, so it may stay.
 # quota.default: every tenant namespace's ResourceQuota; quota.deployments.<name>: merged over it for that
 # deployment. services.loadbalancers and services.nodeports are always 0, whatever is set here.
 # Read on every reconcile; a change reaches existing namespaces within the resync period (10 minutes).
@@ -155,7 +155,6 @@ metadata:
 data:
   config.yaml: |
     reservedTids: ["00000001", "00000002"]
-    sharedTids: ["00000002"]
     quota:
       default:
         pods: "100"
@@ -203,7 +202,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: deploymentproxy
-          image: ghcr.io/tacplus-dev/deploymentproxy:0.2.1@sha256:f08c390c1cfa085e742ca7e8e80c668f2b009c039e7e319e082ddf62b80062a6
+          image: ghcr.io/tacplus-dev/deploymentproxy:0.2.2@sha256:93424cb0de68e32dc9e472dce6f9a4e5db827285b44bb117ce644e90f8d4ea75
           args: [--config=/etc/deploymentproxy/config.yaml]
           securityContext:
             allowPrivilegeEscalation: false

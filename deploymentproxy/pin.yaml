@@ -3,9 +3,9 @@
 # commit and image here, runs deploymentproxy/fetch.sh and regenerates the render fixture. Not by hand.
 repository: tacplus-dev/deploymentproxy
 line: "0.2"
-tag: v0.2.1
-commit: 90d0fa055867e0d06f7998e7a5875c74d74497f2
-image: ghcr.io/tacplus-dev/deploymentproxy:0.2.1@sha256:f08c390c1cfa085e742ca7e8e80c668f2b009c039e7e319e082ddf62b80062a6
+tag: v0.2.2
+commit: 8af5ac9f4f7c5c73af5111ec56d84f32422ae8d9
+image: ghcr.io/tacplus-dev/deploymentproxy:0.2.2@sha256:93424cb0de68e32dc9e472dce6f9a4e5db827285b44bb117ce644e90f8d4ea75
 # The release's manifests, applied in this order (render.sh). config/deployment-namespace is applied once per
 # deployment, in tac-<deployment>.
 files:
