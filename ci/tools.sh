@@ -34,14 +34,14 @@ go_tools=(
   "github.com/yannh/kubeconform@v0.7.0 h1:ZFfniR8VChrWQxaxTUGnNrxw8RIDkjVBrjdhXSamwjw= github.com/yannh/kubeconform/cmd/kubeconform"
   "github.com/zricethezav/gitleaks/v8@v8.30.1 h1:PmEvCfVI7ti9dV3s5aMZUY7sS2GxRvG3yzih7E+cS3w= github.com/zricethezav/gitleaks/v8 github.com/klauspost/compress@v1.20.2 github.com/andybalholm/brotli@v1.2.7 github.com/ulikunitz/xz@v0.5.15"
   "helm.sh/helm/v4@v4.3.1 h1:UndCoLe9UPmNoL7IvWzaUXveL7T5t/ijoorEmgJdI9g= helm.sh/helm/v4/cmd/helm"
-  "github.com/google/go-containerregistry@v0.22.1 h1:RZuuSYhTvlDvtsK+NkutoCZ//C0X2ebLK8X8l3ULs84= github.com/google/go-containerregistry/cmd/crane"
+  "github.com/google/go-containerregistry@v0.22.1 h1:RZuuSYhTvlDvtsK+NkutoCZ//C0X2ebLK8X8l3ULs84= github.com/google/go-containerregistry/cmd/crane github.com/klauspost/compress@v1.20.2"
 )
 security_go_tools=(
   "github.com/google/osv-scanner/v2@v2.7.0 h1:7aOrJ9vB7qbzxC3R+QCXs03SHQiRuM80RJdqZhUEl2g= github.com/google/osv-scanner/v2/cmd/osv-scanner github.com/klauspost/compress@v1.20.2"
   "golang.org/x/vuln@v1.9.0 h1:12VaqnI9kJfqwRoPptxoqsUhQtdfrSbdksT7X/KY/sc= golang.org/x/vuln/cmd/govulncheck"
-  # Trivy's release binary is built with go1.27.3, without GO-2026-6859's fix: built here instead, as
-  # tacplus-dev/cloud#39 builds it (#21).
-  "github.com/aquasecurity/trivy@v0.76.1 h1:xzXcxZpfkZpTxAHzfuG3KS5BRP17KG70+c0uFFwZUU4= github.com/aquasecurity/trivy/cmd/trivy"
+  # Trivy's release binary is not go1.27.4's, without GO-2026-6859's fix: built here instead, as
+  # tacplus-dev/cloud#39 builds it (#21). 0.76.2 requires x/net v0.62.0 itself, but still compress v1.20.1 (#23).
+  "github.com/aquasecurity/trivy@v0.76.2 h1:RYBcQklHCFOHg/sfYSfe8v4/W5H2rAZrP5THPWY5F+A= github.com/aquasecurity/trivy/cmd/trivy github.com/klauspost/compress@v1.20.2"
 )
 # kubectl at the cluster's minor (ci/validate.sh's schemas), from the Kubernetes release.
 kubectl_version=v1.34.13

@@ -11,17 +11,17 @@
 #
 #   kubectl v1.34.13                GO-2026-5158 6603 6610 6611 6612 6617 6629 6860 6866, 6859 (go1.26.10, #21)
 #   gke-gcloud-auth-plugin 0.5.21   GO-2026-6860 6866, 6859 (go1.27.3, #21)
-#   trivy 0.76.1                    GO-2026-5932 6860 6866 6865 (#10)
 #
 # The Go tools built here from source are built with the fixed modules instead (ci/tools.sh; #10, the policy of
 # tacplus-dev/cloud#24): gitleaks v8.30.1 with klauspost/compress v1.20.2, andybalholm/brotli v1.2.7 and
-# ulikunitz/xz v0.5.15, osv-scanner v2.7.0 with compress v1.20.2, so none of them needs an entry. And all of them,
-# trivy too since #21, with go1.27.4, so that GO-2026-6859 (net/http) is not theirs.
+# ulikunitz/xz v0.5.15, osv-scanner v2.7.0, crane v0.22.1 and trivy v0.76.2 (x/net v0.62.0 its own) with compress
+# v1.20.2 (#23), so none of them needs an entry. And all of them, trivy too since #21, with go1.27.4, so that
+# GO-2026-6859 (net/http) is not theirs.
 #
 # GitLab Runner's runner and helper images are our build since #21 (ci/runner-images.sh: go1.27.4, x/net v0.62.0,
 # go-jose v4.1.6, on alpine:3.24 with git 2.54.1-r0, libexpat 2.10.0-r0, miniperl 5.42.3-r0, openssh 10.3_p1-r2; no
 # docker-machine), so #9's, #11's, #15's and #21's entries for upstream's images are gone. Trivy finds one thing
-# in them: GO-2026-5932 (x/crypto v0.58.0, openpgp, no fixed release), in the entry of trivy's.
+# in them: GO-2026-5932 (x/crypto v0.58.0, openpgp, no fixed release), in its entry.
 #
 # And in the CI image's gh (ghcr.io/tacplus-dev/tacplus/build:2.6, also gitlab-runner/pin.yaml's job:, #12),
 # CVE-2026-78661 (#15), until tacplus-dev/tacplus#350 ships a gh built with x/net v0.62.0.
@@ -35,7 +35,7 @@ exceptions:
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
     expires: 2026-12-04
   - id: GO-2026-5932
-    reason: "x/crypto/openpgp, unmaintained (trivy 0.76.1, x/crypto v0.57.0; gitlab-runner and gitlab-runner-helper 19.5.3, our build, v0.58.0, #21): the job's trivy reads one image, the CI image, and no OpenPGP key or message from outside; the runner and the helper call no openpgp code. No fixed release (x/crypto has only a pseudo-version past it), as tacplus handles it."
+    reason: "x/crypto/openpgp, unmaintained (gitlab-runner and gitlab-runner-helper 19.5.3, our build, x/crypto v0.58.0, #21; Trivy's match in the CI image's gh and docker-buildx, v0.58.0; trivy's own since v0.76.2 at module level only, #23): the runner and the helper call no openpgp code, and no job here has gh or buildx read an OpenPGP key or message from outside. No fixed release (x/crypto has only a pseudo-version past it), as tacplus handles it."
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04; the runner images: hub, tacplus-dev/cluster#21, 2026-11-12)"
     expires: 2026-12-04
   - id: GO-2026-6603
@@ -63,17 +63,13 @@ exceptions:
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
     expires: 2026-12-04
   - id: GO-2026-6860
-    reason: "x/net/html quadratic text coalescing (kubectl v1.34.13 x/net v0.56.0, gke-gcloud-auth-plugin 0.5.21 v0.61.0, trivy 0.76.1 v0.60.0): none of them parses HTML from outside here; their peers are the cluster, Google's token endpoints and the image registries. Fixed in x/net v0.62.0; no release of the three with it yet."
+    reason: "x/net/html quadratic text coalescing (kubectl v1.34.13 x/net v0.56.0, gke-gcloud-auth-plugin 0.5.21 v0.61.0): neither parses HTML from outside here; their peers are the cluster and Google's token endpoints. Fixed in x/net v0.62.0; no release of either with it yet."
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
     expires: 2026-12-04
   - id: GO-2026-6866
-    reason: "x/net/html raw text rendering (kubectl v1.34.13, gke-gcloud-auth-plugin 0.5.21, trivy 0.76.1): none of them renders HTML here. Fixed in x/net v0.62.0; no release of the three with it yet."
+    reason: "x/net/html raw text rendering (kubectl v1.34.13, gke-gcloud-auth-plugin 0.5.21): neither renders HTML here. Fixed in x/net v0.62.0; no release of either with it yet."
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
     expires: 2026-12-04
-  - id: GO-2026-6865
-    reason: "klauspost/compress panic on two-block frames (trivy 0.76.1, compress v1.20.1; a release binary, not built here): the job's trivy decodes only the CI image's and the pinned images' layers, from their registries, and its own vulnerability database. Fixed in compress v1.20.2; no trivy release with it yet (0.76.2 still has v1.20.1)."
-    decided_by: "jodydadescott (tacplus-dev/cluster#10, 2026-11-06)"
-    expires: 2026-12-06
   - id: CVE-2026-78661
     reason: "x/net/html DoS on crafted HTML (the CI image's gh, build:2.6, x/net v0.60.0): no job here has gh parse HTML from outside. Fixed in v0.62.0; the CI image's gh waits for tacplus-dev/tacplus#350. (GitLab Runner's runner and helper are built with v0.62.0 since #21.)"
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#15, 2026-11-07)"

@@ -66,6 +66,12 @@ the looper then marks it `promoted` or `declined` here with the date.
   compress v1.20.2 as a fix module builds in; so built, govulncheck finds no symbol in the binary (GO-2026-5932 at
   module level only). The same run shows crane (v0.22.1, compress v1.19.2) carrying GO-2026-6865's symbols too,
   accepted by the entry that names only Trivy: the fix module for it as well (#23).
+  Update 2026-11-15 (#23): done: trivy v0.76.2 and crane v0.22.1 built with compress v1.20.2, GO-2026-6865's entry
+  gone and Trivy out of the x/net/html and openpgp entries' reasons. Left: the unpinned `go.sum` above.
+  Seen while verifying #23 (a local `ci/security.sh`, 2026-11-15): the job image (`build:2.6.10`, linux/arm64)
+  showed no zlib1g finding, and the summary listed CVE-2026-85091 and CVE-2026-76844 as needed by no finding; the
+  same run's Trivy scan of the CI image itself timed out, so it proves nothing yet. If the security job agrees,
+  tacplus-dev/tacplus#369 is done for us and #16's two entries go.
 - **New findings in the pinned images** (2026-11-07, seen while verifying #10): the security job also fails on
   CVE-2026-123158 (openssh 10.3_p1-r1 in the runner image) and CVE-2026-78661 (x/net/html, in the runner, helper,
   docker-machine and the CI image's `gh`), beside #11's CVE-2026-115506. Neither is #10's; the nightly scan should
