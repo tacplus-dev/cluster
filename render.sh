@@ -9,8 +9,8 @@
 #                                   deployment's own quota merged into its config
 #   OUT/10-deployment-<name>.yaml   per entry of DEPLOYMENTS: the namespace tac-<name> labelled
 #                                   tacplus.dev/deployment=<name>, deploymentproxy's per-deployment Role for its
-#                                   operator account (config/deployment-namespace), and the deploy account's Role
-#                                   and RoleBinding (fleet-deploy), in tac-<name> only
+#                                   operator account (config/deployment-namespace) unless it has none, and the
+#                                   deploy account's Role and RoleBinding (fleet-deploy), in tac-<name> only
 #   OUT/20-ci.yaml                  CI in the cluster (README, CI in the cluster): the namespace ci, the jobs' service
 #                                   account ci-job (no token), the NetworkPolicy that keeps its pods off the metadata
 #                                   server, the admission policy refusing a privileged pod, a host path or a host
@@ -58,8 +58,11 @@ for ((i = 0; i < n; i++)); do
   account=$(yq "$e.deployAccount // \"\"" "$deployments")
   [[ $account =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\.iam\.gserviceaccount\.com$ ]] ||
     die "$name: deployAccount [$account] is not a Google service account (<name>@<project>.iam.gserviceaccount.com)"
-  operator=$(yq "$e.operator // \"\"" "$deployments")
-  [[ $operator =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "$name: operator [$operator] is not a service account name"
+  # The operator is optional (a deployment without one, test-idp, asks deploymentproxy for nothing); when set, a name.
+  if [ "$(yq "$e | has(\"operator\")" "$deployments")" = true ]; then
+    operator=$(yq "$e.operator // \"\"" "$deployments")
+    [[ $operator =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "$name: operator [$operator] is not a service account name"
+  fi
   project=$(yq "$e.gitlabProject // \"\"" "$deployments")
   [[ $project =~ ^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)+$ ]] || die "$name: gitlabProject [$project] is not a GitLab project path"
   [ "$(yq "($e.quota // {}) | tag" "$deployments")" = '!!map' ] &&
@@ -122,12 +125,16 @@ for ((i = 0; i < n; i++)); do
   e=".deployments[$i]"
   name=$(yq "$e.name" "$deployments")
   account=$(yq "$e.deployAccount" "$deployments")
-  operator=$(yq "$e.operator" "$deployments")
+  operator=$(yq "$e.operator // \"\"" "$deployments")
   project=$(yq "$e.gitlabProject" "$deployments")
   ns=tac-$name
   {
+    if [ -n "$operator" ]; then
+      echo "# The deployment $name (deployments.yaml): its namespace, deploymentproxy's Role for its operator, and its"
+    else
+      echo "# The deployment $name (deployments.yaml), without an operator: its namespace and its"
+    fi
     cat <<EOF
-# The deployment $name (deployments.yaml): its namespace, deploymentproxy's Role for its operator, and its
 # deploy account's Role, in $ns only. Rendered by render.sh; never edited.
 apiVersion: v1
 kind: Namespace
@@ -137,11 +144,13 @@ metadata:
     tacplus.dev/deployment: $name
   annotations:
     tacplus.dev/gitlab-project: $project
----
 EOF
-    # As config/deployment-namespace/operator.yaml says: NAMESPACE=tac-<deployment> envsubst '\$NAMESPACE'.
-    sed 's/\${NAMESPACE}/'"$ns"'/g' "$release/config/deployment-namespace/operator.yaml" |
-      OPERATOR=$operator yq '(select(.kind == "RoleBinding") | .subjects[0].name) = strenv(OPERATOR)'
+    if [ -n "$operator" ]; then
+      echo ---
+      # As config/deployment-namespace/operator.yaml says: NAMESPACE=tac-<deployment> envsubst '\$NAMESPACE'.
+      sed 's/\${NAMESPACE}/'"$ns"'/g' "$release/config/deployment-namespace/operator.yaml" |
+        OPERATOR=$operator yq '(select(.kind == "RoleBinding") | .subjects[0].name) = strenv(OPERATOR)'
+    fi
     cat <<EOF
 ---
 # What the fleet's helm release needs inside $ns, and nothing cluster-scoped: no namespaces, no cluster RBAC, no

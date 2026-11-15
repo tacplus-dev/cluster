@@ -8,7 +8,9 @@
 #                               and RoleBindings in it. A Role names every group, resource and verb (no `*`), only
 #                               namespaced resources it knows (NAMESPACED below), no escalate, bind or impersonate,
 #                               no non-resource URLs. A RoleBinding binds a Role, never a ClusterRole, and a
-#                               service account only of tac-<name>.
+#                               service account only of tac-<name>. The deploy account's Role fleet-deploy and its
+#                               RoleBinding always; deploymentproxy's Role deploymentproxy-tenantnamespaces and its
+#                               operator's RoleBinding both, or neither (a deployment without an operator).
 #   00-deploymentproxy.yaml     namespaced objects only in deploymentproxy; cluster-scoped, only the Namespace
 #                               deploymentproxy, CRDs, ClusterRoles and ClusterRoleBindings.
 #   20-ci.yaml                  namespaced objects only in ci, and only service accounts, ConfigMaps, NetworkPolicies,
@@ -35,6 +37,8 @@ NAMESPACED=" $(echo $NAMESPACED) "
 CI_RESOURCES=" /pods /pods/attach /pods/exec /pods/log /secrets /serviceaccounts /services /events "
 breaches=0
 breach() { echo "policy: $*"; breaches=$((breaches + 1)); }
+# has FILE KIND NAME: FILE holds the object KIND NAME.
+has() { [ "$(K=$2 N=$3 yq ea '[select(.kind == strenv(K) and .metadata.name == strenv(N))] | length' "$1")" != 0 ]; }
 
 # ci_pod WHAT SPEC: a pod spec (JSON) in ci keeps the pod rules: every image by digest; no privileged container, no
 # added capability, no host path, no host network, PID or IPC, no Docker socket.
@@ -162,6 +166,13 @@ for b in "${files[@]##*/}"; do
           *) breach "$b: $kind $name: a deployment holds only its Namespace, Roles and RoleBindings" ;;
         esac
       done < <(yq -N '[document_index, .kind, .metadata.namespace // "", .metadata.name] | join("|")' "$f")
+      has "$f" Role fleet-deploy || breach "$b: no Role fleet-deploy"
+      has "$f" RoleBinding fleet-deploy || breach "$b: no RoleBinding fleet-deploy"
+      if has "$f" Role deploymentproxy-tenantnamespaces; then
+        has "$f" RoleBinding deploymentproxy-tenantnamespaces || breach "$b: the Role deploymentproxy-tenantnamespaces without its RoleBinding"
+      else
+        ! has "$f" RoleBinding deploymentproxy-tenantnamespaces || breach "$b: the RoleBinding deploymentproxy-tenantnamespaces without its Role"
+      fi
       ;;
     20-ci.yaml)
       runners=()
