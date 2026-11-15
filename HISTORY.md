@@ -21,3 +21,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-11 looper issue The tacplus-reader key moves to tacplus-ci: TACPLUS_READER_KMS_KEY (cloud#30) (#19, 4e42608; gates: full)
 - 2026-11-13 looper issue Security: the pinned GitLab Runner and helper images (19.5.3) carry GO-2026-6859 and HIGH git CVEs; cluster's security job fails (#21, 7acaac7; gates: full)
 - 2026-11-15 looper issue deploymentproxy pinned at v0.2.1: line 0.2's highest patch is v0.2.2 (no NetworkPolicies in tenant namespaces, deploymentproxy#14) (#22, 245aa42; gates: full)
+- 2026-11-15 looper issue Trivy and crane built with klauspost/compress below v1.20.2 (GO-2026-6865, accepted): the fix module builds in, and Trivy v0.76.2 (x/net v0.62.0) is released (#23, 22eb3e0; gates: full)
