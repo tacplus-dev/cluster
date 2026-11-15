@@ -164,6 +164,13 @@ the looper then marks it `promoted` or `declined` here with the date.
   tacplus-dev/deploymentproxy README (Releases), tacplus-dev/tacplus#180.
   Update 2026-11-15 (#24): `build.lock` moved to 2.6.12 (its arm64 image scanned clean of fixed HIGH and CRITICAL
   findings); v2.6.13 was published the same day and `build:2.6` is already its digest, so the pin is behind again.
+- **A nightly build of this repository in tacplus-dev/build** (2026-11-15, #14): since cloud#26 and looper#113,
+  tacplus-dev/build builds a commit of this repository from `build.lock` when a land or a `--build` asks for one, and
+  its security checks (osv-scanner, semgrep, trivy, gitleaks …, failing on HIGH/CRITICAL) run with it: main 481c74d
+  passed with 0 findings. But only on demand: cloud's `stacks/gitlab/nightly-builds.yaml` lists `looper` alone, so a
+  dependency that moves while nothing lands here is seen by the GitLab project's nightly `security` job (our own
+  scan) and not by the pipeline's. Filed as tacplus-dev/cloud#33 (bug, open): one entry in that file, in cloud, not
+  here. Links: #14, tacplus-dev/cloud#33, tacplus-dev/looper#84.
 
 ## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still
