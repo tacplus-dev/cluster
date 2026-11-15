@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-15 by the looper (#24).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-15 by the looper (#14).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -36,7 +36,11 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-15 by th
 - **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6.12's since 2026-11-15, #24; 2.6.10's, OpenEXR-free (tacplus#554), from 2026-11-12; 2.6.2's since #16 before that,
   `gitlab-runner/pin.yaml`'s `job:`) and `gates.yaml` its one set, full (`ci/tools.sh`, the render, `ci/validate.sh
   out`, `ci/checks.sh`), so tacplus-dev/build builds this repository in that image, with no Docker, and runs its
-  security checks; `tests/ci_test.sh` refuses a `build.lock` that is not that `job:`, of the CI image's line.
+  security checks; `tests/ci_test.sh` refuses a `build.lock` that is not that `job:`, of the CI image's line. Verified
+  2026-11-15 (#14, once cloud#26 and looper#113 were done): builds of main planned from the pin report green on the
+  gates full (481c74d, pipeline 3070525179; 66e1835, pipeline 3070897201), and the pipeline's first security run of
+  main found nothing (0 findings, 0 exceptions needed). On demand only: the nightly build schedule is cloud#33's
+  (PROPOSALS.md).
 - **Released / deployed:** the GitLab project runs pipelines on main: #2 reports Jody playing `apply` in pipeline
   3019831835 (job 17680247127) on 2026-11-02; its outcome is not recorded here yet. The lines below predate it.
 - **Known gaps:** the in-cluster runners are not registered or applied yet: the hub registers them as tacplus-dev
