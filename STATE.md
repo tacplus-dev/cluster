@@ -47,20 +47,13 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-16 by th
   (PROPOSALS.md).
 - **Released / deployed:** the GitLab project runs pipelines on main: #2 reports Jody playing `apply` in pipeline
   3019831835 (job 17680247127) on 2026-11-02; its outcome is not recorded here yet. The lines below predate it.
-- **Known gaps:** `infra` (#25) is rendered; tacplus-dev/cloud#64 (merged on cloud's main 2026-11-16, 1189a2b..92cef0e)
-  makes its token secret `gitlab-runner-infra` in cloud's `dev` stack and has cloud's `gitlab` stack register `infra`
-  (group runner, `cloud, cluster, deploy`, untagged off, `ref_protected`, paused) and write its token as version 1 (no
-  person or agent copies a token). Not verified here (no looper has a GitLab token): that cloud's pipeline has applied
-  them. Until it has, a re-pin of `.gitlab-ci.yml` to a commit with #25 makes `apply` fail after applying the rest
-  (`runner-tokens: Secret Manager refused .../gitlab-runner-infra/versions/1`), so the hub re-pins to #25 only after
-  cloud's apply of #64; then the switch-over (README, The infra runner: unpause `infra` and pause cloud's `cluster` and
-  `deploy` pool runners in one step, a commit to cloud's `gitlab` stack, not a GitLab setting; one cloud and one cluster
-  pipeline green on `infra`), then cloud#11 removes the VMs.
-  The in-cluster runners are not registered or applied yet: the hub registers them as tacplus-dev
-  group runners and stores their tokens as the Secret Manager versions the runner files name (README, What the hub
-  does, 7; in `tacplus-dev`, #7), the spot pool labelled and tainted by tacplus-dev/cloud's `dev` stack; until the tokens are readable, `apply` fails after the rest,
-  saying so. Rootless BuildKit is not in the build image yet (tacplus-dev/tacplus#315), and the looper's jobs move
-  over in tacplus-dev/looper's switch issue. The `ci` NetworkPolicy holds only where NetworkPolicy is enforced
+- **Known gaps:** the in-cluster runners are registered and applied (the hub, closing #18 and #25, 2026-11-16 09:25Z):
+  `infra` (59271051, #25; registered by cloud's `gitlab` stack, cloud#64) carries cloud's and cluster's pipelines since
+  the switch-over (cloud#66): cluster pipelines 3072054740 (applied `infra`) and 3072736343 (green through `apply`, on
+  `infra`), cloud pipeline 3072736206; the VM `cluster` runner 58534920 is paused, and tacplus-dev/cloud#11 removes the
+  VMs. `control` (58541761) is live since 2026-11-16 01:28Z (tacplus-dev/looper#84). `build` (58541760) stays paused:
+  rootless BuildKit is not in the build image yet (tacplus-dev/tacplus#315), and until it is the VM build runner takes
+  tacplus-dev/build's scheduled jobs. The `ci` NetworkPolicy holds only where NetworkPolicy is enforced
   (Dataplane V2: tacplus-dev/cloud's `dev` cluster has it).
   `runner-images` needs tacplus-dev/cloud's `apply:dev` to have created `ci-images` (cloud#45, landed) before it
   can push on main (README, What the hub does, 9); nothing has pushed or pulled our images yet.
@@ -89,11 +82,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-16 by th
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
-- **Blocked on:** a green `apply` on main (#18); for #25's done criteria, that green `apply` with `infra` (after
-  cloud's pipeline has applied cloud#64), then the switch-over above. The hub's by-hand steps are done (checked by the hub, 2026-11-15):
-  project runners, `main` and the environment `cluster` protected, the three protected variables,
-  `tacplus-looper-bot` a Reporter, runners 58541760 (`build`) and 58541761 (`control`) tacplus-dev group runners
-  (`arm64, build` and `arm64, control`, untagged off, still paused), and both token secrets' version 1 readable by
-  `cluster-admin-pipeline`. main's last pipeline before #14 and #24 (3057232314, 2026-11-12) was red in `security`,
-  so `plan` and `apply` never ran; main's security run at 0f72a6b is clean. After a green `apply`: unpause `build`,
-  keep `control` paused until tacplus-dev/looper#84, turn on the nightly schedule 4547285.
+- **Blocked on:** tacplus-dev/tacplus#315 (rootless BuildKit in the build image), for unpausing the in-cluster `build`
+  runner 58541760 only; nothing else in this repository waits. main's `apply` is green on `infra` (3072736343),
+  `control` is live and `infra` carries cloud's and cluster's pipelines, the VM `cluster` runner 58534920 paused (the
+  hub, 2026-11-16 09:25Z, closing #18 and #25). Whether this project's nightly schedule 4547285 is on is not recorded:
+  the hub's closing comments do not say, and no looper has a GitLab token to see it.
