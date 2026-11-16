@@ -6,8 +6,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-16 by th
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
 - **Target (#7):** tacplus-dev/cloud's cluster `dev` (us-central1-a) in the project `tacplus-dev` (seabeam.net), as
   `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`; seatrials' deploy account and the runners' token
-  secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1; `gitlab-runner-infra`, #25, not made yet:
-  tacplus-dev/cloud#64) in `tacplus-dev` too. The old `tacplus` in
+  secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1; `gitlab-runner-infra`, #25, made and
+  written by tacplus-dev/cloud's stacks, cloud#64) in `tacplus-dev` too. The old `tacplus` in
   `jody1-328023` is no longer the target; Jody deletes it once the pipeline applies to `dev`.
 - **Works:** the cluster pipeline (#1): `deployments.yaml` (`seatrials`; `test-idp`, #17, without an operator: `operator` optional, no deploymentproxy Role or operator binding then, the policy requiring both or neither); deploymentproxy v0.2.2 (#22) fetched
   and pinned by commit, checksum and image digest, bumped by one command (`deploymentproxy/bump.sh <tag>`, #4: the
@@ -47,14 +47,15 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-16 by th
   (PROPOSALS.md).
 - **Released / deployed:** the GitLab project runs pipelines on main: #2 reports Jody playing `apply` in pipeline
   3019831835 (job 17680247127) on 2026-11-02; its outcome is not recorded here yet. The lines below predate it.
-- **Known gaps:** `infra` (#25) is rendered but not registered, and its token secret `gitlab-runner-infra` does not
-  exist yet (tacplus-dev/cloud#64, opened by #25's run, approved by the hub 2026-11-16 with the registration in its
-  scope): until cloud's `dev` stack makes it and cloud's `gitlab` stack has registered `infra` (group runner,
-  `cloud, cluster, deploy`, untagged off, `ref_protected`, paused) and written its token as version 1 (no person or
-  agent copies a token), a re-pin of `.gitlab-ci.yml` to a commit with #25 makes `apply` fail after applying the rest
+- **Known gaps:** `infra` (#25) is rendered; tacplus-dev/cloud#64 (merged on cloud's main 2026-11-16, 1189a2b..92cef0e)
+  makes its token secret `gitlab-runner-infra` in cloud's `dev` stack and has cloud's `gitlab` stack register `infra`
+  (group runner, `cloud, cluster, deploy`, untagged off, `ref_protected`, paused) and write its token as version 1 (no
+  person or agent copies a token). Not verified here (no looper has a GitLab token): that cloud's pipeline has applied
+  them. Until it has, a re-pin of `.gitlab-ci.yml` to a commit with #25 makes `apply` fail after applying the rest
   (`runner-tokens: Secret Manager refused .../gitlab-runner-infra/versions/1`), so the hub re-pins to #25 only after
-  cloud#64 has applied; then the switch-over (README, The infra runner: unpause `infra`, pause cloud's `cluster` and `deploy` pool
-  runners in one step, one cloud and one cluster pipeline green on `infra`), then cloud#11 removes the VMs.
+  cloud's apply of #64; then the switch-over (README, The infra runner: unpause `infra` and pause cloud's `cluster` and
+  `deploy` pool runners in one step, a commit to cloud's `gitlab` stack, not a GitLab setting; one cloud and one cluster
+  pipeline green on `infra`), then cloud#11 removes the VMs.
   The in-cluster runners are not registered or applied yet: the hub registers them as tacplus-dev
   group runners and stores their tokens as the Secret Manager versions the runner files name (README, What the hub
   does, 7; in `tacplus-dev`, #7), the spot pool labelled and tainted by tacplus-dev/cloud's `dev` stack; until the tokens are readable, `apply` fails after the rest,
@@ -88,8 +89,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-16 by th
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
-- **Blocked on:** a green `apply` on main (#18); for #25's done criteria, cloud#64 (the secret, and cloud's `gitlab`
-  stack's registration of `infra` with its token), then the switch-over above. The hub's by-hand steps are done (checked by the hub, 2026-11-15):
+- **Blocked on:** a green `apply` on main (#18); for #25's done criteria, that green `apply` with `infra` (after
+  cloud's pipeline has applied cloud#64), then the switch-over above. The hub's by-hand steps are done (checked by the hub, 2026-11-15):
   project runners, `main` and the environment `cluster` protected, the three protected variables,
   `tacplus-looper-bot` a Reporter, runners 58541760 (`build`) and 58541761 (`control`) tacplus-dev group runners
   (`arm64, build` and `arm64, control`, untagged off, still paused), and both token secrets' version 1 readable by
