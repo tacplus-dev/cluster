@@ -1,12 +1,13 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-15 by the looper (#14, #17).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-16 by the looper (#25).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
 - **Target (#7):** tacplus-dev/cloud's cluster `dev` (us-central1-a) in the project `tacplus-dev` (seabeam.net), as
   `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`; seatrials' deploy account and the runners' token
-  secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1) in `tacplus-dev` too. The old `tacplus` in
+  secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1; `gitlab-runner-infra`, #25, not made yet:
+  tacplus-dev/cloud#64) in `tacplus-dev` too. The old `tacplus` in
   `jody1-328023` is no longer the target; Jody deletes it once the pipeline applies to `dev`.
 - **Works:** the cluster pipeline (#1): `deployments.yaml` (`seatrials`; `test-idp`, #17, without an operator: `operator` optional, no deploymentproxy Role or operator binding then, the policy requiring both or neither); deploymentproxy v0.2.2 (#22) fetched
   and pinned by commit, checksum and image digest, bumped by one command (`deploymentproxy/bump.sh <tag>`, #4: the
@@ -25,9 +26,12 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-15 by th
   and helper images our own build since #21 (`ci/runner-images.sh`: 19.5.3 at `33227fd4` with go1.27.4, x/net v0.62.0,
   go-jose v4.1.6 and compress v1.20.2, the runner binary SHA-256-identical to tacplus-dev/cloud's; on `alpine:3.24`,
   no docker-machine; reproducible, refused unless the pinned digest; the job `runner-images` pushes them on main to
-  cloud's `ci-images`, the security job scans its OCI layouts, the gates build them when their recipe changes) as two
-  runners, `build` (tags `arm64, build`, jobs on the spot pool only) and `control` (`arm64, control`, #13;
-  no VM runner's tag, the policy refuses one; the normal pool), per-runner requests, limits and ceilings; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
+  cloud's `ci-images`, the security job scans its OCI layouts, the gates build them when their recipe changes) as three
+  runners, `build` (tags `arm64, build`, jobs on the spot pool only), `control` (`arm64, control`, #13;
+  no VM runner's tag, the policy refuses one; the normal pool) and `infra` (#25, for cloud#11: `cloud, cluster, deploy`,
+  the three infrastructure pipelines', protected refs only (`tacplus.protected`, on every runner's pods as
+  `tacplus.dev/runner-protected`), the normal pool as control, no token in the pod; the policy admits those three tags
+  to `infra` alone, refuses it any other tag and an `infra` not protected), per-runner requests, limits and ceilings; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
   the job image, and `git config --global` failed on `//.gitconfig`); Roles in `ci` only; jobs as `ci-job`
   with no token, kept off the metadata server (NetworkPolicy); the admission policy `ci-pods` refusing privileged,
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
@@ -43,7 +47,14 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-15 by th
   (PROPOSALS.md).
 - **Released / deployed:** the GitLab project runs pipelines on main: #2 reports Jody playing `apply` in pipeline
   3019831835 (job 17680247127) on 2026-11-02; its outcome is not recorded here yet. The lines below predate it.
-- **Known gaps:** the in-cluster runners are not registered or applied yet: the hub registers them as tacplus-dev
+- **Known gaps:** `infra` (#25) is rendered but not registered, and its token secret `gitlab-runner-infra` does not
+  exist yet (tacplus-dev/cloud#64, opened by #25's run): until cloud's `dev` stack makes it and the hub has registered
+  `infra` (group runner, `cloud, cluster, deploy`, untagged off, `ref_protected`, paused) with its token as version 1,
+  a re-pin of `.gitlab-ci.yml` to a commit with #25 makes `apply` fail after applying the rest
+  (`runner-tokens: Secret Manager refused .../gitlab-runner-infra/versions/1`), so the hub re-pins to #25 only after
+  both; then the switch-over (README, The infra runner: unpause `infra`, pause cloud's `cluster` and `deploy` pool
+  runners in one step, one cloud and one cluster pipeline green on `infra`), then cloud#11 removes the VMs.
+  The in-cluster runners are not registered or applied yet: the hub registers them as tacplus-dev
   group runners and stores their tokens as the Secret Manager versions the runner files name (README, What the hub
   does, 7; in `tacplus-dev`, #7), the spot pool labelled and tainted by tacplus-dev/cloud's `dev` stack; until the tokens are readable, `apply` fails after the rest,
   saying so. Rootless BuildKit is not in the build image yet (tacplus-dev/tacplus#315), and the looper's jobs move
@@ -76,7 +87,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-15 by th
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
-- **Blocked on:** a green `apply` on main (#18). The hub's by-hand steps are done (checked by the hub, 2026-11-15):
+- **Blocked on:** a green `apply` on main (#18); for #25's done criteria, cloud#64 and the hub's registration of
+  `infra`, then the switch-over above. The hub's by-hand steps are done (checked by the hub, 2026-11-15):
   project runners, `main` and the environment `cluster` protected, the three protected variables,
   `tacplus-looper-bot` a Reporter, runners 58541760 (`build`) and 58541761 (`control`) tacplus-dev group runners
   (`arm64, build` and `arm64, control`, untagged off, still paused), and both token secrets' version 1 readable by
