@@ -14,6 +14,7 @@ Nothing built yet. The design is approved (tacplus-dev/roadmap#1, 2026-11-02).
 - The in-cluster control runner on tags of its own, `arm64, control`, and never the VM runners' (#13). Agent, at Jody's request, 2026-11-06 (`tacplus-dev/roadmap:suggestions/2026-11-06-the-in-cluster-control-runner-on-tags-of-its-own-or-registered-paused.md`).
 - deployments.yaml: the test-idp deployment, operator optional (#17). Agent, at Jody's request, 2026-11-09 (fleet-seatrials#27).
 - The tacplus-reader key moves to tacplus-ci: TACPLUS_READER_KMS_KEY (#19). Agent, at Jody's request, 2026-11-11 (tacplus-dev/cloud#30).
+- The `infra` runner: an in-cluster runner for the cloud, cluster and deploy pipelines, protected refs only, so the runner VMs can go (#25; for tacplus-dev/cloud#11). Hub, under Jody's cluster-only goal, 2026-11-16.
 
 ## Later
 - A reconciler (GKE Config Sync or Argo CD) instead of a manual apply, if standing privilege becomes acceptable (roadmap#1, alternative ii).
