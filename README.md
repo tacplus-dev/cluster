@@ -17,8 +17,8 @@ by Jody 2026-11-02).
   - the fleet deploy account's namespace-scoped Role and RoleBinding;
   - the fleet `operator` service account's binding, if it has one (`operator` is optional: test-idp has none).
 - **CI in the cluster** (the namespace `ci`): GitLab Runner with the Kubernetes executor, one runner for builds
-  (spot pool) and one for control work (normal pool), registered to the tacplus-dev group ([CI in the
-  cluster](#ci-in-the-cluster)).
+  (spot pool), one for control work (normal pool) and one, `infra`, for the cloud, cluster and deploy pipelines
+  (normal pool, protected refs only), registered to the tacplus-dev group ([CI in the cluster](#ci-in-the-cluster)).
 - **Cluster-scoped objects a fleet's chart needs** (CRDs, ClusterRoles), and only from here. None yet: the render
   has no place for them until a fleet needs one (PROPOSALS.md).
 
@@ -40,7 +40,7 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `gitlab-runner/pin.yaml` | GitLab Runner's chart (version, archive digest) and its images, the runner's, the helper's and the jobs' default, by digest; the runner's and the helper's recipe (`build:`, ours: [Our GitLab Runner images](#our-gitlab-runner-images)). |
 | `gitlab-runner/release/` | The chart as fetched (`gitlab-runner/fetch.sh`), with its `SHA256SUMS`. Never edited. |
 | `gitlab-runner/values.yaml` | The chart's values every runner shares: the runner manager's pod, its Role in `ci`, its placement. |
-| `gitlab-runner/runners/<runner>.yaml` | One runner each (`build`, `control`): its tags, its token's Secret Manager version, its jobs' `config.toml`. |
+| `gitlab-runner/runners/<runner>.yaml` | One runner each (`build`, `control`, `infra`): its tags, whether it takes protected refs only, its token's Secret Manager version, its jobs' `config.toml`. |
 | `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
 | `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools). |
@@ -58,8 +58,9 @@ that commit (it is public: no credential).
 - **Identity:** the Google service account `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`, through
   Workload Identity Federation (pool `gitlab-com`, provider `tacplus-dev-cluster`, in the project `tacplus-dev`:
   `attribute.project_path` = `tacplus-dev/cluster`, protected `main` only). No keys.
-- **Runner:** a project runner locked to the GitLab project, tag `cluster`, with a fresh VM per job and no GCP
-  account on the VM. Every job is tagged for it.
+- **Runner:** the in-cluster runner `infra` (tag `cluster`; [The infra runner](#the-infra-runner)), protected refs
+  only, each job a pod with no Google account; until the hub's switch-over, a project runner of the same tag with a
+  fresh VM per job and no GCP account on the VM. Every job is tagged for it.
 
 | Job | When | What |
 |---|---|---|
@@ -151,7 +152,8 @@ checks run as its gates (`tests/bump_test.sh` tests the script against a fixture
 Before the first pipeline:
 
 1. **The runner:** a project runner registered to `tacplus-dev/cluster` only, tag `cluster`, VMs used once, with
-   no Google account; group runners off on the project.
+   no Google account; group runners off on the project. Until step 7's `infra` takes over, when group runners go on
+   (it is one) and the VM runner is paused.
 2. **The project:** `main` protected; the protected environment `cluster`, deployable by Jody and by the account
    whose merges start the pipelines on main (the hub's): GitLab runs an automatic job in a protected environment only
    for a pipeline started by one of its deployers, so `apply` fails for anyone else's; pipeline variables allowed to the Owner role only (Settings > CI/CD > Variables, "Minimum role to use pipeline
@@ -173,14 +175,17 @@ Before the first pipeline:
    is the pinned file's `TACPLUS_READER_KMS_KEY`: a new one reaches the job when the hub re-pins (step 2).
 6. **The schedule:** nightly, on main.
 7. **The in-cluster runners** ([CI in the cluster](#ci-in-the-cluster)): each runner of `gitlab-runner/runners/`
-   created in GitLab as a **group runner of tacplus-dev** with its `tacplus.tags` and "run untagged jobs" off, its
+   created in GitLab as a **group runner of tacplus-dev** with its `tacplus.tags`, "run untagged jobs" off and, where
+   its file says `tacplus.protected: true` (`infra`), protected refs only (the access level `ref_protected`), its
    authentication token (`glrt-...`) stored as the version of the Secret Manager secret its `tacplus.token` names
-   (`gitlab-runner-build` and `gitlab-runner-control` in `tacplus-dev`, version 1), and `cluster-admin-pipeline`
-   allowed to read those two secrets (`roles/secretmanager.secretAccessor` on each). The runners are GitLab's
-   58541760 (`build`) and 58541761 (`control`), registered paused (#18); tacplus-dev/build's scheduled jobs need
+   (`gitlab-runner-build`, `gitlab-runner-control` and `gitlab-runner-infra` in `tacplus-dev`, version 1: tacplus-dev/cloud's
+   `dev` stack makes them), and `cluster-admin-pipeline` allowed to read those secrets
+   (`roles/secretmanager.secretAccessor` on each). The runners are GitLab's
+   58541760 (`build`) and 58541761 (`control`), registered paused (#18), and `infra`, registered paused too (#25;
+   [The infra runner](#the-infra-runner) says how it is switched on); tacplus-dev/build's scheduled jobs need
    `build` unpaused once `apply` has written its token. A new token is a new version
-   and a pull request moving `tacplus.token` to it. Until both are readable, `apply` fails after applying the rest,
-   saying `runner-tokens: Secret Manager refused <version>`.
+   and a pull request moving `tacplus.token` to it. Until every runner's version is readable, `apply` fails after
+   applying the rest, saying `runner-tokens: Secret Manager refused <version>`.
 8. **The pools:** the spot pool labelled `spot=true` and tainted `spot=true:NoSchedule` (tacplus-dev/cloud#7's
    answer; tacplus-dev/cloud's `dev` stack makes them so), the normal pool neither; Workload Identity on the cluster and its pools (`GKE_METADATA`), and NetworkPolicy enforced (Dataplane V2, as
    tacplus-dev/cloud's `dev` cluster has), for the `ci` namespace's NetworkPolicy to hold.
@@ -227,6 +232,7 @@ The chart is pinned by the SHA-256 of its archive, and the runner, helper and de
 |---|---|---|---|---|
 | `build` | `arm64`, `build` | the spot pool only: node selector `spot=true`, toleration `spot=true:NoSchedule` | CPU 1 / 3, memory 4Gi / 8Gi | CPU 3500m, memory 12Gi (a c4a-standard-4) |
 | `control` | `arm64`, `control` (the looper's kicker, reports, managers, scans) | the normal pool: no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 250m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
+| `infra` | `cloud`, `cluster`, `deploy` (tacplus-dev/cloud's, this pipeline, fleet-seatrials' deploy), **protected refs only** | the normal pool, as `control` | CPU 500m / 1500m, memory 1Gi / 4Gi | CPU 1500m, memory 4Gi |
 
 A job raises its own with GitLab's variables (`KUBERNETES_CPU_REQUEST`, `KUBERNETES_MEMORY_LIMIT` and the rest) up
 to the ceiling; the helper container has its own small defaults. It may override nothing else: not its node
@@ -238,9 +244,9 @@ handled the GitLab way, with `retry:` in the pipeline files (`runner_system_fail
 - **No privileged pod, no host path, no Docker socket.** Image builds use rootless BuildKit in the build job's own
   container (tacplus-dev/tacplus#315): every container of a build pod runs as uid 1000, and the build container
   alone is `Unconfined` for seccomp and AppArmor, as rootless BuildKit needs (GitLab's docs: "Set seccomp and
-  AppArmor profiles"), with no capability added. Control jobs run with seccomp `RuntimeDefault` and no privilege
-  escalation. uid 1000 has no home in the job image, so both runners give each job `HOME=/tmp/home`, an emptyDir
-  (#20). Besides the policy on the render, the cluster itself refuses any pod in `ci` that is privileged, has
+  AppArmor profiles"), with no capability added. Control and infra jobs run with seccomp `RuntimeDefault` and no
+  privilege escalation. uid 1000 has no home in the job image, so every runner gives each job `HOME=/tmp/home`, an
+  emptyDir (#20). Besides the policy on the render, the cluster itself refuses any pod in `ci` that is privileged, has
   a host path, the host's network, PID or IPC, a host port or an added capability (the admission policy
   `ci-pods`), whoever creates it.
 - **Namespace-scoped RBAC.** Each runner's service account holds a Role in `ci` only, with what the Kubernetes
@@ -255,10 +261,14 @@ handled the GitLab way, with `retry:` in the pipeline files (`runner_system_fail
   annotation. At apply, `ci/runner-tokens.sh` reads that version as `cluster-admin-pipeline` and writes it into the
   Secret its pods mount (`gitlab-runner-<runner>` in `ci`); a new version restarts the runner. The token is never in
   this repository, in a GitLab variable or in the job's log.
+- **The registration is the file's.** A runner's pods carry its tags (`tacplus.dev/runner-tags`) and whether it
+  takes protected refs only (`tacplus.dev/runner-protected`, from `tacplus.protected`), so the render says what the
+  hub registers in GitLab and the policy can hold it to the rules below.
 
 `ci/policy.sh` checks all of it on the render (each runner's `config.toml` included): the pinned images, the
-namespace-scoped RBAC, the absence of privileged pods, host paths and the Docker socket, and that build pods land
-only on the tainted spot pool and other jobs never, and that no runner takes a VM runner's tag;
+namespace-scoped RBAC, the absence of privileged pods, host paths and the Docker socket, that build pods land
+only on the tainted spot pool and other jobs never, that no runner takes a VM runner's tag, and that the cloud,
+cluster and deploy pipelines' tags are `infra`'s alone, which takes no other and is protected refs only;
 `tests/policy_test.sh` breaks each rule and `tests/render_test.sh` checks the render.
 
 **A bump** of the chart: its version, url and digest, the job image and our runner and helper images' release
@@ -307,7 +317,39 @@ agree. Then remove the `security-exceptions.yaml` entries the `security` job lis
 `autoscale-16`, `gce`; `ci/policy.sh` refuses one), so a job still tagged for the VMs never lands here (#13). The
 GitLab runners' tags follow `tacplus.tags` (the hub's step 7); `control` stays paused until tacplus-dev/looper#84
 gives its pod what the looper's jobs need. The spot pool's size waits on tacplus-dev/cloud#7; this uses whatever
-pool exists.
+pool exists. The three infrastructure pipelines keep their tags and move by the hub's switch-over to `infra`
+(below).
+
+### The infra runner
+
+tacplus-dev/cloud#11 removes every standalone runner VM (Jody: the only VMs are Kubernetes nodes). Three pipelines
+ran on those VMs with no in-cluster runner to move to: tacplus-dev/cloud's (tag `cloud`), this one (`cluster`) and
+fleet-seatrials' deploy (`deploy`). They hold the most powerful credentials we have (WIF to the projects, and
+cluster-admin on `dev`), so they share no runner with the agents' `control` jobs or the builds, as the VM pools kept
+them apart (the hub's decision under Jody's act-on-recommendations rule, 2026-11-16; #25). `infra`
+(`gitlab-runner/runners/infra.yaml`) is that runner, like `control` on the normal pool, with:
+
+- **its three tags and no other.** `ci/policy.sh` refuses any other runner holding `cloud`, `cluster` or `deploy`,
+  and `infra` holding any other tag: no agent's or build's job ever runs beside those credentials, and no
+  infrastructure job runs on a runner that takes agents' jobs.
+- **protected refs only** (`tacplus.protected: true`; GitLab's `ref_protected` at its registration, the hub's): a
+  merge request's or a branch's pipeline gets no runner from it, as Workload Identity Federation admits only the
+  protected refs anyway. The policy refuses an `infra` that is not.
+- **no credential in the pod:** no service account token, and no Google account (the `ci` NetworkPolicy keeps every
+  pod off the metadata server); each job federates its own GitLab `id_token` through WIF, as it did on the VMs.
+- **its token** the Secret Manager version `gitlab-runner-infra` (version 1), which tacplus-dev/cloud's `dev` stack
+  makes beside `gitlab-runner-build` and `gitlab-runner-control`, readable by `cluster-admin-pipeline` only.
+
+**The switch-over** (the hub, once a pipeline on main has applied `infra` and `apply` has written its token): in
+one step, unpause `infra` and pause the VM runners that carry `cloud`, `cluster` and `deploy` (tacplus-dev/cloud's
+`cluster` and `deploy` pools), so no job is taken twice and none is left without a runner; then one cloud and one
+cluster pipeline run green on `infra`; then tacplus-dev/cloud#11 removes the VMs. A new tag or a new pipeline on
+`infra` is a pull request here (its file and the policy), not a registration change.
+
+**Risk recorded:** this pipeline then runs inside the cluster it manages, and tacplus-dev/cloud's inside the cluster
+it makes. If the cluster is lost, neither has a runner to rebuild it with. The way back is a GitLab-hosted arm64 runner
+enabled on tacplus-dev/cloud for the rebuild (a spend Jody approves then): its pipeline makes the cluster again,
+this one's `infra` comes back with the cluster's `ci` namespace, and the hosted runner is turned off again.
 
 ## Security checks
 

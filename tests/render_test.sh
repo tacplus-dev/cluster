@@ -5,14 +5,16 @@
 # Tests render.sh against fixtures: tests/fixtures/render/deployments.yaml renders to exactly
 # tests/fixtures/render/out/ (one file for deploymentproxy, one per deployment, one for ci); the images are pinned by
 # digest (deploymentproxy's, and the runners' and their jobs' in ci); ci's RBAC is in ci only; build jobs select and
-# tolerate the spot pool and control jobs never; each runner's jobs have HOME on an emptyDir; each runner's pods name
-# its token's version, and no token is in it;
+# tolerate the spot pool and control and infra jobs never; each runner's jobs have HOME on an emptyDir; each runner's
+# pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
+# is protected refs only, and no other runner is;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
 # is; deployments.yaml itself renders and passes ci/policy.sh, test-idp with its namespace and deploy Role only; a
 # deployment without an operator has no deploymentproxy Role and no operator binding; a removed entry renders
 # nothing for it; a release
 # file or chart file that does not match its checksum, every malformed entry, and a runner file that names its token
-# by latest or sets what only gitlab-runner/values.yaml sets, is refused with a message. Needs bash, yq and helm.
+# by latest, says protected with anything but true or false, or sets what only gitlab-runner/values.yaml sets, is
+# refused with a message. Needs bash, yq and helm.
 #
 #   tests/render_test.sh
 #   UPDATE=1 tests/render_test.sh    # rewrites the expected output (review the diff)
@@ -53,7 +55,7 @@ images=$(yq ea '[select(.kind == "Deployment") | .spec.template.spec | (.contain
 runner_cfg() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.template.toml"' "$ci" |
   yq -p toml ".runners[0] | $2"; }
 runner_toml() { runner_cfg "$1" ".kubernetes | $2"; }
-jobs=$(for r in build control; do runner_toml $r '.image + " " + .helper_image'; done | sort -u)
+jobs=$(for r in build control infra; do runner_toml $r '.image + " " + .helper_image'; done | sort -u)
 [ "$jobs" = "$(yq '.job + " " + .helper' "$runner_pin")" ] &&
   ok "every runner's jobs default to the pinned job image, with the pinned helper, by digest" || fail "the jobs' images are [$jobs]"
 ! grep -qiE 'image.*:latest|latest@' "$ci" && ok "nothing in ci's render names latest" || fail "ci's render names latest"
@@ -62,20 +64,35 @@ jobs=$(for r in build control; do runner_toml $r '.image + " " + .helper_image';
   [ "$(yq ea '[select(.kind == "RoleBinding") | .roleRef.kind] | unique | join(" ")' "$ci")" = Role ] &&
   ok "the runners' accounts hold Roles in ci only, no cluster RBAC" || fail "ci's RBAC: $(yq -N 'select(.kind | test("Role")) | .kind + " " + (.metadata.namespace // "")' "$ci")"
 [ "$(runner_toml build '.node_selector.spot + " " + .node_tolerations."spot=true"')" = "true NoSchedule" ] &&
-  [ "$(runner_toml control '[(.node_selector // {}) | keys[], (.node_tolerations // {}) | keys[]] | map(select(test("spot"))) | length')" = 0 ] &&
-  [ "$(runner_toml control '.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms[0].match_expressions[] | select(.key == "spot") | .operator + " " + .values[0]')" = "NotIn true" ] &&
-  ok "build jobs select and tolerate the tainted spot pool; control jobs never tolerate it and refuse a spot node" || fail "the jobs' placement"
+  ok "build jobs select and tolerate the tainted spot pool" || fail "build jobs' placement"
+for r in control infra; do
+  [ "$(runner_toml $r '[(.node_selector // {}) | keys[], (.node_tolerations // {}) | keys[]] | map(select(test("spot"))) | length')" = 0 ] &&
+    [ "$(runner_toml $r '.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms[0].match_expressions[] | select(.key == "spot") | .operator + " " + .values[0]')" = "NotIn true" ] &&
+    [ "$(runner_toml $r '.automount_service_account_token')" = false ] &&
+    ok "$r jobs never tolerate the spot taint, refuse a spot node, and get no service account token" || fail "$r jobs' placement or token"
+done
 # A job runs as a user with no home in the job image (uid 1000), so each runner gives it HOME on an emptyDir of its
 # own, writable and there before the script runs (#20: git config --global wrote //.gitconfig).
-for r in build control; do
+for r in build control infra; do
   home=$(runner_cfg $r '(.environment // [])[] | select(test("^HOME=")) | sub("^HOME="; "")')
   [ -n "$home" ] && [ "$home" != / ] &&
     [ "$(H=$home runner_toml $r '[(.volumes.empty_dir // [])[] | select(.mount_path == strenv(H))] | length')" = 1 ] &&
     ok "$r jobs have HOME=$home, an emptyDir" || fail "$r jobs' HOME is [$home], or no emptyDir is mounted there"
 done
 [ "$(yq ea '[select(.kind == "Deployment") | .spec.template.metadata.annotations."tacplus.dev/runner-token"] | join(" ")' "$ci")" = \
-  "$(yq '.tacplus.token' "$here/gitlab-runner/runners/build.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/control.yaml")" ] &&
+  "$(yq '.tacplus.token' "$here/gitlab-runner/runners/build.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/control.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/infra.yaml")" ] &&
   ok "each runner's pods name its token's Secret Manager version" || fail "the runners' token versions"
+# The infra runner (#25): the cloud, cluster and deploy pipelines' tags, nothing else, protected refs only; the other
+# two neither protected nor holding one of its tags. Its pods say so (the hub registers it as its file says).
+annotation() { R=$1 A=$2 yq 'select(.kind == "Deployment" and .metadata.name == "gitlab-runner-" + strenv(R)) | .spec.template.metadata.annotations[("tacplus.dev/" + strenv(A))] // ""' "$ci"; }
+[ "$(annotation infra runner-tags)" = "cloud,cluster,deploy" ] && [ "$(annotation infra runner-protected)" = true ] &&
+  ok "infra's pods name its tags cloud, cluster, deploy, and that it is protected refs only" ||
+  fail "infra's pods: tags [$(annotation infra runner-tags)], protected [$(annotation infra runner-protected)]"
+[ "$(annotation build runner-protected) $(annotation control runner-protected)" = "false false" ] &&
+  ! [[ ",$(annotation build runner-tags),$(annotation control runner-tags)," =~ ,(cloud|cluster|deploy), ]] &&
+  ok "build and control are not protected and hold none of infra's tags" ||
+  fail "build [$(annotation build runner-tags), protected $(annotation build runner-protected)], control [$(annotation control runner-tags), protected $(annotation control runner-protected)]"
+[ "$(yq '.tacplus.protected' "$here/gitlab-runner/runners/infra.yaml")" = true ] && ok "gitlab-runner/runners/infra.yaml says protected: true" || fail "infra.yaml's protected is [$(yq '.tacplus.protected' "$here/gitlab-runner/runners/infra.yaml")]"
 ! grep -q 'glrt-[A-Za-z0-9_]' "$ci" && [ "$(yq ea '[select(.kind == "Secret")] | length' "$ci")" = 0 ] &&
   ok "no token and no Secret in the render" || fail "the render holds a token or a Secret"
 
@@ -153,6 +170,7 @@ refused_runner() {
 refused_runner "its token by latest" '.tacplus.token = "projects/tacplus-dev/secrets/gitlab-runner-build/versions/latest"' "never latest"
 refused_runner "no token" 'del(.tacplus.token)' "tacplus.token \[\] is not a Secret Manager version"
 refused_runner "no tags" '.tacplus.tags = []' "tacplus.tags is not a list"
+refused_runner "protected that is not a boolean" '.tacplus.protected = "yes"' "tacplus.protected \[yes\] is not true or false"
 refused_runner "its own security context" '.securityContext.privileged = true' "sets securityContext, which only gitlab-runner/values.yaml sets"
 refused_runner "its own RBAC" '.rbac.clusterWideAccess = true' "sets rbac, which only"
 refused_runner "its own image" '.runners.image = "alpine"' "sets runners.image, which only"

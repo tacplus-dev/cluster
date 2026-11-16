@@ -20,7 +20,9 @@
 #                               bind or impersonate; a RoleBinding binds a Role to service accounts of ci. The
 #                               runners' pods and their jobs' pods (each runner's config.toml): images by digest, no
 #                               privileged container, host path, host namespace or Docker socket; build jobs only on
-#                               the spot pool, every other job never there (ci_runner below).
+#                               the spot pool, every other job never there; the infra pipelines' tags (cloud, cluster,
+#                               deploy) on the runner infra alone, which takes no other and protected refs only
+#                               (ci_runner below).
 #
 #   ci/policy.sh OUT     # exit 0: every file keeps them; else each breach, one per line. Needs bash, yq.
 set -uo pipefail
@@ -61,10 +63,14 @@ ci_pod() {
 # selector and the spot taint's toleration), takes no other tag but arm64, runs them non-root, and is the only one
 # whose build container may be Unconfined; any other runner's jobs never tolerate spot, refuse a spot node, and may
 # not escalate privilege. No runner takes a VM runner's tag (autoscale, autoscale-16, gce): GitLab gives a job to
-# whichever runner holding its tags asks first.
+# whichever runner holding its tags asks first. The infra pipelines' tags (cloud, cluster, deploy: tacplus-dev/cloud's,
+# this one's and fleet-seatrials' deploy, which hold WIF to the projects and cluster-admin) are the runner infra's
+# alone (#25): no other runner takes one, infra takes no other tag (no agent's or build's job lands beside their
+# credentials), and infra is registered for protected refs only (tacplus.dev/runner-protected).
 ci_runner() {
-  local b=$1 d=$2 render=$3 tags token secret toml json m
+  local b=$1 d=$2 render=$3 tags protected token secret toml json m
   tags=$(D=$d yq 'select(.kind == "Deployment" and .metadata.name == strenv(D)) | .spec.template.metadata.annotations."tacplus.dev/runner-tags" // ""' "$render")
+  protected=$(D=$d yq 'select(.kind == "Deployment" and .metadata.name == strenv(D)) | .spec.template.metadata.annotations."tacplus.dev/runner-protected" // ""' "$render")
   token=$(D=$d yq 'select(.kind == "Deployment" and .metadata.name == strenv(D)) | .spec.template.metadata.annotations."tacplus.dev/runner-token" // ""' "$render")
   secret=$(D=$d yq 'select(.kind == "Deployment" and .metadata.name == strenv(D)) | .spec.template.metadata.annotations."tacplus.dev/runner-token-secret" // ""' "$render")
   [ -n "$tags" ] || breach "$b: the runner $d has no tags (tacplus.dev/runner-tags)"
@@ -75,8 +81,9 @@ ci_runner() {
   toml=$(D=$d yq 'select(.kind == "ConfigMap" and .metadata.name == strenv(D)) | .data."config.template.toml" // ""' "$render")
   [ -n "$toml" ] || { breach "$b: the runner $d has no config.template.toml"; return; }
   json=$(yq -p toml -o json -I=0 <<<"$toml") || { breach "$b: the runner $d's config.template.toml is not TOML"; return; }
-  while IFS= read -r m; do breach "$b: the runner $d: $m"; done < <(jq -r --arg tags "$tags" '
-    ($tags | split(",")) as $tags | ($tags | index("build") != null) as $build |
+  while IFS= read -r m; do breach "$b: the runner $d: $m"; done < <(jq -r --arg tags "$tags" --arg runner "$d" --arg protected "$protected" '
+    ($tags | split(",")) as $tags | ($tags | index("build") != null) as $build | ($runner == "gitlab-runner-infra") as $infra |
+    ["cloud", "cluster", "deploy"] as $infra_tags |
     if (.runners | length) != 1 then "has \(.runners | length) [[runners]], not one" else
     .runners[0] as $r | ($r.kubernetes // {}) as $k |
     (select($r.executor != "kubernetes") | "the executor is \($r.executor // "none"), not kubernetes"),
@@ -91,6 +98,12 @@ ci_runner() {
     (select($k.service_account != "ci-job") | "its jobs run as [\($k.service_account // "")], not ci-job"),
     (select($k.automount_service_account_token != false) | "its jobs get a service account token"),
     ($tags[] | select(IN("autoscale", "autoscale-16", "gce")) | "takes a tag of the VM runners (\(.)): GitLab would give it their jobs"),
+    (if $infra then
+      (($tags - $infra_tags)[] | "takes a tag that is not cloud, cluster or deploy (\(.)): a job tagged for it would run beside the infra pipelines\u0027 credentials"),
+      (select($protected != "true") | "is not protected refs only (tacplus.dev/runner-protected): it holds the infra pipelines\u0027 tags")
+    else
+      ($tags[] | select(IN($infra_tags[])) | "takes a tag of the infra pipelines (\(.)): only the runner infra, protected refs only, takes cloud, cluster and deploy")
+    end),
     (("cpu_request", "cpu_limit", "memory_request", "memory_limit") as $c |
       if $k[$c] == null then "no default \($c)" elif $k[$c + "_overwrite_max_allowed"] == null then "no ceiling for \($c) (\($c)_overwrite_max_allowed)" else empty end),
     ([$k | paths(. == "Unconfined") | map(tostring) | join(".")] as $u |

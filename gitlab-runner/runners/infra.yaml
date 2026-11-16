@@ -1,0 +1,79 @@
+# The infra runner (#25, for tacplus-dev/cloud#11): the three infrastructure pipelines' jobs, tacplus-dev/cloud's
+# (tag `cloud`), tacplus-dev/cluster's (`cluster`) and fleet-seatrials' deploy (`deploy`), each a pod on the normal
+# pool, as control's are. They hold the most powerful credentials we have (WIF to the projects, and cluster-admin on
+# this cluster), so they share no runner with the agents' jobs (control) or the builds (build): this runner takes
+# those three tags and no other (ci/policy.sh refuses any other runner holding one of them, and this one holding any
+# else), and GitLab gives it jobs of protected refs only (tacplus.protected: `ref_protected` at its registration,
+# the hub's; README, What the hub does). No credential is in the pod: no service account token, and no Google account
+# (the ci NetworkPolicy keeps it off the metadata server); each job federates its own id_token through WIF, as on the
+# VMs. It tolerates no spot taint and refuses a spot node by its label or GKE's. No privilege, no privilege
+# escalation, no host path, no Docker socket. A job may raise its requests and limits up to the *_overwrite_max_allowed
+# ceilings, which fit a c4a-standard-2 (2 CPUs, 8 GB) beside the platform, as control's do; the VM pools gave these
+# jobs 2 CPUs and 6 to 7 GB (tofu, Trivy, the scanners), so the defaults start higher than control's. It may not move
+# its pod, its namespace or its account.
+#
+#   tacplus.tags       the tags of its registration in GitLab (README, What the hub does): the tags it takes
+#   tacplus.protected  its registration takes jobs of protected refs only (GitLab's access level ref_protected)
+#   tacplus.token      its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
+#                      writes it into the Secret gitlab-runner-infra at apply time
+tacplus:
+  tags: [cloud, cluster, deploy]
+  protected: true
+  token: projects/tacplus-dev/secrets/gitlab-runner-infra/versions/1
+concurrent: 4
+runners:
+  name: tacplus-dev infra (cluster, ci, normal pool, protected refs)
+  config: |
+    [[runners]]
+      executor = "kubernetes"
+      # uid 1000 has no home in the job image, so HOME would be / (#20): HOME is the emptyDir below instead.
+      environment = ["HOME=/tmp/home"]
+      [runners.kubernetes]
+        namespace = "ci"
+        image = "{{ .Values.pinned.job }}"
+        helper_image = "{{ .Values.pinned.helper }}"
+        service_account = "ci-job"
+        automount_service_account_token = false
+        privileged = false
+        allow_privilege_escalation = false
+        poll_timeout = 600
+        cpu_request = "500m"
+        cpu_limit = "1500m"
+        memory_request = "1Gi"
+        memory_limit = "4Gi"
+        cpu_request_overwrite_max_allowed = "1500m"
+        cpu_limit_overwrite_max_allowed = "1500m"
+        memory_request_overwrite_max_allowed = "4Gi"
+        memory_limit_overwrite_max_allowed = "4Gi"
+        helper_cpu_request = "50m"
+        helper_cpu_limit = "500m"
+        helper_memory_request = "64Mi"
+        helper_memory_limit = "256Mi"
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "home"
+          mount_path = "/tmp/home"
+        [runners.kubernetes.pod_labels]
+          "tacplus.dev/ci-runner" = "infra"
+        [runners.kubernetes.node_selector]
+          "kubernetes.io/arch" = "arm64"
+        [runners.kubernetes.node_tolerations]
+          "kubernetes.io/arch=arm64" = "NoSchedule"
+        [runners.kubernetes.affinity]
+          [runners.kubernetes.affinity.node_affinity]
+            [runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution]
+              [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms]]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "spot"
+                  operator = "NotIn"
+                  values = ["true"]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "cloud.google.com/gke-spot"
+                  operator = "NotIn"
+                  values = ["true"]
+        [runners.kubernetes.pod_security_context]
+          [runners.kubernetes.pod_security_context.seccomp_profile]
+            type = "RuntimeDefault"
+        [runners.kubernetes.helper_container_security_context]
+          allow_privilege_escalation = false
+          [runners.kubernetes.helper_container_security_context.capabilities]
+            drop = ["ALL"]

@@ -17,7 +17,8 @@
 #                                   namespace in ci, and one GitLab Runner per gitlab-runner/runners/<runner>.yaml:
 #                                   the chart (gitlab-runner/release, checked against its SHA256SUMS) rendered with
 #                                   gitlab-runner/values.yaml, the runner's file and the images of
-#                                   gitlab-runner/pin.yaml, its token's Secret Manager version on its pods
+#                                   gitlab-runner/pin.yaml, its token's Secret Manager version, its tags and whether
+#                                   it takes protected refs only on its pods
 #
 # A removed entry renders nothing, and the apply never deletes (ci/apply.sh). Every entry is checked before
 # anything is written; a bad one is refused with what is wrong.
@@ -70,8 +71,9 @@ for ((i = 0; i < n; i++)); do
     die "$name: quota is not a map of resource names to quoted quantities (deploymentproxy's quota.deployments.<name>)"
 done
 
-# The runners (gitlab-runner/runners/<runner>.yaml): each sets only its tags, its token's version, its concurrency,
-# its name and its config.toml; the rest is gitlab-runner/values.yaml's, for every runner alike.
+# The runners (gitlab-runner/runners/<runner>.yaml): each sets only its tags, whether it takes protected refs only
+# (tacplus.protected, false unless said), its token's version, its concurrency, its name and its config.toml; the
+# rest is gitlab-runner/values.yaml's, for every runner alike.
 runners_dir=${RUNNERS:-$here/gitlab-runner/runners}
 runners=()
 for f in "$runners_dir"/*.yaml; do
@@ -80,11 +82,13 @@ for f in "$runners_dir"/*.yaml; do
   [[ $r =~ ^[a-z][a-z0-9-]{0,20}$ ]] || die "runner $r: the name is not 1 to 21 characters of [a-z0-9-] starting with a letter"
   extra=$(yq '(keys | .[] | select(. != "tacplus" and . != "concurrent" and . != "runners")),
     ((.runners // {}) | keys | .[] | select(. != "name" and . != "config") | "runners." + .),
-    ((.tacplus // {}) | keys | .[] | select(. != "tags" and . != "token") | "tacplus." + .)' "$f")
+    ((.tacplus // {}) | keys | .[] | select(. != "tags" and . != "protected" and . != "token") | "tacplus." + .)' "$f")
   [ -z "$extra" ] || die "runner $r: sets $(echo $extra), which only gitlab-runner/values.yaml sets"
   [ "$(yq '.tacplus.tags | tag' "$f")" = '!!seq' ] && [ "$(yq '.tacplus.tags | length' "$f")" -gt 0 ] &&
     [ -z "$(yq '.tacplus.tags[] | select((tag != "!!str") or (test("^[a-z0-9][a-z0-9._-]*$") | not))' "$f")" ] ||
     die "runner $r: tacplus.tags is not a list of GitLab runner tags"
+  [ "$(yq '.tacplus.protected // false | tag' "$f")" = '!!bool' ] ||
+    die "runner $r: tacplus.protected [$(yq '.tacplus.protected' "$f")] is not true or false"
   token=$(yq '.tacplus.token // ""' "$f")
   [[ $token =~ ^projects/[a-z][a-z0-9-]{4,28}[a-z0-9]/secrets/[A-Za-z0-9_-]{1,255}/versions/[1-9][0-9]*$ ]] ||
     die "runner $r: tacplus.token [$token] is not a Secret Manager version (projects/<project>/secrets/<secret>/versions/<number>, never latest)"
@@ -314,15 +318,18 @@ spec:
 EOF
   for r in "${runners[@]}"; do
     f=$runners_dir/$r.yaml
-    # The images, the token's Secret and its version, the tags on the pods: render.sh's, never the runner file's.
-    R=$r TOKEN=$(yq '.tacplus.token' "$f") TAGS=$(yq '.tacplus.tags | join(",")' "$f") \
+    # The images, the token's Secret and its version, the tags and the protection on the pods: render.sh's, never the
+    # runner file's.
+    protected=$(yq '.tacplus.protected // false' "$f")
+    R=$r TOKEN=$(yq '.tacplus.token' "$f") TAGS=$(yq '.tacplus.tags | join(",")' "$f") PROTECTED=$protected \
       JOB=$(yq -e '.job' "$runner_pin") HELPER=$(yq -e '.helper' "$runner_pin") yq -n '
       .pinned.job = strenv(JOB) | .pinned.helper = strenv(HELPER) |
       .runners.secret = "gitlab-runner-" + strenv(R) |
       .podLabels."tacplus.dev/ci-runner" = strenv(R) |
       .podAnnotations."tacplus.dev/runner-token-secret" = "gitlab-runner-" + strenv(R) |
       .podAnnotations."tacplus.dev/runner-token" = strenv(TOKEN) |
-      .podAnnotations."tacplus.dev/runner-tags" = strenv(TAGS)' > "$tmp/$r.yaml"
+      .podAnnotations."tacplus.dev/runner-tags" = strenv(TAGS) |
+      .podAnnotations."tacplus.dev/runner-protected" = strenv(PROTECTED)' > "$tmp/$r.yaml"
     helm template "gitlab-runner-$r" "$runner_release" --namespace ci \
         -f "$here/gitlab-runner/values.yaml" -f "$f" -f "$tmp/$r.yaml" > "$tmp/$r.out" 2> "$tmp/$r.err" ||
       die "runner $r: helm template failed: $(cat "$tmp/$r.err")"
@@ -330,7 +337,7 @@ EOF
     [ "$upstream" = "registry.gitlab.com/gitlab-org/gitlab-runner:alpine-v$app" ] ||
       die "runner $r: the chart's Deployment runs $upstream, not its appVersion $app"
     echo ---
-    echo "# The runner $r (gitlab-runner/runners/$r.yaml), tags $(yq '.tacplus.tags | join(", ")' "$f"): GitLab Runner's chart $(yq '.version' "$runner_release/Chart.yaml")."
+    echo "# The runner $r (gitlab-runner/runners/$r.yaml), tags $(yq '.tacplus.tags | join(", ")' "$f")$([ "$protected" != true ] || echo ", protected refs only"): GitLab Runner's chart $(yq '.version' "$runner_release/Chart.yaml")."
     # checksum/secrets is the hash of the chart's own Secret, which it does not render here (the token's Secret is
     # ci/runner-tokens.sh's): an empty file's, and nothing to roll the pods on.
     IMAGE=$runner_image yq '(select(.kind == "Deployment") | .spec.template.spec.containers[0].image) = strenv(IMAGE) |

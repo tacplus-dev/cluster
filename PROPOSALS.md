@@ -10,6 +10,13 @@ the looper then marks it `promoted` or `declined` here with the date.
   leave cluster-admin to the manual `apply` and `delete-deployment` alone. Needs a WIF binding per environment
   (`attribute.environment`, as fleet-seatrials' test IdP does). For the security round-table the decision
   (`tacplus-dev/roadmap:decisions/cluster-pipeline-2026-11-02.md`, Open) still lists.
+- **The infra runner's sizing on the normal pool** (2026-11-16, #25): `infra`'s jobs (tofu plans and applies, Trivy,
+  the scanners of tacplus-dev/cloud's pipeline; this one's; fleet-seatrials' deploy) had 2 CPUs and 6 to 7 GB each on
+  the VM pools (cloud's `cluster` and `deploy` pools); here they default to 500m / 1500m CPU and 1Gi / 4Gi memory, with
+  the same ceiling as `control`'s (1500m, 4Gi), what fits a c4a-standard-2 beside the platform. If the switch-over's
+  pipelines show a job short of memory (an OOMKilled container) or slow, raise the ceiling in `infra.yaml` and let
+  the job ask for more (`KUBERNETES_MEMORY_LIMIT`), or move the normal pool to a bigger machine type (cloud's `dev`
+  stack); either is a pull request, not a registration change.
 - **A dedicated app for the drift issue** (2026-11-02, #1): the issue asks for the tacplus-reader app, which then
   needs Issues: write on this repository; "reader" stops meaning read-only. A small app (or the repository's
   looper bot, tacplus-dev/looper#28) with Issues: write on `cluster` alone would keep tacplus-reader read-only.
