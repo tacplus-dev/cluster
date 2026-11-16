@@ -25,3 +25,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-15 looper issue security fails on main: the CI image build:2.6.10 carries six fixed HIGH linux-libc-dev CVEs (6.12.117-1); build:2.6.12 has the fix (#24, 481c74d; gates: full)
 - 2026-11-15 looper issue Pin the build: a committed build.lock naming this repository's build image by digest (#14, c3b62c2; gates: full)
 - 2026-11-15 looper issue deployments.yaml: the test-idp deployment (no operator): operator optional in render.sh and policy (#17)
+- 2026-11-16 looper issue STATE.md's Blocked on line is stale: all six issues it names (#18, #25, cloud#64, #14, #24, looper#84) are closed (#26)
