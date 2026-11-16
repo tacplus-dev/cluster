@@ -178,6 +178,13 @@ the looper then marks it `promoted` or `declined` here with the date.
   dependency that moves while nothing lands here is seen by the GitLab project's nightly `security` job (our own
   scan) and not by the pipeline's. Filed as tacplus-dev/cloud#33 (bug, open): one entry in that file, in cloud, not
   here. Links: #14, tacplus-dev/cloud#33, tacplus-dev/looper#84.
+- **STATE.md's other lines from before main's first green `apply`** (2026-11-16, #26): #26 rewrote the Blocked on
+  line and the runners' Known gaps from the hub's comments closing #18 and #25. Still stale, and not settled by those
+  comments: Released / deployed (pipeline 3019831835's outcome, 2026-11-02, "not recorded"), "No pipeline has run" and
+  what the hub owes after it (the drift job's first mint, cloud#30's proof; the re-pins), "The job has not run in
+  GitLab yet (no runner)" under Known vulnerabilities, and the nightly schedule 4547285's state. A run with the hub's
+  answers (or a GitLab token) can rewrite them; cluster#8 (open) also reads as done by #24's move to `build:2.6`.
+  Links: #18, #25, #8, #26.
 
 ## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still
