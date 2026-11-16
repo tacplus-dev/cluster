@@ -347,7 +347,9 @@ them apart (the hub's decision under Jody's act-on-recommendations rule, 2026-11
 
 **The switch-over** (the hub, once a pipeline on main has applied `infra` and `apply` has written its token): in
 one step, unpause `infra` and pause the VM runners that carry `cloud`, `cluster` and `deploy` (tacplus-dev/cloud's
-`cluster` and `deploy` pools), so no job is taken twice and none is left without a runner; then one cloud and one
+`cluster` and `deploy` pools), so no job is taken twice and none is left without a runner. The step is a commit to
+tacplus-dev/cloud's `gitlab` stack (`infra`'s `paused = false`), not a change in GitLab's settings, which that stack's
+next apply would revert (cloud#64); then one cloud and one
 cluster pipeline run green on `infra`; then tacplus-dev/cloud#11 removes the VMs. A new tag or a new pipeline on
 `infra` is a pull request here (its file and the policy), not a registration change.
 
