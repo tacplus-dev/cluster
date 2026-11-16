@@ -181,8 +181,10 @@ Before the first pipeline:
    (`gitlab-runner-build`, `gitlab-runner-control` and `gitlab-runner-infra` in `tacplus-dev`, version 1: tacplus-dev/cloud's
    `dev` stack makes them), and `cluster-admin-pipeline` allowed to read those secrets
    (`roles/secretmanager.secretAccessor` on each). The runners are GitLab's
-   58541760 (`build`) and 58541761 (`control`), registered paused (#18), and `infra`, registered paused too (#25;
-   [The infra runner](#the-infra-runner) says how it is switched on); tacplus-dev/build's scheduled jobs need
+   58541760 (`build`) and 58541761 (`control`), registered paused (#18), and `infra`, which tacplus-dev/cloud's
+   `gitlab` stack registers paused and whose token it writes as `gitlab-runner-infra`'s version 1 itself (cloud#64:
+   no person or agent copies a token; #25; [The infra runner](#the-infra-runner) says how it is switched on);
+   tacplus-dev/build's scheduled jobs need
    `build` unpaused once `apply` has written its token. A new token is a new version
    and a pull request moving `tacplus.token` to it. Until every runner's version is readable, `apply` fails after
    applying the rest, saying `runner-tokens: Secret Manager refused <version>`.
@@ -332,13 +334,16 @@ them apart (the hub's decision under Jody's act-on-recommendations rule, 2026-11
 - **its three tags and no other.** `ci/policy.sh` refuses any other runner holding `cloud`, `cluster` or `deploy`,
   and `infra` holding any other tag: no agent's or build's job ever runs beside those credentials, and no
   infrastructure job runs on a runner that takes agents' jobs.
-- **protected refs only** (`tacplus.protected: true`; GitLab's `ref_protected` at its registration, the hub's): a
+- **protected refs only** (`tacplus.protected: true`; GitLab's `ref_protected` at its registration, tacplus-dev/cloud's
+  `gitlab` stack's, cloud#64): a
   merge request's or a branch's pipeline gets no runner from it, as Workload Identity Federation admits only the
   protected refs anyway. The policy refuses an `infra` that is not.
 - **no credential in the pod:** no service account token, and no Google account (the `ci` NetworkPolicy keeps every
   pod off the metadata server); each job federates its own GitLab `id_token` through WIF, as it did on the VMs.
 - **its token** the Secret Manager version `gitlab-runner-infra` (version 1), which tacplus-dev/cloud's `dev` stack
-  makes beside `gitlab-runner-build` and `gitlab-runner-control`, readable by `cluster-admin-pipeline` only.
+  makes beside `gitlab-runner-build` and `gitlab-runner-control`, readable by `cluster-admin-pipeline` only. Cloud's
+  `gitlab` stack registers the runner (paused) and writes that version itself, as it keeps the VM runners' tokens
+  (cloud#64, the hub's scope): nothing else registers it, and the token never leaves that pipeline.
 
 **The switch-over** (the hub, once a pipeline on main has applied `infra` and `apply` has written its token): in
 one step, unpause `infra` and pause the VM runners that carry `cloud`, `cluster` and `deploy` (tacplus-dev/cloud's
