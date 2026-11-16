@@ -48,11 +48,12 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-16 by th
 - **Released / deployed:** the GitLab project runs pipelines on main: #2 reports Jody playing `apply` in pipeline
   3019831835 (job 17680247127) on 2026-11-02; its outcome is not recorded here yet. The lines below predate it.
 - **Known gaps:** `infra` (#25) is rendered but not registered, and its token secret `gitlab-runner-infra` does not
-  exist yet (tacplus-dev/cloud#64, opened by #25's run): until cloud's `dev` stack makes it and the hub has registered
-  `infra` (group runner, `cloud, cluster, deploy`, untagged off, `ref_protected`, paused) with its token as version 1,
-  a re-pin of `.gitlab-ci.yml` to a commit with #25 makes `apply` fail after applying the rest
+  exist yet (tacplus-dev/cloud#64, opened by #25's run, approved by the hub 2026-11-16 with the registration in its
+  scope): until cloud's `dev` stack makes it and cloud's `gitlab` stack has registered `infra` (group runner,
+  `cloud, cluster, deploy`, untagged off, `ref_protected`, paused) and written its token as version 1 (no person or
+  agent copies a token), a re-pin of `.gitlab-ci.yml` to a commit with #25 makes `apply` fail after applying the rest
   (`runner-tokens: Secret Manager refused .../gitlab-runner-infra/versions/1`), so the hub re-pins to #25 only after
-  both; then the switch-over (README, The infra runner: unpause `infra`, pause cloud's `cluster` and `deploy` pool
+  cloud#64 has applied; then the switch-over (README, The infra runner: unpause `infra`, pause cloud's `cluster` and `deploy` pool
   runners in one step, one cloud and one cluster pipeline green on `infra`), then cloud#11 removes the VMs.
   The in-cluster runners are not registered or applied yet: the hub registers them as tacplus-dev
   group runners and stores their tokens as the Secret Manager versions the runner files name (README, What the hub
@@ -87,8 +88,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-16 by th
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
-- **Blocked on:** a green `apply` on main (#18); for #25's done criteria, cloud#64 and the hub's registration of
-  `infra`, then the switch-over above. The hub's by-hand steps are done (checked by the hub, 2026-11-15):
+- **Blocked on:** a green `apply` on main (#18); for #25's done criteria, cloud#64 (the secret, and cloud's `gitlab`
+  stack's registration of `infra` with its token), then the switch-over above. The hub's by-hand steps are done (checked by the hub, 2026-11-15):
   project runners, `main` and the environment `cluster` protected, the three protected variables,
   `tacplus-looper-bot` a Reporter, runners 58541760 (`build`) and 58541761 (`control`) tacplus-dev group runners
   (`arm64, build` and `arm64, control`, untagged off, still paused), and both token secrets' version 1 readable by
