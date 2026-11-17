@@ -1,0 +1,4 @@
+[
+  {"count":1,"file":"gitlab-runner/release/templates/configmap.yaml","id":"KSV-01010","tool":"trivy"},
+  {"count":1,"file":"tests/fixtures/render/out/20-ci.yaml","id":"KSV-01010","tool":"trivy"}
+]

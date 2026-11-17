@@ -48,6 +48,7 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools). |
 | `build.lock`, `gates.yaml` | The build image by digest (the CI image), and the gates run in it (How a change reaches the cluster, below). |
 | `security-exceptions.yaml` | The security findings accepted, each until its expiry (Security checks, below). |
+| `security-baseline.json` | The MEDIUM and LOW findings looper-scan's nightly takes as baselined, not new (`looper-scan baseline` writes it): the GitLab Runner chart's entrypoint ConfigMap, KSV-01010 (#30). |
 | `tests/` | The tests (`ci/checks.sh` runs them all), their fixtures and stubs. |
 
 ## How it runs
@@ -393,7 +394,7 @@ exceptions:
 ```
 
 Exactly those fields, which looper-scan reads too. The summary lists the entries no finding needs any more, to
-remove. **The report:** the job's artifact `src/security/`, kept 30 days, pass or fail: `findings.json` (every
+remove (but not those of Trivy's config checks, `KSV-`: looper-scan's nightly runs them on the tree, this job does not; #30). **The report:** the job's artifact `src/security/`, kept 30 days, pass or fail: `findings.json` (every
 finding: tool, id, aliases, severity, fix, where, and whether an exception accepts it or it fails the job),
 `summary.md` (also in the job's log), `verdict`, and `raw/`, each tool's own JSON. `tests/security_test.sh` tests the
 job: a planted secret, in the tree or the history only, fails it; an expired exception fails it; a clean tree passes.

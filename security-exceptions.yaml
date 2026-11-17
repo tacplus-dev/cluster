@@ -25,6 +25,10 @@
 #
 # The CI image's gh (ghcr.io/tacplus-dev/tacplus/build:2.6, also gitlab-runner/pin.yaml's job:, #12) is built with
 # x/net v0.62.0 since build 2.6.3 (tacplus-dev/tacplus#350), so #15's CVE-2026-78661 entry is gone (#32).
+#
+# Trivy's config checks (looper-scan's nightly, on the tree): KSV-0109 is a false positive on GitLab Runner chart
+# 0.94.3's entrypoint ConfigMap, which names the secret files it reads and holds no secret (#30); its two KSV-01010
+# findings, MEDIUM, are in security-baseline.json. Re-check both when the chart is moved.
 exceptions:
   - id: GO-2026-5158
     reason: "otel baggage header length (kubectl v1.34.13, otel v1.41.0): kubectl takes no baggage header from anyone but the cluster's API server, over TLS. Fixed in otel v1.42.0; no kubectl 1.34 release with it yet."
@@ -70,3 +74,7 @@ exceptions:
     reason: "GO-2026-6859, an HTTP/1 server crash in net/http (gke-gcloud-auth-plugin 0.5.21, go1.27.3; kubectl v1.34.13, go1.26.10; fixed in go1.26.11 and go1.27.4): kubectl and its auth plugin serve no HTTP, and nothing untrusted reaches them; no kubectl 1.34 or plugin release has the fix yet. The tools built here, and GitLab Runner's runner and helper since #21, are built with go1.27.4 (ci/tools.sh, ci/runner-images.sh); the hub's interim for upstream's runner images ended with them."
     decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12; kubectl and its plugin as #5 decided their other findings: no release of the tool with the fix)"
     expires: 2026-11-25
+  - id: KSV-0109
+    reason: "Trivy's ConfigMap with secrets, a false positive on GitLab Runner chart 0.94.3's entrypoint ConfigMap (gitlab-runner/release/templates/configmap.yaml, rendered in out/20-ci.yaml): its script names the files under /secrets it reads and the variables it exports from them (CI_SERVER_TOKEN, CACHE_S3_SECRET_KEY), and holds no secret; the tokens come from Secret Manager at apply time (ci/runner-tokens.sh) into a Secret projected on /secrets, and gitleaks finds nothing in the tree or its history. Upstream's script, the chart pinned by archive digest: not edited here. Accepts KSV-0109 by id, so on any ConfigMap: re-check it when the chart is moved, and when any other ConfigMap is added. The two KSV-01010 findings on the same script are in security-baseline.json."
+    decided_by: "jodydadescott (tacplus-dev/cluster#30, 2026-11-17)"
+    expires: 2026-12-31

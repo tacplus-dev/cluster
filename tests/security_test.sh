@@ -110,6 +110,10 @@ exceptions "$(entry GO-2026-0001 "$later")"
 passes "an unexpired exception with no finding"
 grep -q 'Exceptions no finding needs' "$work/security/summary.md" && ok "the summary lists an exception no finding needs" ||
   fail "the unused exception: $(cat "$work/security/summary.md")"
+exceptions "$(entry KSV-0109 "$later")"
+passes "an exception for Trivy's config checks, which looper-scan's nightly runs and this job does not"
+grep -q 'KSV-0109' "$work/security/summary.md" && fail "the summary lists KSV-0109 to remove: $(cat "$work/security/summary.md")" ||
+  ok "the summary does not list a config check's exception to remove"
 exceptions "  - id: GO-2026-0001" "    reason: no fix yet" "    expires: $later"
 fails "an exception without decided_by" "needs a reason and who decided"
 exceptions "$(entry GO-2026-0001 "$later")" "    ticket: 12"

@@ -191,8 +191,9 @@ jq -s --argjson exc "$exceptions" --arg today "$today" '
   | sort_by(if .blocking then 0 else 1 end, {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}[.severity] // 4, .tool, .id, .where)' \
   "${norms[@]}" > "$out/findings.json" || { log "the findings could not be read together"; exit 1; }
 
-# Unused exceptions are listed, so that a fixed finding's entry is removed.
-unused=$(jq -r --slurpfile f "$out/findings.json" '.[] | .id as $x
+# Unused exceptions are listed, so that a fixed finding's entry is removed: but not those of Trivy's config checks
+# (KSV-), which looper-scan's nightly runs on the tree and this job does not (#30).
+unused=$(jq -r --slurpfile f "$out/findings.json" '.[] | .id as $x | select($x | startswith("KSV-") | not)
   | select([$f[0][] | select(.id == $x or any(.aliases[]; . == $x))] | length == 0) | .id' <<<"$exceptions")
 blocking=$(jq '[.[] | select(.blocking)] | length' "$out/findings.json")
 {
