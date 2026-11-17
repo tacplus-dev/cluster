@@ -29,3 +29,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-17 looper issue security-exceptions.yaml still accepts CVE-2026-78661 (the CI image's gh): tacplus#350 shipped gh with x/net v0.62.0, in build 2.6.12; drop the entry (#32)
 - 2026-11-17 looper issue GitLab Runner's runner pod runs with a writable root filesystem (values.yaml readOnlyRootFilesystem: false, the chart's default too): KSV-0014 HIGH fails the build's security checks (#29)
 - 2026-11-17 looper issue Security checks: 8 new non-blocking trivy findings on deploymentproxy v0.2.2's manager Deployment (KSV-0125, KSV-0011, KSV-0020, KSV-0021) to fix or baseline (#31)
+- 2026-11-17 looper issue GitLab Runner chart's entrypoint ConfigMap names the secret files it reads (no secret in it): KSV-0109 HIGH fails the build's security checks (#30)
