@@ -1,0 +1,35 @@
+= init
+= thinking_tokens
+= thinking_tokens
+> Bash git status --short && gh issue view 27 --repo tacplus-dev/cluster --comments | tail -40 && gh issue view 173 --repo tacplus-dev/looper --json state,closedAt,title
+< -- author:	tacplus-looper association:	none edited:	false status:	none -- **The looper of cluster: one decision is needed before I change anything here (rule 1).**  The issue asks for three things. Only the first is wholly this repository's:  1. **The mirror (here, no question).** A list of job imag...
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+= thinking_tokens
+> Bash gh issue view 173 --repo tacplus-dev/looper --comments | tail -30; gh issue view 27 --repo tacplus-dev/cluster --json labels
+< association:	none edited:	false status:	none -- The looper of looper starts this issue on `claude-opus-5-5`, the default model. Its limit 4h is capped at 4h by this job (https://gitlab.com/tacplus-dev/looper/-/jobs/18092065618), which ends sooner: the run stops by itself before then, its work checkp...
+= thinking_tokens
+= thinking_tokens
+> Bash gh issue comment 27 --repo tacplus-dev/cluster --body "**The looper of cluster: waiting on the hub's day of evidence. Nothing changed here.**  looper#173 merged and closed at 03:43Z. Its retry of infrastructure failures and its rebuild of a land whose only red jobs were infrastructure are on looper'...
+= task_started
+= task_notification
+< https://github.com/tacplus-dev/cluster/issues/27#issuecomment-6937624366 https://github.com/tacplus-dev/cluster/issues/27 [2026-11-17T03:47:11Z] checkpoint of #27 (a step) pushed to looper/cluster-27:  2 files changed, 185 insertions(+)
+= thinking_tokens
+= thinking_tokens
+Nothing changed in the repository this run. The issue now waits on the hub's day of evidence. I committed nothing, landed nothing, and left the issue open.
+
+- **Why it waits:** looper#173 (retrying build jobs that fail on infrastructure) merged and closed at 03:43Z. Jody's 03:01Z decision says this issue goes ahead only if image pulls still fail after a retry, counted over a day of build jobs. That day hasn't started: the hub still has to copy looper's `ci/build.gitlab-ci.yml` into tacplus-dev/build and unpause the in-cluster build runner.
+- **What I did:** commented on the issue (https://github.com/tacplus-dev/cluster/issues/27#issuecomment-6937624366) asking the hub for one of two outcomes, and added `needs-decision`. There's no open issue I could name as the blocker, so I couldn't mark it `Blocked-by:` instead.
+  - **No timeouts survive a retry:** the hub closes the issue, or lets me close it with their count as the evidence.
+  - **Pulls still fail:** the hub removes `needs-decision` and I do option (b). Here that means a `mirror-images` job and its digest list. I'd also file an issue in cloud for image streaming on both pools and one in looper for pointing job images at the mirror. I asked the hub to post the before-and-after pull times too, since loopers can't see the cluster.
+- **Checkpoint:** saved on `looper/cluster-27` with the same status. It reported "2 files changed, 185 insertions", although my checkout showed no changes at the start of the run. I didn't check which files those were.
+= success: Nothing changed in the repository this run. The issue now waits on the hub's day of evidence. I committed nothing, landed nothing, and left the issue open.
+
+- **Why it waits:** looper#173 (retrying build jobs that fail on infrastructure) merged and closed at 03:43Z. Jody's 03:01Z decision says this issue goes ahead only if image pulls still fail after a retry, counted over a day of build jobs. That day hasn't started: the hub still has to copy looper's `ci/build.gitlab-ci.yml` into tacplus-dev/build and unpause the in-cluster build runner.
+- **What I did:** commented on the issue (https://github.com/tacplus-dev/cluster/issues/27#issuecomment-6937624366) asking the hub for one of two outcomes, and added `needs-decision`. There's no open issue I could name as the blocker, so I couldn't mark it `Blocked-by:` instead.
+  - **No timeouts survive a retry:** the hub closes the issue, or lets me close it with their count as the evidence.
+  - **Pulls still fail:** the hub removes `needs-decision` and I do option (b). Here that means a `mirror-images` job and its digest list. I'd also file an issue in cloud for image streaming on both pools and one in looper for pointing job images at the mirror. I asked the hub to post the before-and-after pull times too, since loopers can't see the cluster.
+- **Checkpoint:** saved on `looper/cluster-27` with the same status. It reported "2 files changed, 185 insertions", although my checkout showed no changes at the start of the run. I didn't check which files those were.
+= usage: {"claude-opus-5-5":{"inputTokens":8,"outputTokens":2375,"cacheReadInputTokens":97261,"cacheCreationInputTokens":18367,"webSearchRequests":0,"costUSD":0.2139202,"contextWindow":1000000,"maxOutputTokens":128000,"thinkingTokens":681,"canonicalModel":"claude-opus-5-5","provider":"firstParty","costBasis":"list"}}
