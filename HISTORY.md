@@ -26,3 +26,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-15 looper issue Pin the build: a committed build.lock naming this repository's build image by digest (#14, c3b62c2; gates: full)
 - 2026-11-15 looper issue deployments.yaml: the test-idp deployment (no operator): operator optional in render.sh and policy (#17)
 - 2026-11-16 looper issue STATE.md's Blocked on line is stale: all six issues it names (#18, #25, cloud#64, #14, #24, looper#84) are closed (#26)
+- 2026-11-17 looper issue security-exceptions.yaml still accepts CVE-2026-78661 (the CI image's gh): tacplus#350 shipped gh with x/net v0.62.0, in build 2.6.12; drop the entry (#32)
