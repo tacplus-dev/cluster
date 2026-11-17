@@ -115,7 +115,12 @@ quotas=$(yq -o=json -I=0 '[.deployments[] | select((.quota // {}) | length > 0) 
     [ -n "$first" ] || echo ---
     first=
     case $f in
-      config/manager/deployment.yaml) IMAGE=$image yq '.spec.template.spec.containers[0].image = strenv(IMAGE)' "$release/$f" ;;
+      # The pod names the image's own user (distroless nonroot, 65532:65532), which the release leaves to the
+      # image, and the container gets a CPU limit, which the release does not set (#31).
+      config/manager/deployment.yaml)
+        IMAGE=$image yq '.spec.template.spec.containers[0].image = strenv(IMAGE) |
+          .spec.template.spec.securityContext.runAsUser = 65532 | .spec.template.spec.securityContext.runAsGroup = 65532 |
+          .spec.template.spec.containers[0].resources.limits.cpu = "500m"' "$release/$f" ;;
       config/manager/configmap.yaml)
         if [ "$quotas" = '{}' ]; then cat "$release/$f"
         else Q=$quotas yq '.data."config.yaml" |= (from_yaml | .quota.deployments = (strenv(Q) | from_json | ... style="") | to_yaml)' "$release/$f"; fi ;;

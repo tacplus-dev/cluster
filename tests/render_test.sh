@@ -4,7 +4,8 @@
 #
 # Tests render.sh against fixtures: tests/fixtures/render/deployments.yaml renders to exactly
 # tests/fixtures/render/out/ (one file for deploymentproxy, one per deployment, one for ci); the images are pinned by
-# digest (deploymentproxy's, and the runners' and their jobs' in ci); ci's RBAC is in ci only; build jobs select and
+# digest (deploymentproxy's, and the runners' and their jobs' in ci); deploymentproxy runs as its image's user,
+# named, and with a CPU limit, the rest of its Deployment the release's; ci's RBAC is in ci only; build jobs select and
 # tolerate the spot pool and control and infra jobs never; each runner's jobs have HOME on an emptyDir;
 # each runner has a read-only root filesystem, its home and config on emptyDirs; each runner's
 # pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
@@ -43,6 +44,16 @@ dp=$work/out/00-deploymentproxy.yaml
 image=$(yq 'select(.kind == "Deployment") | .spec.template.spec.containers[0].image' "$dp")
 [ "$image" = "$(yq '.image' "$here/deploymentproxy/pin.yaml")" ] && [[ $image == *@sha256:* ]] &&
   ok "the image is pinned by tag and digest: $image" || fail "the image is $image"
+# #31: the image's own user (distroless nonroot, 65532:65532) named in the pod, above 10000, and a CPU limit; the
+# rest of the release's Deployment as it is.
+run_as=$(yq 'select(.kind == "Deployment") | .spec.template.spec.securityContext | (.runAsUser | tostring) + ":" + (.runAsGroup | tostring)' "$dp")
+cpu=$(yq 'select(.kind == "Deployment") | .spec.template.spec.containers[0].resources.limits.cpu' "$dp")
+[ "$run_as" = 65532:65532 ] && [ "$cpu" = 500m ] &&
+  ok "deploymentproxy runs as 65532:65532, its CPU limited to 500m" || fail "deploymentproxy runs as [$run_as], CPU limit [$cpu]"
+diff <(yq 'select(.kind == "Deployment") | del(.spec.template.spec.securityContext.runAsUser, .spec.template.spec.securityContext.runAsGroup,
+    .spec.template.spec.containers[0].resources.limits.cpu, .spec.template.spec.containers[0].image)' "$dp") \
+  <(yq 'del(.spec.template.spec.containers[0].image)' "$here/deploymentproxy/release/config/manager/deployment.yaml") >/dev/null &&
+  ok "the rest of deploymentproxy's Deployment is the release's" || fail "the render changed more of the release's Deployment"
 quota=$(yq 'select(.kind == "ConfigMap") | .data."config.yaml" | from_yaml | .quota.deployments | to_json(0)' "$dp")
 [ "$quota" = '{"beta-2":{"pods":"20","requests.cpu":"2"}}' ] &&
   ok "beta-2's quota reaches deploymentproxy's config, alpha's default adds nothing" || fail "quota.deployments is $quota"

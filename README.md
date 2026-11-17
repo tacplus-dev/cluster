@@ -10,7 +10,9 @@ by Jody 2026-11-02).
 
 ## What it manages
 
-- **deploymentproxy:** its namespace, CRDs, ClusterRole and Deployment, pinned to a release line.
+- **deploymentproxy:** its namespace, CRDs, ClusterRole and Deployment, pinned to a release line. The render runs the
+  release's Deployment by its image's digest, as the image's own user named in the pod (65532:65532, above 10000)
+  and with a CPU limit (500m), which the release leaves out (#31); the rest is the release's.
 - **`deployments.yaml`:** one entry per deployment. For each, it applies:
   - the namespace `tac-<deployment>`, labelled `tacplus.dev/deployment=<deployment>`;
   - deploymentproxy's per-deployment Role, if the deployment has an operator;

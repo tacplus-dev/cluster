@@ -200,6 +200,8 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+        runAsUser: 65532
+        runAsGroup: 65532
       containers:
         - name: deploymentproxy
           image: ghcr.io/tacplus-dev/deploymentproxy:0.2.2@sha256:93424cb0de68e32dc9e472dce6f9a4e5db827285b44bb117ce644e90f8d4ea75
@@ -215,6 +217,7 @@ spec:
               memory: 64Mi
             limits:
               memory: 256Mi
+              cpu: 500m
           volumeMounts:
             - name: config
               mountPath: /etc/deploymentproxy
