@@ -171,6 +171,8 @@ the looper then marks it `promoted` or `declined` here with the date.
   tacplus-dev/deploymentproxy README (Releases), tacplus-dev/tacplus#180.
   Update 2026-11-15 (#24): `build.lock` moved to 2.6.12 (its arm64 image scanned clean of fixed HIGH and CRITICAL
   findings); v2.6.13 was published the same day and `build:2.6` is already its digest, so the pin is behind again.
+  Update 2026-11-17 (nightly scan): still on 2.6.12 with v2.6.13 out. That is the right line (2.6, tacplus' newest), so it
+  is no pin-rule finding, and the pinned image has no fixed HIGH or CRITICAL finding (Trivy, linux/arm64).
 - **A nightly build of this repository in tacplus-dev/build** (2026-11-15, #14): since cloud#26 and looper#113,
   tacplus-dev/build builds a commit of this repository from `build.lock` when a land or a `--build` asks for one, and
   its security checks (osv-scanner, semgrep, trivy, gitleaks …, failing on HIGH/CRITICAL) run with it: main 481c74d
@@ -185,6 +187,17 @@ the looper then marks it `promoted` or `declined` here with the date.
   GitLab yet (no runner)" under Known vulnerabilities, and the nightly schedule 4547285's state. A run with the hub's
   answers (or a GitLab token) can rewrite them; cluster#8 (open) also reads as done by #24's move to `build:2.6`.
   Links: #18, #25, #8, #26.
+- **The build's Trivy config scan: vendored releases and the render fixture counted once** (2026-11-17, nightly
+  scan, #28–#31): the build's security checks now scan the Kubernetes manifests too (40 trivy config findings on
+  6c4f82e, after 0 before; tacplus-dev/operator#39–#41 the same night). Two kinds of `where` repeat one cause.
+  First, the vendored upstream releases (`gitlab-runner/release/`, `deploymentproxy/release/`). They are pinned by
+  digest and never edited, and Trivy scans them with upstream's defaults rather than ours: KSV-0015, -0016, -0018,
+  -0030 and -0104 are on the chart's template only, and our render sets each of them. Second, the render fixture
+  (`tests/fixtures/render/out/`) repeats each finding once per rendered deployment. A way for a repository to name
+  its vendored paths (a key in `gates.yaml`, or a `.trivyignore`/skip-dirs that looper-scan reads), so that only
+  the render is scanned, would leave one finding per real cause. That is a looper-scan feature
+  (tacplus-dev/looper#49, #129); `security-baseline.json` is the interim. Links: #28, #29, #30, #31,
+  tacplus-dev/operator#40.
 
 ## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still
