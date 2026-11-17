@@ -79,6 +79,10 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-17 by th
   policy (2026-11-15). The CI image `build:2.6` (2.6.12 since #24, also `gitlab-runner/pin.yaml`'s `job:`, #12): only
   GO-2026-5932 in its gh and docker-buildx, in its entry; #15's CVE-2026-78661 entry went when its gh got x/net v0.62.0 (tacplus-dev/tacplus#350, #32); 2.6.10's six linux-libc-dev CVEs went with the move to 2.6.12 (#24), and #16's zlib1g
   exceptions with 2.6.10, which had the fix. #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
+  Trivy's config checks (looper-scan's nightly, on the tree): KSV-0109 accepted until 2026-12-31 on GitLab Runner chart
+  0.94.3's entrypoint ConfigMap, which names the secret files it reads and holds no secret, and its two KSV-01010 in
+  `security-baseline.json` (#30); re-check both when the chart moves. KSV-0053/KSV-0056 on the RBAC granted by design
+  are #28's.
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
