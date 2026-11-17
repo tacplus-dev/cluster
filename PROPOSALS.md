@@ -206,6 +206,13 @@ the looper then marks it `promoted` or `declined` here with the date.
   MEDIUM and below, and the hub decided no exception for it, so only this feature removes it. The looper-scan of
   #29's run (`tool_trivy` defined but never called) runs no Trivy fs scan at all, which is why the build's report on
   630fc14 has 0 findings; once it runs again, this is the one blocking finding #29 leaves.
+- **deploymentproxy's release naming its user and a CPU limit** (2026-11-17, #31): the render now sets the
+  Deployment's `runAsUser`/`runAsGroup` (65532, the image's distroless `USER`) and a 500m CPU limit, which the
+  release leaves out, so Trivy's KSV-0011, -0020 and -0021 are off the render but stay on `deploymentproxy/release/`
+  (vendored, never edited; the hub's decision on #31 leaves them on the nightly report). A tacplus-dev/deploymentproxy
+  release setting both in `config/manager/deployment.yaml` would clear them there too, and render.sh's override could
+  go at that bump. KSV-0125 (ghcr.io/tacplus-dev not in Trivy's trusted registries) stays either way: the registry is
+  ours. Links: #31, #28.
 
 ## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still
