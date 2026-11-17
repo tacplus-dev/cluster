@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-16 by the looper (#25).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-17 by the looper (#32).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -68,16 +68,15 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-16 by th
   release of its tool: kubectl v1.34.13 (x/net, x/text, otel) and gke-gcloud-auth-plugin 0.5.21 (x/net/html), and
   x/crypto/openpgp (GO-2026-5932) in our runner images. gitleaks, OSV-Scanner, crane and trivy (v0.76.2, x/net v0.62.0
   its own, #23) are built with the fixed modules instead (`ci/tools.sh`, #10, #23): GO-2026-6865 (compress v1.20.2)
-  and GO-2026-6888 (brotli v1.2.7), and gitleaks' xz (v0.5.15), none accepted. 14 accepted until 2026-12-05 (#9, #11, #15), in GitLab
+  and GO-2026-6888 (brotli v1.2.7), and gitleaks' xz (v0.5.15), none accepted.
   Our runner and helper images (#21): only GO-2026-5932 (x/crypto/openpgp, no fixed release), in its
-  entry; #9's, #11's, #15's and #21's 17 entries for upstream's images are gone. CVE-2026-78661 (x/net/html, fixed in
-  v0.62.0) accepted until 2026-12-06 (#15) in the CI image's `gh`, until tacplus-dev/tacplus#350. GO-2026-6859
+  entry; #9's, #11's, #15's and #21's 17 entries for upstream's images are gone. GO-2026-6859
   (net/http, Trivy's CVE-2026-97054) accepted until 2026-11-25 in kubectl v1.34.13 and gke-gcloud-auth-plugin 0.5.21
   only, no release of either with the fix (PROPOSALS.md). Every Go tool `ci/tools.sh` builds, Trivy too since #21,
   is built with go1.27.4. deploymentproxy
   0.2.2's image (#22): only GO-2026-6859 (Trivy's CVE-2026-97054, its go1.27.3), with no severity, so not failing the
-  policy (2026-11-15). The CI image `build:2.6` (2.6.12 since #24, also `gitlab-runner/pin.yaml`'s `job:`, #12): only gh's CVE-2026-78661,
-  accepted above (#15); 2.6.10's six linux-libc-dev CVEs went with the move to 2.6.12 (#24), and #16's zlib1g
+  policy (2026-11-15). The CI image `build:2.6` (2.6.12 since #24, also `gitlab-runner/pin.yaml`'s `job:`, #12): only
+  GO-2026-5932 in its gh and docker-buildx, in its entry; #15's CVE-2026-78661 entry went when its gh got x/net v0.62.0 (tacplus-dev/tacplus#350, #32); 2.6.10's six linux-libc-dev CVEs went with the move to 2.6.12 (#24), and #16's zlib1g
   exceptions with 2.6.10, which had the fix. #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
