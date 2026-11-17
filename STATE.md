@@ -81,8 +81,12 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-17 by th
   exceptions with 2.6.10, which had the fix. #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
   Trivy's config checks (looper-scan's nightly, on the tree): KSV-0109 accepted until 2026-12-31 on GitLab Runner chart
   0.94.3's entrypoint ConfigMap, which names the secret files it reads and holds no secret, and its two KSV-01010 in
-  `security-baseline.json` (#30); re-check both when the chart moves. KSV-0053/KSV-0056 on the RBAC granted by design
-  are #28's.
+  `security-baseline.json` (#30); re-check both when the chart moves. KSV-0053 and KSV-0056 accepted until 2026-12-31
+  on the RBAC granted by design (#28): the runners' `gitlab-runner-*` (exec, attach, services), `fleet-deploy`
+  (services, networkpolicies) and deploymentproxy's ClusterRole (networkpolicies delete). The entries match by id, so
+  `ci/grants.sh` (`tests/grants_test.sh`) fails any other Role granting them, until tacplus-dev/looper#182 scopes
+  them by file; their KSV-0048, -0049 and -0113 in `security-baseline.json`. KSV-0014 on the chart's template still
+  blocks the nightly (#29, PROPOSALS.md).
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
