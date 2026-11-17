@@ -390,7 +390,7 @@ spec:
               drop:
                 - ALL
             privileged: false
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true
             runAsNonRoot: true
           lifecycle:
             preStop:
@@ -434,6 +434,8 @@ spec:
               mountPath: /home/gitlab-runner/.gitlab-runner
             - name: configmaps
               mountPath: /configmaps
+            - mountPath: /home/gitlab-runner
+              name: home
           resources:
             limits:
               memory: 512Mi
@@ -460,6 +462,8 @@ spec:
         - name: configmaps
           configMap:
             name: gitlab-runner-build
+        - emptyDir: {}
+          name: home
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -787,7 +791,7 @@ spec:
               drop:
                 - ALL
             privileged: false
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true
             runAsNonRoot: true
           lifecycle:
             preStop:
@@ -831,6 +835,8 @@ spec:
               mountPath: /home/gitlab-runner/.gitlab-runner
             - name: configmaps
               mountPath: /configmaps
+            - mountPath: /home/gitlab-runner
+              name: home
           resources:
             limits:
               memory: 512Mi
@@ -857,6 +863,8 @@ spec:
         - name: configmaps
           configMap:
             name: gitlab-runner-control
+        - emptyDir: {}
+          name: home
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -1184,7 +1192,7 @@ spec:
               drop:
                 - ALL
             privileged: false
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true
             runAsNonRoot: true
           lifecycle:
             preStop:
@@ -1228,6 +1236,8 @@ spec:
               mountPath: /home/gitlab-runner/.gitlab-runner
             - name: configmaps
               mountPath: /configmaps
+            - mountPath: /home/gitlab-runner
+              name: home
           resources:
             limits:
               memory: 512Mi
@@ -1254,6 +1264,8 @@ spec:
         - name: configmaps
           configMap:
             name: gitlab-runner-infra
+        - emptyDir: {}
+          name: home
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

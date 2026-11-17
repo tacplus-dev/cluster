@@ -200,6 +200,12 @@ the looper then marks it `promoted` or `declined` here with the date.
   the render is scanned, would leave one finding per real cause. That is a looper-scan feature
   (tacplus-dev/looper#49, #129); `security-baseline.json` is the interim. Links: #28, #29, #30, #31,
   tacplus-dev/operator#40.
+  Update 2026-11-17 (#29): the render's runners have a read-only root filesystem now, so KSV-0014 is gone from
+  `tests/fixtures/render/out/20-ci.yaml` (`trivy fs --scanners misconfig` on the tree). It stays on
+  `gitlab-runner/release/templates/deployment.yaml`, the chart's defaults, a HIGH finding: a baseline takes only
+  MEDIUM and below, and the hub decided no exception for it, so only this feature removes it. The looper-scan of
+  #29's run (`tool_trivy` defined but never called) runs no Trivy fs scan at all, which is why the build's report on
+  630fc14 has 0 findings; once it runs again, this is the one blocking finding #29 leaves.
 
 ## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still

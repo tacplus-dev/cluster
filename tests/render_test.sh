@@ -5,7 +5,8 @@
 # Tests render.sh against fixtures: tests/fixtures/render/deployments.yaml renders to exactly
 # tests/fixtures/render/out/ (one file for deploymentproxy, one per deployment, one for ci); the images are pinned by
 # digest (deploymentproxy's, and the runners' and their jobs' in ci); ci's RBAC is in ci only; build jobs select and
-# tolerate the spot pool and control and infra jobs never; each runner's jobs have HOME on an emptyDir; each runner's
+# tolerate the spot pool and control and infra jobs never; each runner's jobs have HOME on an emptyDir;
+# each runner has a read-only root filesystem, its home and config on emptyDirs; each runner's
 # pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
 # is protected refs only, and no other runner is;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
@@ -78,6 +79,17 @@ for r in build control infra; do
   [ -n "$home" ] && [ "$home" != / ] &&
     [ "$(H=$home runner_toml $r '[(.volumes.empty_dir // [])[] | select(.mount_path == strenv(H))] | length')" = 1 ] &&
     ok "$r jobs have HOME=$home, an emptyDir" || fail "$r jobs' HOME is [$home], or no emptyDir is mounted there"
+done
+# Each runner's own container has a read-only root filesystem (#29: KSV-0014); where GitLab Runner writes, its home
+# (its working directory) and its config under it, is an emptyDir.
+pod() { R=$r yq "select(.kind == \"Deployment\" and .metadata.name == \"gitlab-runner-\" + strenv(R)) | .spec.template.spec | $1" "$ci"; }
+emptydir() { local v; v=$(pod ".containers[0].volumeMounts[] | select(.mountPath == \"$1\") | .name")
+  [ -n "$v" ] && [ "$(pod ".volumes[] | select(.name == \"$v\" and has(\"emptyDir\")) | .name")" = "$v" ] && echo 1 || echo 0; }
+for r in build control infra; do
+  [ "$(pod '.containers[0].securityContext.readOnlyRootFilesystem')" = true ] &&
+    [ "$(emptydir /home/gitlab-runner)" = 1 ] && [ "$(emptydir /home/gitlab-runner/.gitlab-runner)" = 1 ] &&
+    ok "$r's runner has a read-only root filesystem, its home and config on emptyDirs" ||
+    fail "$r's runner: readOnlyRootFilesystem [$(pod '.containers[0].securityContext.readOnlyRootFilesystem')], home [$(emptydir /home/gitlab-runner)], config [$(emptydir /home/gitlab-runner/.gitlab-runner)]"
 done
 [ "$(yq ea '[select(.kind == "Deployment") | .spec.template.metadata.annotations."tacplus.dev/runner-token"] | join(" ")' "$ci")" = \
   "$(yq '.tacplus.token' "$here/gitlab-runner/runners/build.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/control.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/infra.yaml")" ] &&

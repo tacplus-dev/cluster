@@ -43,13 +43,22 @@ podSecurityContext:
   fsGroup: 65533
   seccompProfile:
     type: RuntimeDefault
+# A read-only root filesystem (#29): GitLab Runner writes only its config, /home/gitlab-runner/.gitlab-runner (the
+# chart's emptyDir etc-gitlab-runner), and its home, /home/gitlab-runner (its --working-directory), the emptyDir
+# below; fsGroup makes both writable by its uid.
 securityContext:
   allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: false
+  readOnlyRootFilesystem: true
   runAsNonRoot: true
   privileged: false
   capabilities:
     drop: ["ALL"]
+volumes:
+  - name: home
+    emptyDir: {}
+volumeMounts:
+  - name: home
+    mountPath: /home/gitlab-runner
 resources:
   requests:
     cpu: 50m
