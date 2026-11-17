@@ -28,7 +28,11 @@
 #
 # Trivy's config checks (looper-scan's nightly, on the tree): KSV-0109 is a false positive on GitLab Runner chart
 # 0.94.3's entrypoint ConfigMap, which names the secret files it reads and holds no secret (#30); its two KSV-01010
-# findings, MEDIUM, are in security-baseline.json. Re-check both when the chart is moved.
+# findings, MEDIUM, are in security-baseline.json. Re-check both when the chart is moved. KSV-0053 and KSV-0056 are
+# the RBAC this repository grants by design (#28): looper-scan matches an entry by id alone, so on any Role, and
+# ci/grants.sh (tests/grants_test.sh, in ci/checks.sh) holds them to the Roles their reasons name, each on the
+# resources it has today. Once an exception takes a `where` (tacplus-dev/looper#182), they become one entry per file
+# and the guard goes. The MEDIUM KSV-0048, KSV-0049 and KSV-0113 on the same Roles are in security-baseline.json.
 exceptions:
   - id: GO-2026-5158
     reason: "otel baggage header length (kubectl v1.34.13, otel v1.41.0): kubectl takes no baggage header from anyone but the cluster's API server, over TLS. Fixed in otel v1.42.0; no kubectl 1.34 release with it yet."
@@ -77,4 +81,12 @@ exceptions:
   - id: KSV-0109
     reason: "Trivy's ConfigMap with secrets, a false positive on GitLab Runner chart 0.94.3's entrypoint ConfigMap (gitlab-runner/release/templates/configmap.yaml, rendered in out/20-ci.yaml): its script names the files under /secrets it reads and the variables it exports from them (CI_SERVER_TOKEN, CACHE_S3_SECRET_KEY), and holds no secret; the tokens come from Secret Manager at apply time (ci/runner-tokens.sh) into a Secret projected on /secrets, and gitleaks finds nothing in the tree or its history. Upstream's script, the chart pinned by archive digest: not edited here. Accepts KSV-0109 by id, so on any ConfigMap: re-check it when the chart is moved, and when any other ConfigMap is added. The two KSV-01010 findings on the same script are in security-baseline.json."
     decided_by: "jodydadescott (tacplus-dev/cluster#30, 2026-11-17)"
+    expires: 2026-12-31
+  - id: KSV-0053
+    reason: "Trivy's exec into pods, by design on the runners' Roles only: gitlab-runner-build, gitlab-runner-control and gitlab-runner-infra in ci (gitlab-runner/values.yaml rbac.rules, rendered in out/20-ci.yaml) grant pods/exec and pods/attach because GitLab's Kubernetes executor runs a job's script by attaching and exec-ing into the job pod it creates; without them no job runs. The Roles are in ci alone, on its job pods, which run as ci-job without a token. Accepts KSV-0053 by id, so on any Role: ci/grants.sh (in ci/checks.sh) fails any other Role or ClusterRole granting pods/exec or pods/attach, until the entry can be scoped by file (tacplus-dev/looper#182)."
+    decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17)"
+    expires: 2026-12-31
+  - id: KSV-0056
+    reason: "Trivy's manage Kubernetes networking, by design on three grants only: the runners' Roles gitlab-runner-* in ci (services create and get: the Kubernetes executor's job services; out/20-ci.yaml); each deployment's Role fleet-deploy in its own tac-<name> namespace (services, networkpolicies; endpoints read only: what the fleet's helm release ships there; render.sh, out/10-deployment-<name>.yaml); and deploymentproxy's ClusterRole (networkpolicies, delete only: to remove those earlier versions kept in tenant namespaces, #14; deploymentproxy/release/config/rbac/cluster_role.yaml, upstream v0.2.2 pinned by checksum, rendered in out/00-deploymentproxy.yaml), a rule that can go upstream once no tenant namespace holds one. Accepts KSV-0056 by id, so on any Role: ci/grants.sh (in ci/checks.sh) fails any other Role or ClusterRole granting services, endpoints, endpointslices, networkpolicies or ingresses, and these three any more of them, until the entry can be scoped by file (tacplus-dev/looper#182)."
+    decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17)"
     expires: 2026-12-31

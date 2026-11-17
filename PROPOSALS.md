@@ -213,6 +213,12 @@ the looper then marks it `promoted` or `declined` here with the date.
   release setting both in `config/manager/deployment.yaml` would clear them there too, and render.sh's override could
   go at that bump. KSV-0125 (ghcr.io/tacplus-dev not in Trivy's trusted registries) stays either way: the registry is
   ours. Links: #31, #28.
+- **deploymentproxy's ClusterRole without `networkpolicies: [delete]`** (2026-11-17, #28): the rule is there only to
+  remove the NetworkPolicies releases before #14 kept in tenant namespaces; it is one of the three grants
+  `security-exceptions.yaml`'s KSV-0056 entry and `ci/grants.sh` accept. Once no tenant namespace holds one (`kubectl
+  get networkpolicies -A -l` deploymentproxy's owner label, empty), a tacplus-dev/deploymentproxy release could drop
+  it, and `deploymentproxy/bump.sh` to it would take its line out of `ci/grants.sh` and the entry's reason. No
+  deploymentproxy issue asks for it yet. Links: #28, #14, tacplus-dev/looper#182 (the entries per file).
 
 ## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still

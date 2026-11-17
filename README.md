@@ -45,10 +45,10 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `gitlab-runner/runners/<runner>.yaml` | One runner each (`build`, `control`, `infra`): its tags, whether it takes protected refs only, its token's Secret Manager version, its jobs' `config.toml`. |
 | `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
-| `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools). |
+| `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools); `grants.sh`, the scope of the KSV-0053 and KSV-0056 exceptions (Security checks, below). |
 | `build.lock`, `gates.yaml` | The build image by digest (the CI image), and the gates run in it (How a change reaches the cluster, below). |
 | `security-exceptions.yaml` | The security findings accepted, each until its expiry (Security checks, below). |
-| `security-baseline.json` | The MEDIUM and LOW findings looper-scan's nightly takes as baselined, not new (`looper-scan baseline` writes it): the GitLab Runner chart's entrypoint ConfigMap, KSV-01010 (#30). |
+| `security-baseline.json` | The MEDIUM and LOW findings looper-scan's nightly takes as baselined, not new (`looper-scan baseline` writes it): the GitLab Runner chart's entrypoint ConfigMap, KSV-01010 (#30); the RBAC granted by design, KSV-0048, KSV-0049 and KSV-0113 (#28). |
 | `tests/` | The tests (`ci/checks.sh` runs them all), their fixtures and stubs. |
 
 ## How it runs
@@ -394,7 +394,12 @@ exceptions:
 ```
 
 Exactly those fields, which looper-scan reads too. The summary lists the entries no finding needs any more, to
-remove (but not those of Trivy's config checks, `KSV-`: looper-scan's nightly runs them on the tree, this job does not; #30). **The report:** the job's artifact `src/security/`, kept 30 days, pass or fail: `findings.json` (every
+remove (but not those of Trivy's config checks, `KSV-`: looper-scan's nightly runs them on the tree, this job does not; #30). Trivy's KSV-0053 (exec into pods) and KSV-0056 (manage networking) are
+accepted for the RBAC this repository grants by design (#28): the runners' `gitlab-runner-*` (`pods/exec`,
+`pods/attach`, `services`), each deployment's `fleet-deploy` (`services`, `endpoints`, `networkpolicies`) and
+deploymentproxy's ClusterRole (`networkpolicies`, delete only). An entry matches by id alone, so on any Role:
+`ci/grants.sh` (`tests/grants_test.sh`) fails any other Role or ClusterRole in the tree granting them, and those three
+any more of them, until an exception can be scoped by file (tacplus-dev/looper#182). **The report:** the job's artifact `src/security/`, kept 30 days, pass or fail: `findings.json` (every
 finding: tool, id, aliases, severity, fix, where, and whether an exception accepts it or it fails the job),
 `summary.md` (also in the job's log), `verdict`, and `raw/`, each tool's own JSON. `tests/security_test.sh` tests the
 job: a planted secret, in the tree or the history only, fails it; an expired exception fails it; a clean tree passes.
