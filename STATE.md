@@ -32,7 +32,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-17 by th
   the three infrastructure pipelines', protected refs only (`tacplus.protected`, on every runner's pods as
   `tacplus.dev/runner-protected`), the normal pool as control, no token in the pod; the policy admits those three tags
   to `infra` alone, refuses it any other tag and an `infra` not protected), per-runner requests, limits and ceilings; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
-  the job image, and `git config --global` failed on `//.gitconfig`); Roles in `ci` only; jobs as `ci-job`
+  the job image, and `git config --global` failed on `//.gitconfig`); each runner's own container on a read-only root
+  filesystem, its home and config on emptyDirs (#29: KSV-0014; not yet seen running in the cluster); Roles in `ci` only; jobs as `ci-job`
   with no token, kept off the metadata server (NetworkPolicy); the admission policy `ci-pods` refusing privileged,
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
   1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
