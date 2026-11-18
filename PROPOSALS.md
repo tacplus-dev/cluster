@@ -206,6 +206,10 @@ the looper then marks it `promoted` or `declined` here with the date.
   MEDIUM and below, and the hub decided no exception for it, so only this feature removes it. The looper-scan of
   #29's run (`tool_trivy` defined but never called) runs no Trivy fs scan at all, which is why the build's report on
   630fc14 has 0 findings; once it runs again, this is the one blocking finding #29 leaves.
+  Update 2026-11-18 (nightly scan): it runs again, and KSV-0014 on the chart's template fails main's nightly (#33);
+  the 18 MEDIUM/LOW the vendored templates and the render add are #34. tacplus-dev/looper#182 (closed 2026-11-17)
+  lets an exception take a `where`, so a scoped entry is now an interim the hub can decide (#33); no
+  tacplus-dev/looper issue or roadmap entry asks for skipping vendored paths yet.
 - **deploymentproxy's release naming its user and a CPU limit** (2026-11-17, #31): the render now sets the
   Deployment's `runAsUser`/`runAsGroup` (65532, the image's distroless `USER`) and a 500m CPU limit, which the
   release leaves out, so Trivy's KSV-0011, -0020 and -0021 are off the render but stay on `deploymentproxy/release/`
