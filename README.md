@@ -236,8 +236,16 @@ The chart is pinned by the SHA-256 of its archive, and the runner, helper and de
 | Runner | Tags | Its jobs' pods | Default requests / limits | Ceiling a job may raise them to |
 |---|---|---|---|---|
 | `build` | `arm64`, `build` | the spot pool only: node selector `spot=true`, toleration `spot=true:NoSchedule` | CPU 1 / 3, memory 4Gi / 8Gi | CPU 3500m, memory 12Gi (a c4a-standard-4) |
-| `control` | `arm64`, `control` (the looper's kicker, reports, managers, scans) | the normal pool: no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 250m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
+| `control` | `arm64`, `control` (the looper's kicker, reports, managers, scans) | the normal pool: no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 100m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
 | `infra` | `cloud`, `cluster`, `deploy` (tacplus-dev/cloud's, this pipeline, fleet-seatrials' deploy), **protected refs only** | the normal pool, as `control` | CPU 500m / 1500m, memory 1Gi / 4Gi | CPU 1500m, memory 4Gi |
+
+**How many jobs at once** (`concurrent`): `build` 6 and `infra` 4, fixed; `control` as many as the normal pool has
+room for (`concurrent: pool`, #36), which `render.sh` counts from `gitlab-runner/pool.yaml` (its nodes, a node's
+allocatable, a reserve for kube-system and the deployments' pods) less every runner manager, deploymentproxy and
+`infra`'s jobs at their full concurrent, by each job pod's default requests (job and helper) in CPU and memory:
+14 today, CPU the bound. The render refuses runners the pool cannot hold. `control`'s defaults are its largest
+kind's, a report's (tacplus-dev/looper#165), so the count holds for every looper job; a job that raises its own is
+not counted. A larger pool, or a measured reserve, is a change to `gitlab-runner/pool.yaml`, and the count follows.
 
 A job raises its own with GitLab's variables (`KUBERNETES_CPU_REQUEST`, `KUBERNETES_MEMORY_LIMIT` and the rest) up
 to the ceiling; the helper container has its own small defaults. It may override nothing else: not its node

@@ -83,7 +83,7 @@ spec:
       matchLabels:
         kubernetes.io/metadata.name: ci
 ---
-# The runner build (gitlab-runner/runners/build.yaml), tags arm64, build: GitLab Runner's chart 0.94.3.
+# The runner build (gitlab-runner/runners/build.yaml), tags arm64, build, concurrent 6: GitLab Runner's chart 0.94.3.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -486,7 +486,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control: GitLab Runner's chart 0.94.3.
+# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 14, the normal pool's room (gitlab-runner/pool.yaml): GitLab Runner's chart 0.94.3.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -562,7 +562,7 @@ data:
       --working-directory=/home/gitlab-runner
   config.toml: |
     shutdown_timeout = 0
-    concurrent = 8
+    concurrent = 14
     check_interval = 3
     log_level = "info"
   config.template.toml: |
@@ -579,7 +579,7 @@ data:
         privileged = false
         allow_privilege_escalation = false
         poll_timeout = 600
-        cpu_request = "250m"
+        cpu_request = "100m"
         cpu_limit = "1"
         memory_request = "512Mi"
         memory_limit = "2Gi"
@@ -768,7 +768,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: 4bee92ffd35473b51634e397ad6211f66a80038deeb50f3a3cad2b9143b9b124
+        checksum/configmap: 832cf86710d345e3611928afd3a68428a4702d04e70289775a78c538529f2267
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
@@ -888,7 +888,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner infra (gitlab-runner/runners/infra.yaml), tags cloud, cluster, deploy, protected refs only: GitLab Runner's chart 0.94.3.
+# The runner infra (gitlab-runner/runners/infra.yaml), tags cloud, cluster, deploy, protected refs only, concurrent 4: GitLab Runner's chart 0.94.3.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount

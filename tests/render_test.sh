@@ -9,7 +9,9 @@
 # tolerate the spot pool and control and infra jobs never; each runner's jobs have HOME on an emptyDir;
 # each runner has a CPU limit and a read-only root filesystem, its home and config on emptyDirs; each runner's
 # pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
-# is protected refs only, and no other runner is;
+# is protected refs only, and no other runner is; control's concurrent is the normal pool's room
+# (gitlab-runner/pool.yaml), CPU or memory the bound, and runners the pool cannot hold, a second runner on its room,
+# one off the normal pool on it, or a quantity it cannot read, are refused;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
 # is; deployments.yaml itself renders and passes ci/policy.sh, test-idp with its namespace and deploy Role only; a
 # deployment without an operator has no deploymentproxy Role and no operator binding; a removed entry renders
@@ -203,6 +205,48 @@ refused_runner "its own security context" '.securityContext.privileged = true' "
 refused_runner "its own RBAC" '.rbac.clusterWideAccess = true' "sets rbac, which only"
 refused_runner "its own image" '.runners.image = "alpine"' "sets runners.image, which only"
 refused_runner "no config" 'del(.runners.config)' "no runners.config"
+
+# The normal pool's room (#36): control's concurrent is what gitlab-runner/pool.yaml leaves for its jobs' pods (their
+# default requests, job and helper) once the reserve, every runner manager, deploymentproxy and infra's jobs at its
+# full concurrent are counted, CPU and memory both; never a fixed number.
+concurrent() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.toml"' "$2" |
+  sed -n 's/^ *concurrent = //p'; }
+# 3 x 1930m - 1200m - 3 x 50m (managers) - 50m (deploymentproxy) - 4 x 550m (infra) = 2190m, 14 pods of 150m; memory
+# 3 x 6144Mi - 3Gi - 3 x 128Mi - 64Mi - 4 x 1088Mi = 10560Mi, 18 of 576Mi.
+[ "$(concurrent control "$ci")" = 14 ] && [ "$(concurrent infra "$ci")" = 4 ] &&
+  grep -q '^# The runner control .*concurrent 14, the normal pool.s room' "$ci" &&
+  ok "control's concurrent is the normal pool's room for its jobs (14), infra's its own (4)" ||
+  fail "concurrent: control [$(concurrent control "$ci")], infra [$(concurrent infra "$ci")]"
+# pooled NAME YQ WANT: control's concurrent with gitlab-runner/pool.yaml changed by YQ is WANT, or render.sh refuses it
+# saying WANT.
+pooled() {
+  rm -rf "$work/bad" && yq "$2" "$here/gitlab-runner/pool.yaml" > "$work/pool.yaml"
+  if POOL=$work/pool.yaml "$here/render.sh" "$fixtures/deployments.yaml" "$work/bad" > "$work/log" 2>&1; then
+    [ "$(concurrent control "$work/bad/20-ci.yaml")" = "$3" ] && ok "pool: $1: control's concurrent is $3" ||
+      fail "pool: $1: control's concurrent is [$(concurrent control "$work/bad/20-ci.yaml")], not $3"
+  else
+    grep -q -- "$3" "$work/log" && ok "pool: refused: $1" || fail "pool: $1: $(cat "$work/log")"
+  fi
+}
+pooled "two nodes, CPU the bound" '.nodes = 2' 1
+pooled "4Gi nodes, memory the bound" '.allocatable.memory = "4Gi"' 7
+pooled "a larger reserve" '.reserved.cpu = "1500m"' 12
+pooled "no room for one job" '.reserved.cpu = "3300m"' "the normal pool has no room for one job of control"
+pooled "a quantity it cannot read" '.reserved.cpu = "1.5"' "gitlab-runner/pool.yaml: reserved.cpu \[1.5\] is not"
+# pool_runner NAME YQ WANT: render.sh refuses the runner files changed by YQ (on control.yaml, then infra.yaml), saying WANT.
+pool_runner() {
+  rm -rf "$work/runners" "$work/bad" && cp -R "$here/gitlab-runner/runners" "$work/runners"
+  yq -i "$2" "$work/runners/control.yaml"; yq -i "$3" "$work/runners/infra.yaml"
+  if RUNNERS=$work/runners "$here/render.sh" "$fixtures/deployments.yaml" "$work/bad" > "$work/log" 2>&1; then
+    fail "pool: $1: rendered"
+  else
+    grep -q -- "$4" "$work/log" && ok "pool: refused: $1" || fail "pool: $1: the refusal does not say [$4]: $(cat "$work/log")"
+  fi
+}
+pool_runner "two runners on the pool's room" '.' '.concurrent = "pool"' "runner infra: concurrent pool, as control: one runner only"
+pool_runner "fixed runners overfilling the pool" '.concurrent = 8' '.concurrent = 9' "the normal pool has no room for its runners' jobs"
+refused_runner "the pool's room off the normal pool" '.concurrent = "pool"' "runner build: concurrent pool, but its jobs are not on the normal pool"
+refused_runner "concurrent neither a number nor pool" '.concurrent = "many"' "concurrent is not 1 to 99, nor pool"
 
 # refused NAME YAML WANT: render.sh refuses deployments.yaml YAML, saying WANT, and writes nothing.
 refused() {

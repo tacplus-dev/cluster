@@ -18,7 +18,8 @@
 #                                   the chart (gitlab-runner/release, checked against its SHA256SUMS) rendered with
 #                                   gitlab-runner/values.yaml, the runner's file and the images of
 #                                   gitlab-runner/pin.yaml, its token's Secret Manager version, its tags and whether
-#                                   it takes protected refs only on its pods
+#                                   it takes protected refs only on its pods, and its concurrent (the normal pool's
+#                                   room for the one that says pool: gitlab-runner/pool.yaml)
 #
 # A removed entry renders nothing, and the apply never deletes (ci/apply.sh). Every entry is checked before
 # anything is written; a bad one is refused with what is wrong.
@@ -72,8 +73,8 @@ for ((i = 0; i < n; i++)); do
 done
 
 # The runners (gitlab-runner/runners/<runner>.yaml): each sets only its tags, whether it takes protected refs only
-# (tacplus.protected, false unless said), its token's version, its concurrency, its name and its config.toml; the
-# rest is gitlab-runner/values.yaml's, for every runner alike.
+# (tacplus.protected, false unless said), its token's version, its concurrency (1 to 99, or `pool`: the normal pool's
+# room, below), its name and its config.toml; the rest is gitlab-runner/values.yaml's, for every runner alike.
 runners_dir=${RUNNERS:-$here/gitlab-runner/runners}
 runners=()
 for f in "$runners_dir"/*.yaml; do
@@ -92,11 +93,81 @@ for f in "$runners_dir"/*.yaml; do
   token=$(yq '.tacplus.token // ""' "$f")
   [[ $token =~ ^projects/[a-z][a-z0-9-]{4,28}[a-z0-9]/secrets/[A-Za-z0-9_-]{1,255}/versions/[1-9][0-9]*$ ]] ||
     die "runner $r: tacplus.token [$token] is not a Secret Manager version (projects/<project>/secrets/<secret>/versions/<number>, never latest)"
-  [[ $(yq '.concurrent // ""' "$f") =~ ^[1-9][0-9]?$ ]] || die "runner $r: concurrent is not 1 to 99"
+  [[ $(yq '.concurrent // ""' "$f") =~ ^([1-9][0-9]?|pool)$ ]] || die "runner $r: concurrent is not 1 to 99, nor pool"
   [ "$(yq '.runners.config | tag' "$f")" = '!!str' ] || die "runner $r: no runners.config"
   runners+=("$r")
 done
 [ ${#runners[@]} -gt 0 ] || die "no runner in $runners_dir"
+
+# The normal pool's room (gitlab-runner/pool.yaml, #36): what its nodes can allocate, less the reserve, every runner
+# manager (all on the normal pool), deploymentproxy and every normal-pool runner's jobs at its fixed concurrent; the
+# runner that says `concurrent: pool` takes as many jobs as fit in the rest, CPU and memory both. A job's pod is its
+# runner's default requests, its job container's and its helper's.
+pool=${POOL:-$here/gitlab-runner/pool.yaml}
+[ -f "$pool" ] || die "no $pool"
+# quantity WHAT VALUE UNIT: VALUE (CPU as 1930m or 2, memory as 512Mi or 4Gi) in millicores or MiB.
+quantity() {
+  case $3:$2 in
+    m:[0-9]*m) [[ ${2%m} =~ ^[0-9]+$ ]] && echo "${2%m}" && return ;;
+    m:[0-9]*) [[ $2 =~ ^[0-9]+$ ]] && echo $(($2 * 1000)) && return ;;
+    Mi:[0-9]*Mi) [[ ${2%Mi} =~ ^[0-9]+$ ]] && echo "${2%Mi}" && return ;;
+    Mi:[0-9]*Gi) [[ ${2%Gi} =~ ^[0-9]+$ ]] && echo $((${2%Gi} * 1024)) && return ;;
+  esac
+  die "$1 [$2] is not $([ "$3" = m ] && echo "a CPU quantity (1930m, 2)" || echo "a memory quantity (512Mi, 4Gi)")"
+}
+pool_q() { quantity "gitlab-runner/pool.yaml: $1" "$(yq ".$1 // \"\"" "$pool")" "$2"; }
+nodes=$(yq '.nodes // ""' "$pool")
+[[ $nodes =~ ^[1-9][0-9]*$ ]] || die "gitlab-runner/pool.yaml: nodes [$nodes] is not a number of nodes"
+# One substitution per assignment, so a refusal stops the render (set -e).
+node_cpu=$(pool_q allocatable.cpu m)
+node_mem=$(pool_q allocatable.memory Mi)
+reserved_cpu=$(pool_q reserved.cpu m)
+reserved_mem=$(pool_q reserved.memory Mi)
+values=$here/gitlab-runner/values.yaml
+manager_cpu=$(quantity "gitlab-runner/values.yaml: resources.requests.cpu" "$(yq '.resources.requests.cpu // ""' "$values")" m)
+manager_mem=$(quantity "gitlab-runner/values.yaml: resources.requests.memory" "$(yq '.resources.requests.memory // ""' "$values")" Mi)
+free_cpu=$((nodes * node_cpu - reserved_cpu - ${#runners[@]} * manager_cpu))
+free_mem=$((nodes * node_mem - reserved_mem - ${#runners[@]} * manager_mem))
+dp=$release/config/manager/deployment.yaml
+replicas=$(yq 'select(.kind == "Deployment") | .spec.replicas // 1' "$dp")
+while IFS='|' read -r c cpu mem; do
+  cpu=$(quantity "deploymentproxy's $c: requests.cpu" "$cpu" m)
+  mem=$(quantity "deploymentproxy's $c: requests.memory" "$mem" Mi)
+  free_cpu=$((free_cpu - replicas * cpu)) free_mem=$((free_mem - replicas * mem))
+done < <(yq -N 'select(.kind == "Deployment") | .spec.template.spec.containers[] | .name + "|" + (.resources.requests.cpu // "0") + "|" + (.resources.requests.memory // "0Mi")' "$dp")
+declare -A concurrent=()
+pooled= pod_cpu=0 pod_mem=0
+for r in "${runners[@]}"; do
+  f=$runners_dir/$r.yaml
+  k=$(yq '.runners.config' "$f" | yq -p toml -o json -I=0 '.runners[0].kubernetes // {}') || die "runner $r: runners.config is not TOML"
+  c=$(yq '.concurrent' "$f")
+  # The spot pool's runner (its jobs select spot) takes nothing of the normal pool's but its manager.
+  if [ "$(yq -p json '(.node_selector // {}) | has("spot")' <<<"$k")" = true ]; then
+    [ "$c" != pool ] || die "runner $r: concurrent pool, but its jobs are not on the normal pool"
+    concurrent[$r]=$c; continue
+  fi
+  q() { quantity "runner $r: $1" "$(yq -p json ".$1 // \"\"" <<<"$k")" "$2"; }
+  job_cpu=$(q cpu_request m)
+  helper_cpu=$(q helper_cpu_request m)
+  job_mem=$(q memory_request Mi)
+  helper_mem=$(q helper_memory_request Mi)
+  cpu=$((job_cpu + helper_cpu)) mem=$((job_mem + helper_mem))
+  if [ "$c" = pool ]; then
+    [ -z "$pooled" ] || die "runner $r: concurrent pool, as $pooled: one runner only takes the pool's room"
+    pooled=$r pod_cpu=$cpu pod_mem=$mem
+  else
+    concurrent[$r]=$c
+    free_cpu=$((free_cpu - c * cpu)) free_mem=$((free_mem - c * mem))
+  fi
+done
+[ "$free_cpu" -ge 0 ] && [ "$free_mem" -ge 0 ] ||
+  die "the normal pool has no room for its runners' jobs: ${free_cpu}m CPU and ${free_mem}Mi memory left (gitlab-runner/pool.yaml)"
+if [ -n "$pooled" ]; then
+  c=$((free_cpu / pod_cpu < free_mem / pod_mem ? free_cpu / pod_cpu : free_mem / pod_mem))
+  [ "$c" -le 99 ] || c=99
+  [ "$c" -ge 1 ] || die "the normal pool has no room for one job of $pooled (${pod_cpu}m, ${pod_mem}Mi): ${free_cpu}m CPU and ${free_mem}Mi memory left (gitlab-runner/pool.yaml)"
+  concurrent[$pooled]=$c
+fi
 
 mkdir -p "$out"
 rm -f "$out"/*.yaml
@@ -323,12 +394,12 @@ spec:
 EOF
   for r in "${runners[@]}"; do
     f=$runners_dir/$r.yaml
-    # The images, the token's Secret and its version, the tags and the protection on the pods: render.sh's, never the
-    # runner file's.
+    # The images, the token's Secret and its version, the tags and the protection on the pods, and the concurrent it
+    # counted: render.sh's, never the runner file's.
     protected=$(yq '.tacplus.protected // false' "$f")
     R=$r TOKEN=$(yq '.tacplus.token' "$f") TAGS=$(yq '.tacplus.tags | join(",")' "$f") PROTECTED=$protected \
-      JOB=$(yq -e '.job' "$runner_pin") HELPER=$(yq -e '.helper' "$runner_pin") yq -n '
-      .pinned.job = strenv(JOB) | .pinned.helper = strenv(HELPER) |
+      JOB=$(yq -e '.job' "$runner_pin") HELPER=$(yq -e '.helper' "$runner_pin") CONCURRENT=${concurrent[$r]} yq -n '
+      .pinned.job = strenv(JOB) | .pinned.helper = strenv(HELPER) | .concurrent = (strenv(CONCURRENT) | to_number) |
       .runners.secret = "gitlab-runner-" + strenv(R) |
       .podLabels."tacplus.dev/ci-runner" = strenv(R) |
       .podAnnotations."tacplus.dev/runner-token-secret" = "gitlab-runner-" + strenv(R) |
@@ -342,7 +413,7 @@ EOF
     [ "$upstream" = "registry.gitlab.com/gitlab-org/gitlab-runner:alpine-v$app" ] ||
       die "runner $r: the chart's Deployment runs $upstream, not its appVersion $app"
     echo ---
-    echo "# The runner $r (gitlab-runner/runners/$r.yaml), tags $(yq '.tacplus.tags | join(", ")' "$f")$([ "$protected" != true ] || echo ", protected refs only"): GitLab Runner's chart $(yq '.version' "$runner_release/Chart.yaml")."
+    echo "# The runner $r (gitlab-runner/runners/$r.yaml), tags $(yq '.tacplus.tags | join(", ")' "$f")$([ "$protected" != true ] || echo ", protected refs only"), concurrent ${concurrent[$r]}$([ "$r" != "$pooled" ] || echo ", the normal pool's room (gitlab-runner/pool.yaml)"): GitLab Runner's chart $(yq '.version' "$runner_release/Chart.yaml")."
     # checksum/secrets is the hash of the chart's own Secret, which it does not render here (the token's Secret is
     # ci/runner-tokens.sh's): an empty file's, and nothing to roll the pods on.
     IMAGE=$runner_image yq '(select(.kind == "Deployment") | .spec.template.spec.containers[0].image) = strenv(IMAGE) |

@@ -17,6 +17,17 @@ the looper then marks it `promoted` or `declined` here with the date.
   pipelines show a job short of memory (an OOMKilled container) or slow, raise the ceiling in `infra.yaml` and let
   the job ask for more (`KUBERNETES_MEMORY_LIMIT`), or move the normal pool to a bigger machine type (cloud's `dev`
   stack); either is a pull request, not a registration change.
+- **The normal pool's reserve, measured** (2026-11-18, #36): `gitlab-runner/pool.yaml`'s `reserved` (kube-system and
+  the deployments' pods, 1200m and 3Gi of the three nodes) is CPU from tacplus-dev/looper#165's evidence and memory an
+  estimate; `control`'s `concurrent` (14) follows from it. The hub's `kubectl describe nodes` (Allocated resources,
+  less the `ci` and `deploymentproxy` pods), or tacplus-dev/cloud's hub audit reading the containers' requests
+  (`kubernetes.io/container/cpu/request_cores`, `memory/request_bytes`), would replace both with what the nodes
+  hold; a change of the pool (cloud's `dev` stack) is a change of `nodes` or `allocatable` there too.
+- **A runner of their own for the kicker and the plan** (2026-11-18, #36, part 2): `gitlab-runner/runners/kick.yaml`,
+  tags `arm64, kick` (not `arm64, control, kick`: GitLab gives a runner every job whose tags are a subset of its own,
+  so one holding `control` would fill with reports too), a small fixed `concurrent` on the normal pool, its token
+  `gitlab-runner-kick` version 1. Waits on tacplus-dev/cloud#81 (the registration and the secret: the apply refuses
+  a version it cannot read); then tacplus-dev/looper tags `.control` `arm64, kick`.
 - **A dedicated app for the drift issue** (2026-11-02, #1): the issue asks for the tacplus-reader app, which then
   needs Issues: write on this repository; "reader" stops meaning read-only. A small app (or the repository's
   looper bot, tacplus-dev/looper#28) with Issues: write on `cluster` alone would keep tacplus-reader read-only.

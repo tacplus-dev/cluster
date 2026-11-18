@@ -1,0 +1,26 @@
+# The normal pool, as the runners' concurrency counts it (#36): render.sh gives the runner whose file says
+# `concurrent: pool` (control) as many jobs as the pool has room for, by their pods' requests, once it has counted this
+# reserve, every runner manager (gitlab-runner/values.yaml's resources), deploymentproxy (its release's requests)
+# and every other normal-pool runner's jobs at its full concurrent (infra's); and it refuses runners the pool cannot
+# hold. A job's pod counts as its runner's default requests, the job's container and the helper's: a job raising its
+# own (KUBERNETES_CPU_REQUEST) is not counted, so a runner's defaults are its largest kind's (control: a report's,
+# tacplus-dev/looper#165). Bin-packing is not counted: the jobs' pods are small beside a node.
+#
+#   nodes        the pool's nodes: tacplus-dev/cloud's stacks/dev, cluster.normal (3 x c4a-standard-2, fixed, no
+#                autoscaling)
+#   allocatable  a node's, by GKE's reservations for a c4a-standard-2 (2 vCPU, 8 GiB): CPU 2000m - 6% of the first
+#                core - 1% of the second = 1930m; memory 8Gi - 25% of the first 4Gi - 20% of the next 4Gi - 100Mi
+#                eviction = 6249Mi, taken as 6Gi
+#   reserved     the whole pool's, for what is neither a runner nor deploymentproxy: kube-system and the deployments'
+#                pods. CPU from tacplus-dev/looper#165's evidence (2026-11-16): 8 control jobs ran (a report 550m with
+#                its helper, a manager 300m) beside the managers and deploymentproxy, and the next found no room
+#                (`3 Insufficient cpu`), which leaves at most about 1200m of the three nodes' 5790m to the rest; memory
+#                an estimate, unmeasured. The nodes' requests as measured (`kubectl describe nodes`, Allocated
+#                resources) correct both (PROPOSALS.md).
+nodes: 3
+allocatable:
+  cpu: 1930m
+  memory: 6Gi
+reserved:
+  cpu: 1200m
+  memory: 3Gi
