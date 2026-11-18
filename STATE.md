@@ -86,10 +86,14 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by th
   on the RBAC granted by design (#28): the runners' `gitlab-runner-*` (exec, attach, services), `fleet-deploy`
   (services, networkpolicies) and deploymentproxy's ClusterRole (networkpolicies delete). The entries match by id, so
   `ci/grants.sh` (`tests/grants_test.sh`) fails any other Role granting them, until tacplus-dev/looper#182 scopes
-  them by file; their KSV-0048, -0049 and -0113 in `security-baseline.json`. KSV-0014 on the chart's template still
-  blocks the nightly (#29, PROPOSALS.md).
+  them by file; their KSV-0048, -0049 and -0113 in `security-baseline.json`. KSV-0014 (HIGH) on the chart's template,
+  upstream's defaults, still fails the nightly (#33). The render's runners have a read-only root (#29,
+  `tests/render_test.sh`). The hub decided to fix the scan, with no exception: the vendored releases are left out
+  of Trivy's config scan and the render is still scanned. That needs looper-scan to read a repository's vendored
+  paths (tacplus-dev/looper#190), and #33 waits on it.
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
 - **Blocked on:** tacplus-dev/tacplus#315 (rootless BuildKit in the build image), for unpausing the in-cluster `build`
-  runner 58541760 only; nothing else in this repository waits.
+  runner 58541760 only; tacplus-dev/looper#190 (looper-scan leaving vendored paths out of Trivy's config scan), for
+  a green nightly (#33). Nothing else in this repository waits.
