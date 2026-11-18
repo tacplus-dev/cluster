@@ -210,6 +210,11 @@ the looper then marks it `promoted` or `declined` here with the date.
   the 18 MEDIUM/LOW the vendored templates and the render add are #34. tacplus-dev/looper#182 (closed 2026-11-17)
   lets an exception take a `where`, so a scoped entry is now an interim the hub can decide (#33); no
   tacplus-dev/looper issue or roadmap entry asks for skipping vendored paths yet.
+  Update 2026-11-18 (#33): the hub decided "fix the scan, no exception": config-scan the render and leave
+  `gitlab-runner/release/` out, as "scan what ships". Nothing here can steer the scan, because looper-scan runs
+  `trivy fs` on the whole tree and Trivy reads `trivy.yaml`/`.trivyignore` from the job's working directory, not
+  from the tree. So the feature is tacplus-dev/looper#190 (a `feature`; it needs a roadmap entry). #33 waits on it,
+  and once it lands, this repository names `gitlab-runner/release/` and `deploymentproxy/release/` there.
 - **deploymentproxy's release naming its user and a CPU limit** (2026-11-17, #31): the render now sets the
   Deployment's `runAsUser`/`runAsGroup` (65532, the image's distroless `USER`) and a 500m CPU limit, which the
   release leaves out, so Trivy's KSV-0011, -0020 and -0021 are off the render but stay on `deploymentproxy/release/`
