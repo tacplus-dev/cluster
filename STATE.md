@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by the looper (#36).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by the looper (#34).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -34,8 +34,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by th
   to `infra` alone, refuses it any other tag and an `infra` not protected), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
   `gitlab-runner/pool.yaml`, 14 today, CPU the bound; its default CPU request a report's 100m, looper#165), the
   render refusing runners the pool cannot hold; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
-  the job image, and `git config --global` failed on `//.gitconfig`); each runner's own container on a read-only root
-  filesystem, its home and config on emptyDirs (#29: KSV-0014; not yet seen running in the cluster); Roles in `ci` only; jobs as `ci-job`
+  the job image, and `git config --global` failed on `//.gitconfig`); each runner's own container CPU-limited to 500m (#34) and on a
+  read-only root filesystem, its home and config on emptyDirs (#29: KSV-0014; not yet seen running in the cluster); Roles in `ci` only; jobs as `ci-job`
   with no token, kept off the metadata server (NetworkPolicy); the admission policy `ci-pods` refusing privileged,
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
   1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
@@ -92,7 +92,9 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by th
   upstream's defaults, still fails the nightly (#33). The render's runners have a read-only root (#29,
   `tests/render_test.sh`). The hub decided to fix the scan, with no exception: the vendored releases are left out
   of Trivy's config scan and the render is still scanned. That needs looper-scan to read a repository's vendored
-  paths (tacplus-dev/looper#190), and #33 waits on it.
+  paths (tacplus-dev/looper#190), and #33 waits on it. The runners have a 500m CPU limit (KSV-0011, #34);
+  KSV-0125 (our registries), the runners' KSV-0020/-0021 (the image's user 100) and the vendored releases'
+  templates' MEDIUM/LOW findings are in `security-baseline.json` per file (#34).
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
