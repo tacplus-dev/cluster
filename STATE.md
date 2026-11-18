@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-17 by the looper (#31).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by the looper (#35).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -54,8 +54,9 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-17 by th
   `infra`), cloud pipeline 3072736206; the VM `cluster` runner 58534920 is paused, and tacplus-dev/cloud#11 removes the
   VMs. `control` (58541761) is live since 2026-11-16 01:28Z (tacplus-dev/looper#84). `build` (58541760) stays paused:
   rootless BuildKit is not in the build image yet (tacplus-dev/tacplus#315), and until it is the VM build runner takes
-  tacplus-dev/build's scheduled jobs. The `ci` NetworkPolicy holds only where NetworkPolicy is enforced
-  (Dataplane V2: tacplus-dev/cloud's `dev` cluster has it).
+  tacplus-dev/build's scheduled jobs. Whether this project's nightly schedule 4547285 is on is not recorded: the hub's
+  closing comments do not say, and no looper has a GitLab token to see it. The `ci` NetworkPolicy holds only where
+  NetworkPolicy is enforced (Dataplane V2: tacplus-dev/cloud's `dev` cluster has it).
   `runner-images` needs tacplus-dev/cloud's `apply:dev` to have created `ci-images` (cloud#45, landed) before it
   can push on main (README, What the hub does, 9); nothing has pushed or pulled our images yet.
   No pipeline has run: the hub owes the runner (tag `cluster`), the project's variables and
@@ -91,7 +92,4 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-17 by th
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
 - **Blocked on:** tacplus-dev/tacplus#315 (rootless BuildKit in the build image), for unpausing the in-cluster `build`
-  runner 58541760 only; nothing else in this repository waits. main's `apply` is green on `infra` (3072736343),
-  `control` is live and `infra` carries cloud's and cluster's pipelines, the VM `cluster` runner 58534920 paused (the
-  hub, 2026-11-16 09:25Z, closing #18 and #25). Whether this project's nightly schedule 4547285 is on is not recorded:
-  the hub's closing comments do not say, and no looper has a GitLab token to see it.
+  runner 58541760 only; nothing else in this repository waits.
