@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by the looper (#35).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by the looper (#36).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -31,7 +31,9 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by th
   no VM runner's tag, the policy refuses one; the normal pool) and `infra` (#25, for cloud#11: `cloud, cluster, deploy`,
   the three infrastructure pipelines', protected refs only (`tacplus.protected`, on every runner's pods as
   `tacplus.dev/runner-protected`), the normal pool as control, no token in the pod; the policy admits those three tags
-  to `infra` alone, refuses it any other tag and an `infra` not protected), per-runner requests, limits and ceilings; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
+  to `infra` alone, refuses it any other tag and an `infra` not protected), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
+  `gitlab-runner/pool.yaml`, 14 today, CPU the bound; its default CPU request a report's 100m, looper#165), the
+  render refusing runners the pool cannot hold; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
   the job image, and `git config --global` failed on `//.gitconfig`); each runner's own container on a read-only root
   filesystem, its home and config on emptyDirs (#29: KSV-0014; not yet seen running in the cluster); Roles in `ci` only; jobs as `ci-job`
   with no token, kept off the metadata server (NetworkPolicy); the admission policy `ci-pods` refusing privileged,
@@ -94,6 +96,9 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by th
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
-- **Blocked on:** tacplus-dev/tacplus#315 (rootless BuildKit in the build image), for unpausing the in-cluster `build`
+- **Blocked on:** tacplus-dev/cloud#81 (the `kick` runner's registration and its token secret `gitlab-runner-kick`),
+  for #36's runner reserved for the looper's kicker and plan, so they never wait behind reports; tacplus-dev/tacplus#315 (rootless BuildKit in the build image), for unpausing the in-cluster `build`
   runner 58541760 only; tacplus-dev/looper#190 (looper-scan leaving vendored paths out of Trivy's config scan), for
-  a green nightly (#33). Nothing else in this repository waits.
+  a green nightly (#33). Nothing else in this repository waits. `gitlab-runner/pool.yaml`'s reserve (kube-system and
+  the deployments' pods) is CPU from looper#165's evidence and memory an estimate, not measured on the nodes
+  (PROPOSALS.md).
