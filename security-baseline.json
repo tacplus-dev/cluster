@@ -1,4 +1,16 @@
 [
+  {"count":1,"file":"deploymentproxy/release/config/manager/deployment.yaml","id":"KSV-0011","tool":"trivy"},
+  {"count":1,"file":"gitlab-runner/release/templates/deployment.yaml","id":"KSV-0011","tool":"trivy"},
+  {"count":1,"file":"gitlab-runner/release/templates/deployment.yaml","id":"KSV-0015","tool":"trivy"},
+  {"count":1,"file":"gitlab-runner/release/templates/deployment.yaml","id":"KSV-0016","tool":"trivy"},
+  {"count":1,"file":"gitlab-runner/release/templates/deployment.yaml","id":"KSV-0018","tool":"trivy"},
+  {"count":1,"file":"deploymentproxy/release/config/manager/deployment.yaml","id":"KSV-0020","tool":"trivy"},
+  {"count":1,"file":"gitlab-runner/release/templates/deployment.yaml","id":"KSV-0020","tool":"trivy"},
+  {"count":1,"file":"tests/fixtures/render/out/20-ci.yaml","id":"KSV-0020","tool":"trivy"},
+  {"count":1,"file":"deploymentproxy/release/config/manager/deployment.yaml","id":"KSV-0021","tool":"trivy"},
+  {"count":1,"file":"gitlab-runner/release/templates/deployment.yaml","id":"KSV-0021","tool":"trivy"},
+  {"count":1,"file":"tests/fixtures/render/out/20-ci.yaml","id":"KSV-0021","tool":"trivy"},
+  {"count":1,"file":"gitlab-runner/release/templates/deployment.yaml","id":"KSV-0030","tool":"trivy"},
   {"count":1,"file":"tests/fixtures/render/out/10-deployment-alpha.yaml","id":"KSV-0048","tool":"trivy"},
   {"count":1,"file":"tests/fixtures/render/out/10-deployment-beta-2.yaml","id":"KSV-0048","tool":"trivy"},
   {"count":1,"file":"tests/fixtures/render/out/20-ci.yaml","id":"KSV-0048","tool":"trivy"},
@@ -6,7 +18,12 @@
   {"count":1,"file":"tests/fixtures/render/out/10-deployment-beta-2.yaml","id":"KSV-0049","tool":"trivy"},
   {"count":1,"file":"gitlab-runner/release/templates/configmap.yaml","id":"KSV-01010","tool":"trivy"},
   {"count":1,"file":"tests/fixtures/render/out/20-ci.yaml","id":"KSV-01010","tool":"trivy"},
+  {"count":1,"file":"gitlab-runner/release/templates/deployment.yaml","id":"KSV-0104","tool":"trivy"},
   {"count":1,"file":"tests/fixtures/render/out/10-deployment-alpha.yaml","id":"KSV-0113","tool":"trivy"},
   {"count":1,"file":"tests/fixtures/render/out/10-deployment-beta-2.yaml","id":"KSV-0113","tool":"trivy"},
-  {"count":1,"file":"tests/fixtures/render/out/20-ci.yaml","id":"KSV-0113","tool":"trivy"}
+  {"count":1,"file":"tests/fixtures/render/out/20-ci.yaml","id":"KSV-0113","tool":"trivy"},
+  {"count":1,"file":"deploymentproxy/release/config/manager/deployment.yaml","id":"KSV-0125","tool":"trivy"},
+  {"count":1,"file":"gitlab-runner/release/templates/deployment.yaml","id":"KSV-0125","tool":"trivy"},
+  {"count":1,"file":"tests/fixtures/render/out/00-deploymentproxy.yaml","id":"KSV-0125","tool":"trivy"},
+  {"count":1,"file":"tests/fixtures/render/out/20-ci.yaml","id":"KSV-0125","tool":"trivy"}
 ]

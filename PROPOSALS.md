@@ -215,6 +215,9 @@ the looper then marks it `promoted` or `declined` here with the date.
   `trivy fs` on the whole tree and Trivy reads `trivy.yaml`/`.trivyignore` from the job's working directory, not
   from the tree. So the feature is tacplus-dev/looper#190 (a `feature`; it needs a roadmap entry). #33 waits on it,
   and once it lands, this repository names `gitlab-runner/release/` and `deploymentproxy/release/` there.
+  Update 2026-11-18 (#34): the render's runners have a 500m CPU limit (KSV-0011 off `20-ci.yaml`); the other 17
+  MEDIUM/LOW, the vendored templates' among them, are in `security-baseline.json` per file, the hub's decision.
+  Once looper-scan skips vendored paths, their `gitlab-runner/release/` and `deploymentproxy/release/` entries go.
 - **deploymentproxy's release naming its user and a CPU limit** (2026-11-17, #31): the render now sets the
   Deployment's `runAsUser`/`runAsGroup` (65532, the image's distroless `USER`) and a 500m CPU limit, which the
   release leaves out, so Trivy's KSV-0011, -0020 and -0021 are off the render but stay on `deploymentproxy/release/`

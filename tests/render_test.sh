@@ -7,7 +7,7 @@
 # digest (deploymentproxy's, and the runners' and their jobs' in ci); deploymentproxy runs as its image's user,
 # named, and with a CPU limit, the rest of its Deployment the release's; ci's RBAC is in ci only; build jobs select and
 # tolerate the spot pool and control and infra jobs never; each runner's jobs have HOME on an emptyDir;
-# each runner has a read-only root filesystem, its home and config on emptyDirs; each runner's
+# each runner has a CPU limit and a read-only root filesystem, its home and config on emptyDirs; each runner's
 # pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
 # is protected refs only, and no other runner is;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
@@ -90,6 +90,11 @@ for r in build control infra; do
   [ -n "$home" ] && [ "$home" != / ] &&
     [ "$(H=$home runner_toml $r '[(.volumes.empty_dir // [])[] | select(.mount_path == strenv(H))] | length')" = 1 ] &&
     ok "$r jobs have HOME=$home, an emptyDir" || fail "$r jobs' HOME is [$home], or no emptyDir is mounted there"
+done
+# Each runner's own container has a CPU limit (#34: KSV-0011), the chart's resources value, gitlab-runner/values.yaml's.
+for r in build control infra; do
+  cpu=$(R=$r yq 'select(.kind == "Deployment" and .metadata.name == "gitlab-runner-" + strenv(R)) | .spec.template.spec.containers[0].resources.limits.cpu' "$ci")
+  [ "$cpu" = 500m ] && ok "$r's runner has its CPU limited to 500m" || fail "$r's runner's CPU limit is [$cpu]"
 done
 # Each runner's own container has a read-only root filesystem (#29: KSV-0014); where GitLab Runner writes, its home
 # (its working directory) and its config under it, is an emptyDir.

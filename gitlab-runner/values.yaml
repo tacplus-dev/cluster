@@ -59,11 +59,13 @@ volumes:
 volumeMounts:
   - name: home
     mountPath: /home/gitlab-runner
+# The runner's own container (its jobs' are each runner's config): a CPU limit too (#34: KSV-0011), as deploymentproxy's.
 resources:
   requests:
     cpu: 50m
     memory: 128Mi
   limits:
+    cpu: 500m
     memory: 512Mi
 # The normal pool: arm64 (GKE taints Arm nodes kubernetes.io/arch=arm64:NoSchedule), and never a spot node, by its
 # label or GKE's.

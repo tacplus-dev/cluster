@@ -48,7 +48,7 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools); `grants.sh`, the scope of the KSV-0053 and KSV-0056 exceptions (Security checks, below). |
 | `build.lock`, `gates.yaml` | The build image by digest (the CI image), and the gates run in it (How a change reaches the cluster, below). |
 | `security-exceptions.yaml` | The security findings accepted, each until its expiry (Security checks, below). |
-| `security-baseline.json` | The MEDIUM and LOW findings looper-scan's nightly takes as baselined, not new (`looper-scan baseline` writes it): the GitLab Runner chart's entrypoint ConfigMap, KSV-01010 (#30); the RBAC granted by design, KSV-0048, KSV-0049 and KSV-0113 (#28). |
+| `security-baseline.json` | The MEDIUM and LOW findings looper-scan's nightly takes as baselined, not new (`looper-scan baseline` writes it): the GitLab Runner chart's entrypoint ConfigMap, KSV-01010 (#30); the RBAC granted by design, KSV-0048, KSV-0049 and KSV-0113 (#28); KSV-0125 on our own registries, the runners' uid and gid (KSV-0020, -0021, the runner image's user 100), and the vendored releases' templates scanned with upstream's defaults (KSV-0011, -0015, -0016, -0018, -0020, -0021, -0030, -0104), until looper-scan can skip vendored paths (#34). |
 | `tests/` | The tests (`ci/checks.sh` runs them all), their fixtures and stubs. |
 
 ## How it runs
