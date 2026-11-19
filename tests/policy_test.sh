@@ -12,7 +12,8 @@
 # tolerating spot, landing on a spot node, Unconfined or escalating privilege; a job allowed to override its
 # placement, a job's token, no resource ceiling; build taking other tags; a VM runner's tag (autoscale,
 # autoscale-16, gce) on any runner; an infra pipeline's tag (cloud, cluster, deploy) on build or control, infra
-# taking any other tag, or not protected refs only (#25); a runner manager on a read-only root filesystem without a
+# taking any other tag, or not protected refs only (#25); kick taking a tag but arm64 and kick, or not kick, and kick
+# on any other runner (#36); a runner manager on a read-only root filesystem without a
 # writable emptyDir where GitLab Runner writes (/tmp or its TMPDIR, its home; #37); a token by latest; cluster RBAC,
 # a `*`, a resource the executor does not need, another namespace's account or object, a Secret. Needs bash, yq, jq, helm.
 #
@@ -117,6 +118,9 @@ breach_ci "control taking an infra pipeline's tag" "$(deployment control '.metad
 breach_ci "build taking an infra pipeline's tag" "$(deployment build '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,build,deploy\"" "gitlab-runner-build: takes a tag of the infra pipelines (deploy)"
 breach_ci "infra taking control's tag" "$(deployment infra '.metadata.annotations."tacplus.dev/runner-tags"') = \"cloud,cluster,deploy,control\"" "gitlab-runner-infra: takes a tag that is not cloud, cluster or deploy (control)"
 breach_ci "infra taking arm64" "$(deployment infra '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,cloud,cluster,deploy\"" "gitlab-runner-infra: takes a tag that is not cloud, cluster or deploy (arm64)"
+breach_ci "kick taking control's tag" "$(deployment kick '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,kick,control\"" "gitlab-runner-kick: takes a tag that is not arm64 or kick (control)"
+breach_ci "kick without its tag" "$(deployment kick '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64\"" "gitlab-runner-kick: does not take kick"
+breach_ci "control taking kick's tag" "$(deployment control '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,control,kick\"" "gitlab-runner-control: takes kick, the kick runner's tag"
 breach_ci "infra not protected" "$(deployment infra '.metadata.annotations."tacplus.dev/runner-protected"') = \"false\"" "gitlab-runner-infra: is not protected refs only"
 breach_ci "infra without the protected annotation" "del($(deployment infra '.metadata.annotations."tacplus.dev/runner-protected"'))" "gitlab-runner-infra: is not protected refs only"
 breach_ci "infra jobs with a token" "$(toml infra 'automount_service_account_token = false' 'automount_service_account_token = true')" "gitlab-runner-infra: its jobs get a service account token"

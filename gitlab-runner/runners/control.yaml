@@ -1,5 +1,5 @@
-# The control runner: the tacplus-dev group's jobs tagged `arm64, control` (the looper's kicker, reports, managers
-# and scans, once they move here: tacplus-dev/looper#84), each a pod on the normal pool. Its tags are its own, never
+# The control runner: the tacplus-dev group's jobs tagged `arm64, control` (the looper's reports, managers and scans,
+# once they move here: tacplus-dev/looper#84; its kicker and plan have kick of their own, #36), each a pod on the normal pool. Its tags are its own, never
 # the VM runners' (`autoscale`, `autoscale-16`, `gce`: ci/policy.sh): GitLab gives a job to whichever runner holding
 # its tags asks first (#13). It tolerates no spot taint and refuses a spot node by its label or GKE's. No privilege,
 # no privilege escalation, no host path, no Docker socket; agents never build (a build is a job of its own, on the
@@ -8,8 +8,8 @@
 #
 # Its concurrent is the normal pool's room (#36: `pool`, gitlab-runner/pool.yaml), counted by its default requests,
 # which are its largest kind's (a report's, 100m and 512Mi: tacplus-dev/looper#165; a manager, the kicker and the plan
-# ask less): render.sh gives it as many jobs as the pool holds beside infra's at their full concurrent, and refuses
-# runners the pool cannot hold. A fixed 8 at 250m left the kicker queued behind eight reports (#36).
+# ask less): render.sh gives it as many jobs as the pool holds beside infra's and kick's at their full concurrent, and
+# refuses runners the pool cannot hold. A fixed 8 at 250m left the kicker queued behind eight reports (#36).
 #
 #   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
 #   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh

@@ -1,0 +1,76 @@
+# The kick runner (#36): the tacplus-dev group's jobs tagged `arm64, kick`, the looper's kicker and plan (its
+# `.control` jobs, once tacplus-dev/looper tags them so), each a pod on the normal pool, as control's are. They start
+# the managers and plan the runs, so they get slots of their own: at 10:08Z on 2026-11-18 a kick waited 52 minutes
+# behind eight reports on control, and nothing started tacplus's manager. Its tags are arm64 and kick, never control:
+# GitLab gives a runner every job whose tags it holds, so holding control it would fill with reports too; and no
+# other runner holds kick (ci/policy.sh). It tolerates no spot taint and refuses a spot node by its label or GKE's. No
+# privilege, no privilege escalation, no host path, no Docker socket. Its defaults are control's (a kicker or a plan
+# asks less than a report: tacplus-dev/looper#165), as are its ceilings.
+#
+# Its concurrent is fixed and small, the kicker and the plan side by side; render.sh counts it out of the normal
+# pool's room before control's (gitlab-runner/pool.yaml).
+#
+#   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
+#   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
+#                   writes it into the Secret gitlab-runner-kick at apply time (tacplus-dev/cloud#81 registers it
+#                   and writes version 1)
+tacplus:
+  tags: [arm64, kick]
+  token: projects/tacplus-dev/secrets/gitlab-runner-kick/versions/1
+concurrent: 2
+runners:
+  name: tacplus-dev kick (cluster, ci, normal pool)
+  config: |
+    [[runners]]
+      executor = "kubernetes"
+      # uid 1000 has no home in the job image, so HOME would be / (#20): HOME is the emptyDir below instead.
+      environment = ["HOME=/tmp/home"]
+      [runners.kubernetes]
+        namespace = "ci"
+        image = "{{ .Values.pinned.job }}"
+        helper_image = "{{ .Values.pinned.helper }}"
+        service_account = "ci-job"
+        automount_service_account_token = false
+        privileged = false
+        allow_privilege_escalation = false
+        poll_timeout = 600
+        cpu_request = "100m"
+        cpu_limit = "1"
+        memory_request = "512Mi"
+        memory_limit = "2Gi"
+        cpu_request_overwrite_max_allowed = "1500m"
+        cpu_limit_overwrite_max_allowed = "1500m"
+        memory_request_overwrite_max_allowed = "4Gi"
+        memory_limit_overwrite_max_allowed = "4Gi"
+        helper_cpu_request = "50m"
+        helper_cpu_limit = "500m"
+        helper_memory_request = "64Mi"
+        helper_memory_limit = "256Mi"
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "home"
+          mount_path = "/tmp/home"
+        [runners.kubernetes.pod_labels]
+          "tacplus.dev/ci-runner" = "kick"
+        [runners.kubernetes.node_selector]
+          "kubernetes.io/arch" = "arm64"
+        [runners.kubernetes.node_tolerations]
+          "kubernetes.io/arch=arm64" = "NoSchedule"
+        [runners.kubernetes.affinity]
+          [runners.kubernetes.affinity.node_affinity]
+            [runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution]
+              [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms]]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "spot"
+                  operator = "NotIn"
+                  values = ["true"]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "cloud.google.com/gke-spot"
+                  operator = "NotIn"
+                  values = ["true"]
+        [runners.kubernetes.pod_security_context]
+          [runners.kubernetes.pod_security_context.seccomp_profile]
+            type = "RuntimeDefault"
+        [runners.kubernetes.helper_container_security_context]
+          allow_privilege_escalation = false
+          [runners.kubernetes.helper_container_security_context.capabilities]
+            drop = ["ALL"]

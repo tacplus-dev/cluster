@@ -9,7 +9,8 @@
 # tolerate the spot pool and control and infra jobs never; each runner's jobs have HOME on an emptyDir;
 # each runner has a CPU limit and a read-only root filesystem, /tmp, its home and config on emptyDirs (#37); each runner's
 # pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
-# is protected refs only, and no other runner is; control's concurrent is the normal pool's room
+# is protected refs only, and no other runner is; kick's pods name arm64, kick (#36), control's arm64, control; kick's
+# concurrent is its own (2), control's the normal pool's room
 # (gitlab-runner/pool.yaml), CPU or memory the bound, and runners the pool cannot hold, a second runner on its room,
 # one off the normal pool on it, or a quantity it cannot read, are refused;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
@@ -69,7 +70,7 @@ images=$(yq ea '[select(.kind == "Deployment") | .spec.template.spec | (.contain
 runner_cfg() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.template.toml"' "$ci" |
   yq -p toml ".runners[0] | $2"; }
 runner_toml() { runner_cfg "$1" ".kubernetes | $2"; }
-jobs=$(for r in build control infra; do runner_toml $r '.image + " " + .helper_image'; done | sort -u)
+jobs=$(for r in build control infra kick; do runner_toml $r '.image + " " + .helper_image'; done | sort -u)
 [ "$jobs" = "$(yq '.job + " " + .helper' "$runner_pin")" ] &&
   ok "every runner's jobs default to the pinned job image, with the pinned helper, by digest" || fail "the jobs' images are [$jobs]"
 ! grep -qiE 'image.*:latest|latest@' "$ci" && ok "nothing in ci's render names latest" || fail "ci's render names latest"
@@ -79,7 +80,7 @@ jobs=$(for r in build control infra; do runner_toml $r '.image + " " + .helper_i
   ok "the runners' accounts hold Roles in ci only, no cluster RBAC" || fail "ci's RBAC: $(yq -N 'select(.kind | test("Role")) | .kind + " " + (.metadata.namespace // "")' "$ci")"
 [ "$(runner_toml build '.node_selector.spot + " " + .node_tolerations."spot=true"')" = "true NoSchedule" ] &&
   ok "build jobs select and tolerate the tainted spot pool" || fail "build jobs' placement"
-for r in control infra; do
+for r in control infra kick; do
   [ "$(runner_toml $r '[(.node_selector // {}) | keys[], (.node_tolerations // {}) | keys[]] | map(select(test("spot"))) | length')" = 0 ] &&
     [ "$(runner_toml $r '.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms[0].match_expressions[] | select(.key == "spot") | .operator + " " + .values[0]')" = "NotIn true" ] &&
     [ "$(runner_toml $r '.automount_service_account_token')" = false ] &&
@@ -87,14 +88,14 @@ for r in control infra; do
 done
 # A job runs as a user with no home in the job image (uid 1000), so each runner gives it HOME on an emptyDir of its
 # own, writable and there before the script runs (#20: git config --global wrote //.gitconfig).
-for r in build control infra; do
+for r in build control infra kick; do
   home=$(runner_cfg $r '(.environment // [])[] | select(test("^HOME=")) | sub("^HOME="; "")')
   [ -n "$home" ] && [ "$home" != / ] &&
     [ "$(H=$home runner_toml $r '[(.volumes.empty_dir // [])[] | select(.mount_path == strenv(H))] | length')" = 1 ] &&
     ok "$r jobs have HOME=$home, an emptyDir" || fail "$r jobs' HOME is [$home], or no emptyDir is mounted there"
 done
 # Each runner's own container has a CPU limit (#34: KSV-0011), the chart's resources value, gitlab-runner/values.yaml's.
-for r in build control infra; do
+for r in build control infra kick; do
   cpu=$(R=$r yq 'select(.kind == "Deployment" and .metadata.name == "gitlab-runner-" + strenv(R)) | .spec.template.spec.containers[0].resources.limits.cpu' "$ci")
   [ "$cpu" = 500m ] && ok "$r's runner has its CPU limited to 500m" || fail "$r's runner's CPU limit is [$cpu]"
 done
@@ -104,7 +105,7 @@ done
 pod() { R=$r yq "select(.kind == \"Deployment\" and .metadata.name == \"gitlab-runner-\" + strenv(R)) | .spec.template.spec | $1" "$ci"; }
 emptydir() { local v; v=$(pod ".containers[0].volumeMounts[] | select(.mountPath == \"$1\") | .name")
   [ -n "$v" ] && [ "$(pod ".volumes[] | select(.name == \"$v\" and has(\"emptyDir\")) | .name")" = "$v" ] && echo 1 || echo 0; }
-for r in build control infra; do
+for r in build control infra kick; do
   [ "$(pod '.containers[0].securityContext.readOnlyRootFilesystem')" = true ] &&
     [ "$(emptydir /tmp)" = 1 ] && [ "$(emptydir /home/gitlab-runner)" = 1 ] &&
     [ "$(emptydir /home/gitlab-runner/.gitlab-runner)" = 1 ] &&
@@ -112,7 +113,7 @@ for r in build control infra; do
     fail "$r's runner: readOnlyRootFilesystem [$(pod '.containers[0].securityContext.readOnlyRootFilesystem')], /tmp [$(emptydir /tmp)], home [$(emptydir /home/gitlab-runner)], config [$(emptydir /home/gitlab-runner/.gitlab-runner)]"
 done
 [ "$(yq ea '[select(.kind == "Deployment") | .spec.template.metadata.annotations."tacplus.dev/runner-token"] | join(" ")' "$ci")" = \
-  "$(yq '.tacplus.token' "$here/gitlab-runner/runners/build.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/control.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/infra.yaml")" ] &&
+  "$(for r in build control infra kick; do yq '.tacplus.token' "$here/gitlab-runner/runners/$r.yaml"; done | paste -sd ' ')" ] &&
   ok "each runner's pods name its token's Secret Manager version" || fail "the runners' token versions"
 # The infra runner (#25): the cloud, cluster and deploy pipelines' tags, nothing else, protected refs only; the other
 # two neither protected nor holding one of its tags. Its pods say so (the hub registers it as its file says).
@@ -120,10 +121,15 @@ annotation() { R=$1 A=$2 yq 'select(.kind == "Deployment" and .metadata.name == 
 [ "$(annotation infra runner-tags)" = "cloud,cluster,deploy" ] && [ "$(annotation infra runner-protected)" = true ] &&
   ok "infra's pods name its tags cloud, cluster, deploy, and that it is protected refs only" ||
   fail "infra's pods: tags [$(annotation infra runner-tags)], protected [$(annotation infra runner-protected)]"
-[ "$(annotation build runner-protected) $(annotation control runner-protected)" = "false false" ] &&
-  ! [[ ",$(annotation build runner-tags),$(annotation control runner-tags)," =~ ,(cloud|cluster|deploy), ]] &&
-  ok "build and control are not protected and hold none of infra's tags" ||
-  fail "build [$(annotation build runner-tags), protected $(annotation build runner-protected)], control [$(annotation control runner-tags), protected $(annotation control runner-protected)]"
+[ "$(annotation build runner-protected) $(annotation control runner-protected) $(annotation kick runner-protected)" = "false false false" ] &&
+  ! [[ ",$(annotation build runner-tags),$(annotation control runner-tags),$(annotation kick runner-tags)," =~ ,(cloud|cluster|deploy), ]] &&
+  ok "build, control and kick are not protected and hold none of infra's tags" ||
+  fail "build [$(annotation build runner-tags), protected $(annotation build runner-protected)], control [$(annotation control runner-tags), protected $(annotation control runner-protected)], kick [$(annotation kick runner-tags), protected $(annotation kick runner-protected)]"
+# The kick runner (#36): the looper's kicker and plan (.control, tagged arm64, kick) on a runner of their own, so they
+# never wait behind the reports filling control: arm64 and kick, never control (GitLab would give it the reports too).
+[ "$(annotation kick runner-tags)" = "arm64,kick" ] && [ "$(annotation control runner-tags)" = "arm64,control" ] &&
+  ok "kick's pods name its tags arm64, kick; control's arm64, control" ||
+  fail "kick's tags [$(annotation kick runner-tags)], control's [$(annotation control runner-tags)]"
 [ "$(yq '.tacplus.protected' "$here/gitlab-runner/runners/infra.yaml")" = true ] && ok "gitlab-runner/runners/infra.yaml says protected: true" || fail "infra.yaml's protected is [$(yq '.tacplus.protected' "$here/gitlab-runner/runners/infra.yaml")]"
 ! grep -q 'glrt-[A-Za-z0-9_]' "$ci" && [ "$(yq ea '[select(.kind == "Secret")] | length' "$ci")" = 0 ] &&
   ok "no token and no Secret in the render" || fail "the render holds a token or a Secret"
@@ -210,15 +216,16 @@ refused_runner "no config" 'del(.runners.config)' "no runners.config"
 
 # The normal pool's room (#36): control's concurrent is what gitlab-runner/pool.yaml leaves for its jobs' pods (their
 # default requests, job and helper) once the reserve, every runner manager, deploymentproxy and infra's jobs at its
-# full concurrent are counted, CPU and memory both; never a fixed number.
+# full concurrent are counted, and kick's (#36: the kicker and the plan, never queued behind control's reports), CPU and
+# memory both; never a fixed number.
 concurrent() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.toml"' "$2" |
   sed -n 's/^ *concurrent = //p'; }
-# 3 x 1930m - 1200m - 3 x 50m (managers) - 50m (deploymentproxy) - 4 x 550m (infra) = 2190m, 14 pods of 150m; memory
-# 3 x 6144Mi - 3Gi - 3 x 128Mi - 64Mi - 4 x 1088Mi = 10560Mi, 18 of 576Mi.
-[ "$(concurrent control "$ci")" = 14 ] && [ "$(concurrent infra "$ci")" = 4 ] &&
-  grep -q '^# The runner control .*concurrent 14, the normal pool.s room' "$ci" &&
-  ok "control's concurrent is the normal pool's room for its jobs (14), infra's its own (4)" ||
-  fail "concurrent: control [$(concurrent control "$ci")], infra [$(concurrent infra "$ci")]"
+# 3 x 1930m - 1200m - 4 x 50m (managers) - 50m (deploymentproxy) - 4 x 550m (infra) - 2 x 150m (kick) = 1840m, 12
+# pods of 150m; memory 3 x 6144Mi - 3Gi - 4 x 128Mi - 64Mi - 4 x 1088Mi - 2 x 576Mi = 9280Mi, 16 of 576Mi.
+[ "$(concurrent control "$ci")" = 12 ] && [ "$(concurrent infra "$ci")" = 4 ] && [ "$(concurrent kick "$ci")" = 2 ] &&
+  grep -q '^# The runner control .*concurrent 12, the normal pool.s room' "$ci" &&
+  ok "control's concurrent is the normal pool's room for its jobs (12), infra's and kick's their own (4, 2)" ||
+  fail "concurrent: control [$(concurrent control "$ci")], infra [$(concurrent infra "$ci")], kick [$(concurrent kick "$ci")]"
 # pooled NAME YQ WANT: control's concurrent with gitlab-runner/pool.yaml changed by YQ is WANT, or render.sh refuses it
 # saying WANT.
 pooled() {
@@ -230,10 +237,10 @@ pooled() {
     grep -q -- "$3" "$work/log" && ok "pool: refused: $1" || fail "pool: $1: $(cat "$work/log")"
   fi
 }
-pooled "two nodes, CPU the bound" '.nodes = 2' 1
-pooled "4Gi nodes, memory the bound" '.allocatable.memory = "4Gi"' 7
-pooled "a larger reserve" '.reserved.cpu = "1500m"' 12
-pooled "no room for one job" '.reserved.cpu = "3300m"' "the normal pool has no room for one job of control"
+pooled "two nodes, CPU the bound" '.nodes = 2 | .reserved.cpu = "900m"' 1
+pooled "4Gi nodes, memory the bound" '.allocatable.memory = "4Gi"' 5
+pooled "a larger reserve" '.reserved.cpu = "1500m"' 10
+pooled "no room for one job" '.reserved.cpu = "3000m"' "the normal pool has no room for one job of control"
 pooled "a quantity it cannot read" '.reserved.cpu = "1.5"' "gitlab-runner/pool.yaml: reserved.cpu \[1.5\] is not"
 # pool_runner NAME YQ WANT: render.sh refuses the runner files changed by YQ (on control.yaml, then infra.yaml), saying WANT.
 pool_runner() {

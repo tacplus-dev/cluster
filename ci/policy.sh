@@ -21,8 +21,9 @@
 #                               runners' pods and their jobs' pods (each runner's config.toml): images by digest, no
 #                               privileged container, host path, host namespace or Docker socket; build jobs only on
 #                               the spot pool, every other job never there; the infra pipelines' tags (cloud, cluster,
-#                               deploy) on the runner infra alone, which takes no other and protected refs only
-#                               (ci_runner below). A runner manager on a read-only root filesystem has a writable
+#                               deploy) on the runner infra alone, which takes no other and protected refs only;
+#                               kick (the looper's kicker and plan, #36) on the runner kick alone, which takes no
+#                               other but arm64 (ci_runner below). A runner manager on a read-only root filesystem has a writable
 #                               emptyDir wherever GitLab Runner writes (RUNNER_WRITES below; #37).
 #
 #   ci/policy.sh OUT     # exit 0: every file keeps them; else each breach, one per line. Needs bash, yq.
@@ -94,7 +95,9 @@ ci_runner_writes() {
 # whichever runner holding its tags asks first. The infra pipelines' tags (cloud, cluster, deploy: tacplus-dev/cloud's,
 # this one's and fleet-seatrials' deploy, which hold WIF to the projects and cluster-admin) are the runner infra's
 # alone (#25): no other runner takes one, infra takes no other tag (no agent's or build's job lands beside their
-# credentials), and infra is registered for protected refs only (tacplus.dev/runner-protected).
+# credentials), and infra is registered for protected refs only (tacplus.dev/runner-protected). The tag kick is the
+# runner kick's alone (#36), and kick takes no other but arm64: its slots are the kicker's and the plan's, never a
+# report's, so they never wait behind control's.
 ci_runner() {
   local b=$1 d=$2 render=$3 tags protected token secret toml json m
   tags=$(D=$d yq 'select(.kind == "Deployment" and .metadata.name == strenv(D)) | .spec.template.metadata.annotations."tacplus.dev/runner-tags" // ""' "$render")
@@ -111,6 +114,7 @@ ci_runner() {
   json=$(yq -p toml -o json -I=0 <<<"$toml") || { breach "$b: the runner $d's config.template.toml is not TOML"; return; }
   while IFS= read -r m; do breach "$b: the runner $d: $m"; done < <(jq -r --arg tags "$tags" --arg runner "$d" --arg protected "$protected" '
     ($tags | split(",")) as $tags | ($tags | index("build") != null) as $build | ($runner == "gitlab-runner-infra") as $infra |
+    ($runner == "gitlab-runner-kick") as $kick |
     ["cloud", "cluster", "deploy"] as $infra_tags |
     if (.runners | length) != 1 then "has \(.runners | length) [[runners]], not one" else
     .runners[0] as $r | ($r.kubernetes // {}) as $k |
@@ -131,6 +135,12 @@ ci_runner() {
       (select($protected != "true") | "is not protected refs only (tacplus.dev/runner-protected): it holds the infra pipelines\u0027 tags")
     else
       ($tags[] | select(IN($infra_tags[])) | "takes a tag of the infra pipelines (\(.)): only the runner infra, protected refs only, takes cloud, cluster and deploy")
+    end),
+    (if $kick then
+      (($tags - ["arm64", "kick"])[] | "takes a tag that is not arm64 or kick (\(.)): its jobs would hold the slots the kicker and the plan keep"),
+      (select($tags | index("kick") == null) | "does not take kick: the kicker and the plan would have no runner of their own")
+    else
+      ($tags[] | select(. == "kick") | "takes kick, the kick runner\u0027s tag: the kicker and the plan would queue behind its jobs")
     end),
     (("cpu_request", "cpu_limit", "memory_request", "memory_limit") as $c |
       if $k[$c] == null then "no default \($c)" elif $k[$c + "_overwrite_max_allowed"] == null then "no ceiling for \($c) (\($c)_overwrite_max_allowed)" else empty end),

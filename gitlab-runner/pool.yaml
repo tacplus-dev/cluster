@@ -1,7 +1,7 @@
 # The normal pool, as the runners' concurrency counts it (#36): render.sh gives the runner whose file says
 # `concurrent: pool` (control) as many jobs as the pool has room for, by their pods' requests, once it has counted this
 # reserve, every runner manager (gitlab-runner/values.yaml's resources), deploymentproxy (its release's requests)
-# and every other normal-pool runner's jobs at its full concurrent (infra's); and it refuses runners the pool cannot
+# and every other normal-pool runner's jobs at its full concurrent (infra's and kick's); and it refuses runners the pool cannot
 # hold. A job's pod counts as its runner's default requests, the job's container and the helper's: a job raising its
 # own (KUBERNETES_CPU_REQUEST) is not counted, so a runner's defaults are its largest kind's (control: a report's,
 # tacplus-dev/looper#165). Bin-packing is not counted: the jobs' pods are small beside a node.

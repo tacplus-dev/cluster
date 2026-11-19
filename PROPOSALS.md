@@ -19,15 +19,15 @@ the looper then marks it `promoted` or `declined` here with the date.
   stack); either is a pull request, not a registration change.
 - **The normal pool's reserve, measured** (2026-11-18, #36): `gitlab-runner/pool.yaml`'s `reserved` (kube-system and
   the deployments' pods, 1200m and 3Gi of the three nodes) is CPU from tacplus-dev/looper#165's evidence and memory an
-  estimate; `control`'s `concurrent` (14) follows from it. The hub's `kubectl describe nodes` (Allocated resources,
+  estimate; `control`'s `concurrent` (12, beside `kick`'s 2) follows from it. The hub's `kubectl describe nodes` (Allocated resources,
   less the `ci` and `deploymentproxy` pods), or tacplus-dev/cloud's hub audit reading the containers' requests
   (`kubernetes.io/container/cpu/request_cores`, `memory/request_bytes`), would replace both with what the nodes
   hold; a change of the pool (cloud's `dev` stack) is a change of `nodes` or `allocatable` there too.
-- **A runner of their own for the kicker and the plan** (2026-11-18, #36, part 2): `gitlab-runner/runners/kick.yaml`,
-  tags `arm64, kick` (not `arm64, control, kick`: GitLab gives a runner every job whose tags are a subset of its own,
-  so one holding `control` would fill with reports too), a small fixed `concurrent` on the normal pool, its token
-  `gitlab-runner-kick` version 1. Waits on tacplus-dev/cloud#81 (the registration and the secret: the apply refuses
-  a version it cannot read); then tacplus-dev/looper tags `.control` `arm64, kick`.
+- **The looper's `.control` on the kick runner** (2026-11-19, #36): `gitlab-runner/runners/kick.yaml` (tags
+  `arm64, kick`, `concurrent` 2, the normal pool; tacplus-dev/cloud#81 registered it and wrote `gitlab-runner-kick`
+  version 1) takes no job until tacplus-dev/looper tags its `.control` jobs (the kicker and the plan) `arm64, kick`,
+  after the hub re-pins the cluster to a commit with it. Until then `control` holds the 2 slots' room it no longer
+  uses. Ordered: the re-pin first, or `.control` jobs find no runner.
 - **A runner change proven by a job before main takes it** (2026-11-19, #37): e246907's runners rolled out green
   (`apply` waits for their rollouts) yet failed every job at once, because nothing here starts a job: `ci/policy.sh`
   now refuses a read-only root filesystem without a writable emptyDir where GitLab Runner writes, but only for the

@@ -24,8 +24,9 @@ ok() { echo "ok   $*"; }
 export PATH=$here/tests/stub:$work/bin:$PATH KSTUB=$work/k SMSTUB=$work/sm
 mkdir -p "$KSTUB" "$work/bin"
 printf '#!/bin/sh\n' > "$work/bin/gke-gcloud-auth-plugin" && chmod +x "$work/bin/gke-gcloud-auth-plugin"
-for r in build control infra; do
-  ref=$(yq '.tacplus.token' "$here/gitlab-runner/runners/$r.yaml")
+for f in "$here"/gitlab-runner/runners/*.yaml; do
+  r=$(basename "$f" .yaml)
+  ref=$(yq '.tacplus.token' "$f")
   mkdir -p "$SMSTUB/$(dirname "${ref#projects/}" | sed 's|/secrets/|/|; s|/versions$||')"
   printf 'glrt-stub%s_t0ken\n' "$r" > "$SMSTUB/$(echo "${ref#projects/}" | sed 's|/secrets/|/|; s|/versions/|/|')"
 done
