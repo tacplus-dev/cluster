@@ -28,6 +28,19 @@ the looper then marks it `promoted` or `declined` here with the date.
   so one holding `control` would fill with reports too), a small fixed `concurrent` on the normal pool, its token
   `gitlab-runner-kick` version 1. Waits on tacplus-dev/cloud#81 (the registration and the secret: the apply refuses
   a version it cannot read); then tacplus-dev/looper tags `.control` `arm64, kick`.
+- **A runner change proven by a job before main takes it** (2026-11-19, #37): e246907's runners rolled out green
+  (`apply` waits for their rollouts) yet failed every job at once, because nothing here starts a job: `ci/policy.sh`
+  now refuses a read-only root filesystem without a writable emptyDir where GitLab Runner writes, but only for the
+  paths it knows (RUNNER_WRITES). A job pod started by the rendered runner would prove the rest: either the gates
+  (an envtest API server plus the runner binary against a stub GitLab, no container runtime needed for the manager,
+  though the job pod itself needs a node), or `apply` running one canary job on each changed runner (a GitLab
+  trigger, a token the pipeline does not hold today) and the hub rolling back (`ci/rollback.sh`) on its failure.
+  Either is a design for Jody: a token, or a kubelet in the gates.
+- **A runner that deploys this pipeline outside the cluster it deploys** (2026-11-19, #37): `ci/rollback.sh` needs
+  a person with cluster-admin; tacplus-dev/cloud#11 removes the VM `cluster` runner that applied #37's rollback. A
+  GitLab-hosted arm64 runner enabled on this project for a rollback-only job (README's recorded risk already names one
+  for a lost cluster), or keeping one VM runner paused for it, would give the pipeline a way back with no person on
+  Cloud Shell; a spend and a placement of cluster-admin credentials Jody decides.
 - **A dedicated app for the drift issue** (2026-11-02, #1): the issue asks for the tacplus-reader app, which then
   needs Issues: write on this repository; "reader" stops meaning read-only. A small app (or the repository's
   looper bot, tacplus-dev/looper#28) with Issues: write on `cluster` alone would keep tacplus-reader read-only.

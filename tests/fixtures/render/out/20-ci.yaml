@@ -436,6 +436,8 @@ spec:
               mountPath: /configmaps
             - mountPath: /home/gitlab-runner
               name: home
+            - mountPath: /tmp
+              name: tmp
           resources:
             limits:
               cpu: 500m
@@ -465,6 +467,8 @@ spec:
             name: gitlab-runner-build
         - emptyDir: {}
           name: home
+        - emptyDir: {}
+          name: tmp
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -838,6 +842,8 @@ spec:
               mountPath: /configmaps
             - mountPath: /home/gitlab-runner
               name: home
+            - mountPath: /tmp
+              name: tmp
           resources:
             limits:
               cpu: 500m
@@ -867,6 +873,8 @@ spec:
             name: gitlab-runner-control
         - emptyDir: {}
           name: home
+        - emptyDir: {}
+          name: tmp
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -1240,6 +1248,8 @@ spec:
               mountPath: /configmaps
             - mountPath: /home/gitlab-runner
               name: home
+            - mountPath: /tmp
+              name: tmp
           resources:
             limits:
               cpu: 500m
@@ -1269,6 +1279,8 @@ spec:
             name: gitlab-runner-infra
         - emptyDir: {}
           name: home
+        - emptyDir: {}
+          name: tmp
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

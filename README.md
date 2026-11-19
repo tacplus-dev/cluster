@@ -45,7 +45,7 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `gitlab-runner/runners/<runner>.yaml` | One runner each (`build`, `control`, `infra`): its tags, whether it takes protected refs only, its token's Secret Manager version, its jobs' `config.toml`. |
 | `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
-| `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `lib.sh` (credentials); `tools.sh` (the pinned tools); `grants.sh`, the scope of the KSV-0053 and KSV-0056 exceptions (Security checks, below). |
+| `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `rollback` (the way back without a runner: Rolling back, below); `lib.sh` (credentials); `tools.sh` (the pinned tools); `grants.sh`, the scope of the KSV-0053 and KSV-0056 exceptions (Security checks, below). |
 | `build.lock`, `gates.yaml` | The build image by digest (the CI image), and the gates run in it (How a change reaches the cluster, below). |
 | `security-exceptions.yaml` | The security findings accepted, each until its expiry (Security checks, below). |
 | `security-baseline.json` | The MEDIUM and LOW findings looper-scan's nightly takes as baselined, not new (`looper-scan baseline` writes it): the GitLab Runner chart's entrypoint ConfigMap, KSV-01010 (#30); the RBAC granted by design, KSV-0048, KSV-0049 and KSV-0113 (#28); KSV-0125 on our own registries, the runners' uid and gid (KSV-0020, -0021, the runner image's user 100), and the vendored releases' templates scanned with upstream's defaults (KSV-0011, -0015, -0016, -0018, -0020, -0021, -0030, -0104), until looper-scan can skip vendored paths (#34). |
@@ -214,6 +214,24 @@ runners' tokens) lands; the hub re-pins `.gitlab-ci.yml`; the pipeline on main a
    `seatrials` (`tac-seatrials`, its two Roles and RoleBindings), all added; nothing else.
 2. `apply`, after it: it plans again on the cluster as it is, applies, and waits for deploymentproxy to roll out.
 3. Run the pipeline again (web): `plan` says `no difference`, and `apply` changes nothing.
+
+### Rolling back
+
+A change to the runners can take down the runner that deploys it: this pipeline runs on `infra`, in the cluster
+(#37: e246907's runners failed every job at once, `infra`'s too, and only the paused VM runner could apply the
+rollback). So the way back needs no runner in the cluster:
+
+1. **Re-pin** the GitLab project to the last good commit of main (`ci/pin.sh <commit>`, What the hub does, step 2),
+   so no pipeline applies the broken one again. If `infra` still runs jobs, that pipeline's `apply` is the rollback.
+2. **If it does not:** from Cloud Shell, or anywhere gcloud is signed in as someone who is cluster-admin on `dev`
+   (Jody), in a checkout of main: `ci/rollback.sh <commit>`. It fetches that commit, builds its pinned tools,
+   renders, checks the policy and applies it as `apply` does (the plan, the apply, the runners' tokens, the rollouts
+   waited for), with no runner and no GitLab. Like `apply`, it never deletes. A runner's old pods finish the jobs
+   they run (`terminationGracePeriodSeconds`) while the new ones start.
+
+`ci/policy.sh` keeps the failure #37 found out of the render: a runner manager on a read-only root filesystem must
+have a writable emptyDir wherever GitLab Runner writes (`/tmp`, or its `TMPDIR`, for each job's log buffer; its home;
+its config). No check here starts a job; a runner change is proven by the first job it takes after `apply`.
 
 ### Locally
 

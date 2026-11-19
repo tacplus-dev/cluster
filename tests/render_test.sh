@@ -7,7 +7,7 @@
 # digest (deploymentproxy's, and the runners' and their jobs' in ci); deploymentproxy runs as its image's user,
 # named, and with a CPU limit, the rest of its Deployment the release's; ci's RBAC is in ci only; build jobs select and
 # tolerate the spot pool and control and infra jobs never; each runner's jobs have HOME on an emptyDir;
-# each runner has a CPU limit and a read-only root filesystem, its home and config on emptyDirs; each runner's
+# each runner has a CPU limit and a read-only root filesystem, /tmp, its home and config on emptyDirs (#37); each runner's
 # pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
 # is protected refs only, and no other runner is; control's concurrent is the normal pool's room
 # (gitlab-runner/pool.yaml), CPU or memory the bound, and runners the pool cannot hold, a second runner on its room,
@@ -98,16 +98,18 @@ for r in build control infra; do
   cpu=$(R=$r yq 'select(.kind == "Deployment" and .metadata.name == "gitlab-runner-" + strenv(R)) | .spec.template.spec.containers[0].resources.limits.cpu' "$ci")
   [ "$cpu" = 500m ] && ok "$r's runner has its CPU limited to 500m" || fail "$r's runner's CPU limit is [$cpu]"
 done
-# Each runner's own container has a read-only root filesystem (#29: KSV-0014); where GitLab Runner writes, its home
-# (its working directory) and its config under it, is an emptyDir.
+# Each runner's own container has a read-only root filesystem (#29: KSV-0014); where GitLab Runner writes, /tmp (each
+# job's log buffer: without it every job failed at once, #37), its home (its working directory) and its config under
+# it, is an emptyDir.
 pod() { R=$r yq "select(.kind == \"Deployment\" and .metadata.name == \"gitlab-runner-\" + strenv(R)) | .spec.template.spec | $1" "$ci"; }
 emptydir() { local v; v=$(pod ".containers[0].volumeMounts[] | select(.mountPath == \"$1\") | .name")
   [ -n "$v" ] && [ "$(pod ".volumes[] | select(.name == \"$v\" and has(\"emptyDir\")) | .name")" = "$v" ] && echo 1 || echo 0; }
 for r in build control infra; do
   [ "$(pod '.containers[0].securityContext.readOnlyRootFilesystem')" = true ] &&
-    [ "$(emptydir /home/gitlab-runner)" = 1 ] && [ "$(emptydir /home/gitlab-runner/.gitlab-runner)" = 1 ] &&
-    ok "$r's runner has a read-only root filesystem, its home and config on emptyDirs" ||
-    fail "$r's runner: readOnlyRootFilesystem [$(pod '.containers[0].securityContext.readOnlyRootFilesystem')], home [$(emptydir /home/gitlab-runner)], config [$(emptydir /home/gitlab-runner/.gitlab-runner)]"
+    [ "$(emptydir /tmp)" = 1 ] && [ "$(emptydir /home/gitlab-runner)" = 1 ] &&
+    [ "$(emptydir /home/gitlab-runner/.gitlab-runner)" = 1 ] &&
+    ok "$r's runner has a read-only root filesystem, /tmp, its home and config on emptyDirs" ||
+    fail "$r's runner: readOnlyRootFilesystem [$(pod '.containers[0].securityContext.readOnlyRootFilesystem')], /tmp [$(emptydir /tmp)], home [$(emptydir /home/gitlab-runner)], config [$(emptydir /home/gitlab-runner/.gitlab-runner)]"
 done
 [ "$(yq ea '[select(.kind == "Deployment") | .spec.template.metadata.annotations."tacplus.dev/runner-token"] | join(" ")' "$ci")" = \
   "$(yq '.tacplus.token' "$here/gitlab-runner/runners/build.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/control.yaml") $(yq '.tacplus.token' "$here/gitlab-runner/runners/infra.yaml")" ] &&

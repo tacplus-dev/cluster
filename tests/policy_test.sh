@@ -12,8 +12,9 @@
 # tolerating spot, landing on a spot node, Unconfined or escalating privilege; a job allowed to override its
 # placement, a job's token, no resource ceiling; build taking other tags; a VM runner's tag (autoscale,
 # autoscale-16, gce) on any runner; an infra pipeline's tag (cloud, cluster, deploy) on build or control, infra
-# taking any other tag, or not protected refs only (#25); a token by latest; cluster RBAC, a `*`, a resource the executor does not need,
-# another namespace's account or object, a Secret. Needs bash, yq, jq, helm.
+# taking any other tag, or not protected refs only (#25); a runner manager on a read-only root filesystem without a
+# writable emptyDir where GitLab Runner writes (/tmp or its TMPDIR, its home; #37); a token by latest; cluster RBAC,
+# a `*`, a resource the executor does not need, another namespace's account or object, a Secret. Needs bash, yq, jq, helm.
 #
 #   tests/policy_test.sh
 set -uo pipefail
@@ -125,6 +126,13 @@ breach_ci "a privileged runner manager" "$(deployment build '.spec.containers[0]
 breach_ci "a host path in a runner manager" "$(deployment build '.spec.volumes') += [{\"name\": \"docker\", \"hostPath\": {\"path\": \"/var/run/docker.sock\"}}]" "the volume docker is a host path"
 breach_ci "a runner manager image by tag only" "$(deployment control '.spec.containers[0].image') = \"registry.gitlab.com/gitlab-org/gitlab-runner:latest\"" "the image \[registry.gitlab.com/gitlab-org/gitlab-runner:latest\] is not pinned by digest"
 breach_ci "a runner manager on spot" "$(deployment control '.spec.tolerations') += [{\"key\": \"spot\", \"operator\": \"Exists\"}]" "Deployment gitlab-runner-control tolerates spot"
+# Where the runner manager writes, on its read-only root filesystem (#37: no /tmp failed every job at once).
+mounts=$(deployment control '.spec.containers[0].volumeMounts')
+breach_ci "a runner manager without /tmp" "del($mounts[] | select(.mountPath == \"/tmp\"))" "Deployment gitlab-runner-control: the container gitlab-runner-control writes /tmp, each job's log buffer, before the job starts (helpers/trace/buffer.go: os.CreateTemp), on a read-only root filesystem: no volume is mounted there"
+breach_ci "a runner manager's /tmp read-only" "($mounts[] | select(.mountPath == \"/tmp\") | .readOnly) = true" "the container gitlab-runner-control writes /tmp, each job's log buffer.*its mount tmp is readOnly"
+breach_ci "a runner manager's /tmp not an emptyDir" "($mounts[] | select(.mountPath == \"/tmp\") | .name) = \"configmaps\"" "the container gitlab-runner-control writes /tmp, each job's log buffer.*its mount configmaps is not an emptyDir"
+breach_ci "a runner manager's TMPDIR not mounted" "$(deployment infra '.spec.containers[0].env') += [{\"name\": \"TMPDIR\", \"value\": \"/var/tmp\"}]" "Deployment gitlab-runner-infra: the container gitlab-runner-infra writes /var/tmp, each job's log buffer"
+breach_ci "a runner manager without its home" "del($(deployment build '.spec.containers[0].volumeMounts')[] | select(.mountPath == \"/home/gitlab-runner\"))" "the container gitlab-runner-build writes /home/gitlab-runner, its working directory (--working-directory), on a read-only root filesystem: no volume"
 breach_ci "host networking" "$(deployment build '.spec.hostNetwork') = true" "gitlab-runner-build: hostNetwork"
 breach_ci "a ClusterRole" '(select(.kind == "Role" and .metadata.name == "gitlab-runner-build") | .kind) = "ClusterRole"' "ClusterRole gitlab-runner-build: ci holds only"
 breach_ci "a ClusterRoleBinding" '(select(.kind == "RoleBinding" and .metadata.name == "gitlab-runner-build") | .kind) = "ClusterRoleBinding"' "ClusterRoleBinding gitlab-runner-build: ci holds only"

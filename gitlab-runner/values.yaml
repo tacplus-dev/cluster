@@ -43,9 +43,11 @@ podSecurityContext:
   fsGroup: 65533
   seccompProfile:
     type: RuntimeDefault
-# A read-only root filesystem (#29): GitLab Runner writes only its config, /home/gitlab-runner/.gitlab-runner (the
-# chart's emptyDir etc-gitlab-runner), and its home, /home/gitlab-runner (its --working-directory), the emptyDir
-# below; fsGroup makes both writable by its uid.
+# A read-only root filesystem (#29): GitLab Runner writes its config, /home/gitlab-runner/.gitlab-runner (the
+# chart's emptyDir etc-gitlab-runner), its home, /home/gitlab-runner (its --working-directory), and /tmp, where it
+# buffers each job's log before the job starts (#37: without it every job failed at once with runner_system_failure
+# and an empty log), the emptyDirs below; fsGroup makes them writable by its uid. ci/policy.sh refuses a render
+# without them (RUNNER_WRITES).
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
@@ -56,9 +58,13 @@ securityContext:
 volumes:
   - name: home
     emptyDir: {}
+  - name: tmp
+    emptyDir: {}
 volumeMounts:
   - name: home
     mountPath: /home/gitlab-runner
+  - name: tmp
+    mountPath: /tmp
 # The runner's own container (its jobs' are each runner's config): a CPU limit too (#34: KSV-0011), as deploymentproxy's.
 resources:
   requests:

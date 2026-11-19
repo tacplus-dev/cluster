@@ -22,7 +22,8 @@
 #                               privileged container, host path, host namespace or Docker socket; build jobs only on
 #                               the spot pool, every other job never there; the infra pipelines' tags (cloud, cluster,
 #                               deploy) on the runner infra alone, which takes no other and protected refs only
-#                               (ci_runner below).
+#                               (ci_runner below). A runner manager on a read-only root filesystem has a writable
+#                               emptyDir wherever GitLab Runner writes (RUNNER_WRITES below; #37).
 #
 #   ci/policy.sh OUT     # exit 0: every file keeps them; else each breach, one per line. Needs bash, yq.
 set -uo pipefail
@@ -54,6 +55,33 @@ ci_pod() {
     ((.volumes // [])[] | select(has("hostPath")) | "the volume \(.name) is a host path"),
     (("hostNetwork", "hostPID", "hostIPC") as $h | select(.[$h] == true) | "\($h)"),
     (select([.. | strings | select(test("docker\\.sock"))] | length > 0) | "the Docker socket")' <<<"$2")
+}
+
+# RUNNER_WRITES: where GitLab Runner's manager writes (19.5.3), each path|why. On a read-only root filesystem
+# (#29), each must be a writable emptyDir; /tmp is TMPDIR when the container sets it. #37: without /tmp, every job
+# failed at once with runner_system_failure and an empty log.
+RUNNER_WRITES="/tmp|each job's log buffer, before the job starts (helpers/trace/buffer.go: os.CreateTemp)
+/home/gitlab-runner|its working directory (--working-directory)
+/home/gitlab-runner/.gitlab-runner|its config.toml (the chart's entrypoint copies it there; the runner rewrites it)"
+
+# ci_runner_writes WHAT SPEC: in a runner manager's pod spec (JSON), every container on a read-only root filesystem
+# has each path of RUNNER_WRITES on a writable emptyDir: the deepest mount at or above it is an emptyDir, not
+# readOnly.
+ci_runner_writes() {
+  local what=$1 m
+  while IFS= read -r m; do breach "$what: $m"; done < <(jq -r --arg writes "$RUNNER_WRITES" '
+    ([(.volumes // [])[] | select(has("emptyDir")) | .name]) as $empty |
+    ($writes | split("\n") | map(split("|") | {path: .[0], why: .[1]})) as $writes |
+    (.containers // [])[] | select(.securityContext.readOnlyRootFilesystem == true) | . as $c |
+    ([(.env // [])[] | select(.name == "TMPDIR") | .value][0] // "/tmp" | rtrimstr("/")) as $tmp |
+    $writes[] | (if .path == "/tmp" then .path = $tmp else . end) | . as $w |
+    ([($c.volumeMounts // [])[] | (.mountPath | rtrimstr("/")) as $p |
+      select($w.path == $p or ($w.path | startswith($p + "/"))) | .path = $p] |
+      max_by(.path | length)) as $m |
+    if $m == null then "the container \($c.name) writes \($w.path), \($w.why), on a read-only root filesystem: no volume is mounted there"
+    elif $m.readOnly == true then "the container \($c.name) writes \($w.path), \($w.why), but its mount \($m.name) is readOnly"
+    elif ($empty | index($m.name)) == null then "the container \($c.name) writes \($w.path), \($w.why), but its mount \($m.name) is not an emptyDir"
+    else empty end' <<<"$2")
 }
 
 # ci_runner FILE DEPLOYMENT RENDER: the runner DEPLOYMENT's config.toml (its ConfigMap's config.template.toml) keeps
@@ -221,6 +249,7 @@ for b in "${files[@]##*/}"; do
             runners+=("$name")
             pod="select(document_index == $i) | .spec.template"
             ci_pod "$b: the Deployment $name" "$(yq ea -o=json -I=0 "$pod.spec" "$f")"
+            ci_runner_writes "$b: the Deployment $name" "$(yq ea -o=json -I=0 "$pod.spec" "$f")"
             [ "$(yq ea "$pod.spec.tolerations // [] | map(select(.key == \"spot\")) | length" "$f")" = 0 ] ||
               breach "$b: the Deployment $name tolerates spot: a runner manager runs on the normal pool"
             ;;
