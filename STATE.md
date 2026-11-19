@@ -1,13 +1,13 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-19 by the looper (#37).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-19 by the looper (#36).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
 - **Target (#7):** tacplus-dev/cloud's cluster `dev` (us-central1-a) in the project `tacplus-dev` (seabeam.net), as
   `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`; seatrials' deploy account and the runners' token
   secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1; `gitlab-runner-infra`, #25, made and
-  written by tacplus-dev/cloud's stacks, cloud#64) in `tacplus-dev` too. The old `tacplus` in
+  written by tacplus-dev/cloud's stacks, cloud#64; `gitlab-runner-kick`, #36, the same, cloud#81) in `tacplus-dev` too. The old `tacplus` in
   `jody1-328023` is no longer the target; Jody deletes it once the pipeline applies to `dev`.
 - **Works:** the cluster pipeline (#1): `deployments.yaml` (`seatrials`; `test-idp`, #17, without an operator: `operator` optional, no deploymentproxy Role or operator binding then, the policy requiring both or neither); deploymentproxy v0.2.2 (#22) fetched
   and pinned by commit, checksum and image digest, rendered as its image's user 65532:65532 with a 500m CPU limit (#31), bumped by one command (`deploymentproxy/bump.sh <tag>`, #4: the
@@ -26,13 +26,15 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-19 by th
   and helper images our own build since #21 (`ci/runner-images.sh`: 19.5.3 at `33227fd4` with go1.27.4, x/net v0.62.0,
   go-jose v4.1.6 and compress v1.20.2, the runner binary SHA-256-identical to tacplus-dev/cloud's; on `alpine:3.24`,
   no docker-machine; reproducible, refused unless the pinned digest; the job `runner-images` pushes them on main to
-  cloud's `ci-images`, the security job scans its OCI layouts, the gates build them when their recipe changes) as three
+  cloud's `ci-images`, the security job scans its OCI layouts, the gates build them when their recipe changes) as four
   runners, `build` (tags `arm64, build`, jobs on the spot pool only), `control` (`arm64, control`, #13;
   no VM runner's tag, the policy refuses one; the normal pool) and `infra` (#25, for cloud#11: `cloud, cluster, deploy`,
   the three infrastructure pipelines', protected refs only (`tacplus.protected`, on every runner's pods as
   `tacplus.dev/runner-protected`), the normal pool as control, no token in the pod; the policy admits those three tags
-  to `infra` alone, refuses it any other tag and an `infra` not protected), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
-  `gitlab-runner/pool.yaml`, 14 today, CPU the bound; its default CPU request a report's 100m, looper#165), the
+  to `infra` alone, refuses it any other tag and an `infra` not protected) and `kick` (#36: `arm64, kick`, the looper's
+  kicker and plan on slots of their own, `concurrent` 2, the normal pool; the policy keeps `kick` its tag alone and
+  it on `arm64, kick` only), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
+  `gitlab-runner/pool.yaml`, 12 today beside `kick`'s 2, CPU the bound; its default CPU request a report's 100m, looper#165), the
   render refusing runners the pool cannot hold; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
   the job image, and `git config --global` failed on `//.gitconfig`); each runner's own container CPU-limited to 500m (#34) and on a
   read-only root filesystem, its home, its config and `/tmp` on emptyDirs (#29: KSV-0014; #37: `/tmp`, where the runner
@@ -62,7 +64,10 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   `infra`), cloud pipeline 3072736206; the VM `cluster` runner 58534920 is paused, and tacplus-dev/cloud#11 removes the
   VMs. `control` (58541761) is live since 2026-11-16 01:28Z (tacplus-dev/looper#84). `build` (58541760) stays paused:
   rootless BuildKit is not in the build image yet (tacplus-dev/tacplus#315), and until it is the VM build runner takes
-  tacplus-dev/build's scheduled jobs. Whether this project's nightly schedule 4547285 is on is not recorded: the hub's
+  tacplus-dev/build's scheduled jobs. `kick` (#36; registered by cloud's `gitlab` stack, cloud#81) takes no job until
+  the hub re-pins to a commit with it and tacplus-dev/looper#197 tags `.control` (the kicker, the plan) `arm64, kick`;
+  that its token's version 1 is readable is cloud#81's, unverified here (until it is, `apply` fails after the rest,
+  at `runner-tokens`). Whether this project's nightly schedule 4547285 is on is not recorded: the hub's
   closing comments do not say, and no looper has a GitLab token to see it. The `ci` NetworkPolicy holds only where
   NetworkPolicy is enforced (Dataplane V2: tacplus-dev/cloud's `dev` cluster has it).
   `runner-images` needs tacplus-dev/cloud's `apply:dev` to have created `ci-images` (cloud#45, landed) before it
