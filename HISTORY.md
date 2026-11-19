@@ -33,3 +33,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-17 looper issue Trivy's config checks flag the RBAC this repository grants by design (runner pods/exec and services, fleet-deploy and deploymentproxy NetworkPolicies): KSV-0053/KSV-0056 HIGH fail the build's security checks (#28)
 - 2026-11-18 looper issue STATE.md's Blocked on line is stale: it names closed #18 and #25 (#35)
 - 2026-11-18 looper issue Security checks: 18 new non-blocking Trivy config findings (the runners' CPU limit, uid/gid, registry; the vendored chart and deploymentproxy templates) to fix or baseline (#34)
+- 2026-11-19 looper issue e246907 deployed: every new job on the in-cluster runners fails at once with runner_system_failure (read-only root filesystem #29?); rolled back to 8762d36 (#37)
