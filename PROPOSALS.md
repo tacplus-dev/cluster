@@ -25,7 +25,7 @@ the looper then marks it `promoted` or `declined` here with the date.
   hold; a change of the pool (cloud's `dev` stack) is a change of `nodes` or `allocatable` there too.
 - **The looper's `.control` on the kick runner** (2026-11-19, #36): `gitlab-runner/runners/kick.yaml` (tags
   `arm64, kick`, `concurrent` 2, the normal pool; tacplus-dev/cloud#81 registered it and wrote `gitlab-runner-kick`
-  version 1) takes no job until tacplus-dev/looper tags its `.control` jobs (the kicker and the plan) `arm64, kick`,
+  version 1) takes no job until tacplus-dev/looper#197 tags its `.control` jobs (the kicker and the plan) `arm64, kick`,
   after the hub re-pins the cluster to a commit with it. Until then `control` holds the 2 slots' room it no longer
   uses. Ordered: the re-pin first, or `.control` jobs find no runner.
 - **A runner change proven by a job before main takes it** (2026-11-19, #37): e246907's runners rolled out green
