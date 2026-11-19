@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by the looper (#34).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-19 by the looper (#37).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -35,7 +35,10 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by th
   `gitlab-runner/pool.yaml`, 14 today, CPU the bound; its default CPU request a report's 100m, looper#165), the
   render refusing runners the pool cannot hold; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
   the job image, and `git config --global` failed on `//.gitconfig`); each runner's own container CPU-limited to 500m (#34) and on a
-  read-only root filesystem, its home and config on emptyDirs (#29: KSV-0014; not yet seen running in the cluster); Roles in `ci` only; jobs as `ci-job`
+  read-only root filesystem, its home, its config and `/tmp` on emptyDirs (#29: KSV-0014; #37: `/tmp`, where the runner
+buffers each job's log, was missing, and every job failed at once; `ci/policy.sh` now refuses a runner on a read-only
+root without a writable emptyDir where GitLab Runner writes); a way back with no in-cluster runner (#37:
+`ci/rollback.sh <commit>`, from Cloud Shell as someone cluster-admin on `dev`; README, Rolling back); Roles in `ci` only; jobs as `ci-job`
   with no token, kept off the metadata server (NetworkPolicy); the admission policy `ci-pods` refusing privileged,
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
   1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
@@ -48,7 +51,10 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-18 by th
   gates full (481c74d, pipeline 3070525179; 66e1835, pipeline 3070897201), and the pipeline's first security run of
   main found nothing (0 findings, 0 exceptions needed). On demand only: the nightly build schedule is cloud#33's
   (PROPOSALS.md).
-- **Released / deployed:** the GitLab project runs pipelines on main: #2 reports Jody playing `apply` in pipeline
+- **Released / deployed:** the cluster runs 8762d36 (2026-11-16): the hub re-pinned to e246907 on 2026-11-18 23:29Z,
+  every new job on the in-cluster runners then failed at once (runner_system_failure, empty log: #29's read-only root
+  without `/tmp`), and the hub rolled back to 8762d36 at 00:30Z on the VM `cluster` runner (#37). #28 to #36 reach the
+  cluster when the hub re-pins to a commit with #37's fix. The GitLab project runs pipelines on main: #2 reports Jody playing `apply` in pipeline
   3019831835 (job 17680247127) on 2026-11-02; its outcome is not recorded here yet. The lines below predate it.
 - **Known gaps:** the in-cluster runners are registered and applied (the hub, closing #18 and #25, 2026-11-16 09:25Z):
   `infra` (59271051, #25; registered by cloud's `gitlab` stack, cloud#64) carries cloud's and cluster's pipelines since
