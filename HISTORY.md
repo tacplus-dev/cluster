@@ -35,3 +35,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-18 looper issue Security checks: 18 new non-blocking Trivy config findings (the runners' CPU limit, uid/gid, registry; the vendored chart and deploymentproxy templates) to fix or baseline (#34)
 - 2026-11-19 looper issue e246907 deployed: every new job on the in-cluster runners fails at once with runner_system_failure (read-only root filesystem #29?); rolled back to 8762d36 (#37)
 - 2026-11-19 looper issue STATE.md's Blocked on line is stale: it names closed tacplus-dev/cloud#81 (the kick runner now waits on the re-pin and looper#197) and cites closed looper#165 (#38)
+- 2026-11-20 looper issue The kick runner can't schedule: control's concurrent 'pool' takes the normal pool's whole room, leaving none for gitlab-runner-kick (#39)
