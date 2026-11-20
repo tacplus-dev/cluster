@@ -7,6 +7,18 @@ metadata:
   labels:
     tacplus.dev/ci: "true"
 ---
+# The runner managers' priority (gitlab-runner/values.yaml's priorityClassName, #39): above the jobs' pods (0, none
+# set), preempting one when a manager has no room, so a runner is never down for want of its manager's pod. Never the
+# cluster's default; far below the system's (over 1000000000).
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ci-runner-manager
+value: 1000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: GitLab Runner managers in ci (tacplus-dev/cluster), ahead of their jobs' pods.
+---
 # The jobs' pods' account: no role anywhere, and no token in the pod.
 apiVersion: v1
 kind: ServiceAccount
@@ -379,6 +391,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       terminationGracePeriodSeconds: 3600
+      priorityClassName: "ci-runner-manager"
       serviceAccountName: "gitlab-runner-build"
       containers:
         - name: gitlab-runner-build
@@ -785,6 +798,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       terminationGracePeriodSeconds: 3600
+      priorityClassName: "ci-runner-manager"
       serviceAccountName: "gitlab-runner-control"
       containers:
         - name: gitlab-runner-control
@@ -1191,6 +1205,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       terminationGracePeriodSeconds: 3600
+      priorityClassName: "ci-runner-manager"
       serviceAccountName: "gitlab-runner-infra"
       containers:
         - name: gitlab-runner-infra
@@ -1395,9 +1410,9 @@ data:
         privileged = false
         allow_privilege_escalation = false
         poll_timeout = 600
-        cpu_request = "100m"
+        cpu_request = "50m"
         cpu_limit = "1"
-        memory_request = "512Mi"
+        memory_request = "256Mi"
         memory_limit = "2Gi"
         cpu_request_overwrite_max_allowed = "1500m"
         cpu_limit_overwrite_max_allowed = "1500m"
@@ -1584,7 +1599,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: kick
       annotations:
-        checksum/configmap: 40ea6be888b6a93bcd575bb6a568962b5d6208bce6885cbdd0f0ff105fb68237
+        checksum/configmap: eeaa7317b2a6ea1b9239cfe0bb539900accc9b19556bdf0f1bec8169137b8872
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,kick"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-kick/versions/1"
@@ -1597,6 +1612,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       terminationGracePeriodSeconds: 3600
+      priorityClassName: "ci-runner-manager"
       serviceAccountName: "gitlab-runner-kick"
       containers:
         - name: gitlab-runner-kick

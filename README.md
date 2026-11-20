@@ -258,20 +258,24 @@ The chart is pinned by the SHA-256 of its archive, and the runner, helper and de
 | `build` | `arm64`, `build` | the spot pool only: node selector `spot=true`, toleration `spot=true:NoSchedule` | CPU 1 / 3, memory 4Gi / 8Gi | CPU 3500m, memory 12Gi (a c4a-standard-4) |
 | `control` | `arm64`, `control` (the looper's reports, managers, scans) | the normal pool: no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 100m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
 | `infra` | `cloud`, `cluster`, `deploy` (tacplus-dev/cloud's, this pipeline, fleet-seatrials' deploy), **protected refs only** | the normal pool, as `control` | CPU 500m / 1500m, memory 1Gi / 4Gi | CPU 1500m, memory 4Gi |
-| `kick` | `arm64`, `kick` (the looper's kicker and plan, its `.control` jobs; #36) | the normal pool, as `control` | CPU 100m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
+| `kick` | `arm64`, `kick` (the looper's kicker and plan, its `.control` jobs; #36) | the normal pool, as `control` | CPU 50m / 1, memory 256Mi / 2Gi (the looper's `.control` requests, #39) | CPU 1500m, memory 4Gi |
 
 **How many jobs at once** (`concurrent`): `build` 6, `infra` 4 and `kick` 2, fixed; `control` as many as the normal pool has
 room for (`concurrent: pool`, #36), which `render.sh` counts from `gitlab-runner/pool.yaml` (its nodes, a node's
 allocatable, a reserve for kube-system and the deployments' pods) less every runner manager, deploymentproxy and
 `infra`'s and `kick`'s jobs at their full concurrent, by each job pod's default requests (job and helper) in CPU and
-memory: 12 today, CPU the bound. The render refuses runners the pool cannot hold. `control`'s defaults are its largest
+memory: 12 today, CPU the bound, 140m left. The render refuses runners the pool cannot hold. `control`'s defaults are its largest
 kind's, a report's (tacplus-dev/looper#165), so the count holds for every looper job; a job that raises its own is
 not counted. A larger pool, or a measured reserve, is a change to `gitlab-runner/pool.yaml`, and the count follows.
 
 A job raises its own with GitLab's variables (`KUBERNETES_CPU_REQUEST`, `KUBERNETES_MEMORY_LIMIT` and the rest) up
 to the ceiling; the helper container has its own small defaults. It may override nothing else: not its node
 selector, tolerations, namespace, service account or pod annotations (the policy refuses any
-`*_overwrite_allowed`). The runner managers (one Deployment per runner, in `ci`) run on the normal pool too. A spot
+`*_overwrite_allowed`). The runner managers (one Deployment per runner, in `ci`) run on the normal pool too, at the
+PriorityClass `ci-runner-manager` (#39), above every job's pod (none sets one) and preempting one when a manager has
+no room: a manager that cannot schedule takes its whole runner down, as `kick`'s did while `control`'s old manager
+still ran its jobs beside the new one's after an apply. A manager is counted in the pool's room, so it only takes back
+its own; the job it evicts fails and is retried. A spot
 node from 0 takes minutes, so a build job waits up to 15 minutes for its pod (`poll_timeout`); preemption is
 handled the GitLab way, with `retry:` in the pipeline files (`runner_system_failure`, `stuck_or_timeout_failure`).
 

@@ -14,8 +14,11 @@
 #   00-deploymentproxy.yaml     namespaced objects only in deploymentproxy; cluster-scoped, only the Namespace
 #                               deploymentproxy, CRDs, ClusterRoles and ClusterRoleBindings.
 #   20-ci.yaml                  namespaced objects only in ci, and only service accounts, ConfigMaps, NetworkPolicies,
-#                               Roles, RoleBindings and Deployments; cluster-scoped, only the Namespace ci and the
-#                               admission policy ci-pods (no ClusterRole, no ClusterRoleBinding). A Role names only
+#                               Roles, RoleBindings and Deployments; cluster-scoped, only the Namespace ci, the
+#                               admission policy ci-pods and the runner managers' PriorityClass ci-runner-manager
+#                               (no ClusterRole, no ClusterRoleBinding): every manager runs at it, and it is above
+#                               the jobs (0, which set none), preempts them, is no default and no system priority
+#                               (#39). A Role names only
 #                               what the Kubernetes executor needs (CI_RESOURCES below), every verb, no escalate,
 #                               bind or impersonate; a RoleBinding binds a Role to service accounts of ci. The
 #                               runners' pods and their jobs' pods (each runner's config.toml): images by digest, no
@@ -87,7 +90,8 @@ ci_runner_writes() {
 
 # ci_runner FILE DEPLOYMENT RENDER: the runner DEPLOYMENT's config.toml (its ConfigMap's config.template.toml) keeps
 # the job rules: one Kubernetes runner, its jobs in ci, as ci-job without a token, images by digest, no privilege,
-# no host path, no Docker socket, no capability added, nothing a job may override but its resources up to a ceiling;
+# no host path, no Docker socket, no capability added, no priority class, nothing a job may override but its
+# resources up to a ceiling;
 # a default and a ceiling for CPU and memory. A runner tagged build places its jobs on the spot pool only (its node
 # selector and the spot taint's toleration), takes no other tag but arm64, runs them non-root, and is the only one
 # whose build container may be Unconfined; any other runner's jobs never tolerate spot, refuse a spot node, and may
@@ -127,6 +131,7 @@ ci_runner() {
     (select(($k.cap_add // []) | length > 0) | "its jobs add capabilities"),
     ($k | keys[] | select(endswith("_overwrite_allowed")) | "a job may override what \(.) allows"),
     (select($k | has("pod_spec")) | "it patches its jobs pod spec (pod_spec)"),
+    (select($k | has("priority_class_name")) | "its jobs set a priority class (priority_class_name): only the runner managers run above the jobs"),
     (select($k.service_account != "ci-job") | "its jobs run as [\($k.service_account // "")], not ci-job"),
     (select($k.automount_service_account_token != false) | "its jobs get a service account token"),
     ($tags[] | select(IN("autoscale", "autoscale-16", "gce")) | "takes a tag of the VM runners (\(.)): GitLab would give it their jobs"),
@@ -233,9 +238,11 @@ for b in "${files[@]##*/}"; do
             [ "$name" = ci ] || breach "$b: the Namespace $name, not ci" ;;
           ValidatingAdmissionPolicy|ValidatingAdmissionPolicyBinding)
             [ "$name" = ci-pods ] || breach "$b: the $kind $name, not ci-pods" ;;
+          PriorityClass)
+            [ "$name" = ci-runner-manager ] || breach "$b: the PriorityClass $name, not ci-runner-manager" ;;
           ServiceAccount|ConfigMap|NetworkPolicy|Role|RoleBinding|Deployment)
             [ "$ns" = ci ] || breach "$b: $kind $name in [$ns], not ci" ;;
-          *) breach "$b: $kind $name: ci holds only its Namespace, its admission policy, and service accounts, ConfigMaps, NetworkPolicies, Roles, RoleBindings and Deployments in ci" ;;
+          *) breach "$b: $kind $name: ci holds only its Namespace, its admission policy, the runner managers' PriorityClass, and service accounts, ConfigMaps, NetworkPolicies, Roles, RoleBindings and Deployments in ci" ;;
         esac
         case $kind in
           Role)
@@ -262,10 +269,25 @@ for b in "${files[@]##*/}"; do
             ci_runner_writes "$b: the Deployment $name" "$(yq ea -o=json -I=0 "$pod.spec" "$f")"
             [ "$(yq ea "$pod.spec.tolerations // [] | map(select(.key == \"spot\")) | length" "$f")" = 0 ] ||
               breach "$b: the Deployment $name tolerates spot: a runner manager runs on the normal pool"
+            [ "$(yq ea "$pod.spec.priorityClassName // \"\"" "$f")" = ci-runner-manager ] ||
+              breach "$b: the Deployment $name does not run at the runner managers' priority (priorityClassName ci-runner-manager): a manager that cannot schedule takes its runner down"
             ;;
         esac
       done < <(yq -N '[document_index, .kind, .metadata.namespace // "", .metadata.name] | join("|")' "$f")
       [ "$(yq 'select(.kind == "Namespace") | .metadata.name' "$f")" = ci ] || breach "$b: no Namespace ci"
+      # The runner managers' priority (#39): above the jobs' pods (0), preempting them, never the cluster's default,
+      # and a user's (at most 1000000000, the system's above).
+      if has "$f" PriorityClass ci-runner-manager; then
+        pc='select(.kind == "PriorityClass" and .metadata.name == "ci-runner-manager")'
+        [ "$(yq "$pc | .globalDefault // false" "$f")" = false ] || breach "$b: the PriorityClass ci-runner-manager is the cluster's default"
+        [ "$(yq "$pc | .preemptionPolicy // \"PreemptLowerPriority\"" "$f")" = PreemptLowerPriority ] ||
+          breach "$b: the PriorityClass ci-runner-manager does not preempt the jobs (preemptionPolicy PreemptLowerPriority)"
+        value=$(yq "$pc | .value // 0" "$f")
+        [[ $value =~ ^[1-9][0-9]{0,8}$ ]] ||
+          breach "$b: the PriorityClass ci-runner-manager's value [$value] is not above the jobs' (0) and below the system's (1000000000)"
+      else
+        breach "$b: no PriorityClass ci-runner-manager"
+      fi
       [ ${#runners[@]} -gt 0 ] || breach "$b: no runner"
       for d in "${runners[@]}"; do ci_runner "$b" "$d" "$f"; done
       ;;

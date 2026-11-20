@@ -10,7 +10,8 @@
 # each runner has a CPU limit and a read-only root filesystem, /tmp, its home and config on emptyDirs (#37); each runner's
 # pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
 # is protected refs only, and no other runner is; kick's pods name arm64, kick (#36), control's arm64, control; kick's
-# concurrent is its own (2), control's the normal pool's room
+# jobs default to 50m and 256Mi (#39); every runner manager runs at the PriorityClass ci-runner-manager, above its
+# jobs and preempting them, and no job at any (#39); kick's concurrent is its own (2), control's the normal pool's room
 # (gitlab-runner/pool.yaml), CPU or memory the bound, and runners the pool cannot hold, a second runner on its room,
 # one off the normal pool on it, or a quantity it cannot read, are refused;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
@@ -130,6 +131,22 @@ annotation() { R=$1 A=$2 yq 'select(.kind == "Deployment" and .metadata.name == 
 [ "$(annotation kick runner-tags)" = "arm64,kick" ] && [ "$(annotation control runner-tags)" = "arm64,control" ] &&
   ok "kick's pods name its tags arm64, kick; control's arm64, control" ||
   fail "kick's tags [$(annotation kick runner-tags)], control's [$(annotation control runner-tags)]"
+# A kick or a plan job asks little (#39: the looper's .control requests, tacplus-dev/looper#165): kick's defaults are
+# 50m and 256Mi.
+[ "$(runner_toml kick '.cpu_request + " " + .memory_request')" = "50m 256Mi" ] &&
+  ok "kick's jobs default to 50m and 256Mi, a kicker's or a plan's requests" ||
+  fail "kick's jobs default to [$(runner_toml kick '.cpu_request + " " + .memory_request')]"
+# The runner managers first (#39): a manager that cannot schedule takes its whole runner down, so each runs at the
+# PriorityClass ci-runner-manager, above the jobs' pods (0, none set), preempting them; never the cluster's default.
+[ "$(yq ea '[select(.kind == "PriorityClass")] | length' "$ci")" = 1 ] &&
+  [ "$(yq 'select(.kind == "PriorityClass") | .metadata.name + " " + (.value > 0 | tostring) + " " + .preemptionPolicy + " " + (.globalDefault // false | tostring)' "$ci")" = "ci-runner-manager true PreemptLowerPriority false" ] &&
+  ok "the PriorityClass ci-runner-manager, above the jobs, preempting them, not the cluster's default" ||
+  fail "the PriorityClass: $(yq -o=json -I=0 'select(.kind == "PriorityClass")' "$ci")"
+for r in build control infra kick; do
+  [ "$(pod '.priorityClassName')" = ci-runner-manager ] && [ "$(runner_toml $r '.priority_class_name // ""')" = "" ] &&
+    ok "$r's runner runs at ci-runner-manager, its jobs at none" ||
+    fail "$r's runner's priorityClassName [$(pod '.priorityClassName')], its jobs' [$(runner_toml $r '.priority_class_name // ""')]"
+done
 [ "$(yq '.tacplus.protected' "$here/gitlab-runner/runners/infra.yaml")" = true ] && ok "gitlab-runner/runners/infra.yaml says protected: true" || fail "infra.yaml's protected is [$(yq '.tacplus.protected' "$here/gitlab-runner/runners/infra.yaml")]"
 ! grep -q 'glrt-[A-Za-z0-9_]' "$ci" && [ "$(yq ea '[select(.kind == "Secret")] | length' "$ci")" = 0 ] &&
   ok "no token and no Secret in the render" || fail "the render holds a token or a Secret"
@@ -220,8 +237,9 @@ refused_runner "no config" 'del(.runners.config)' "no runners.config"
 # memory both; never a fixed number.
 concurrent() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.toml"' "$2" |
   sed -n 's/^ *concurrent = //p'; }
-# 3 x 1930m - 1200m - 4 x 50m (managers) - 50m (deploymentproxy) - 4 x 550m (infra) - 2 x 150m (kick) = 1840m, 12
-# pods of 150m; memory 3 x 6144Mi - 3Gi - 4 x 128Mi - 64Mi - 4 x 1088Mi - 2 x 576Mi = 9280Mi, 16 of 576Mi.
+# 3 x 1930m - 1200m - 4 x 50m (managers) - 50m (deploymentproxy) - 4 x 550m (infra) - 2 x 100m (kick) = 1940m, 12
+# pods of 150m, 140m left (#39); memory 3 x 6144Mi - 3Gi - 4 x 128Mi - 64Mi - 4 x 1088Mi - 2 x 320Mi = 9792Mi, 17 of
+# 576Mi.
 [ "$(concurrent control "$ci")" = 12 ] && [ "$(concurrent infra "$ci")" = 4 ] && [ "$(concurrent kick "$ci")" = 2 ] &&
   grep -q '^# The runner control .*concurrent 12, the normal pool.s room' "$ci" &&
   ok "control's concurrent is the normal pool's room for its jobs (12), infra's and kick's their own (4, 2)" ||
@@ -237,8 +255,8 @@ pooled() {
     grep -q -- "$3" "$work/log" && ok "pool: refused: $1" || fail "pool: $1: $(cat "$work/log")"
   fi
 }
-pooled "two nodes, CPU the bound" '.nodes = 2 | .reserved.cpu = "900m"' 1
-pooled "4Gi nodes, memory the bound" '.allocatable.memory = "4Gi"' 5
+pooled "two nodes, CPU the bound" '.nodes = 2 | .reserved.cpu = "900m"' 2
+pooled "4Gi nodes, memory the bound" '.allocatable.memory = "4Gi"' 6
 pooled "a larger reserve" '.reserved.cpu = "1500m"' 10
 pooled "no room for one job" '.reserved.cpu = "3000m"' "the normal pool has no room for one job of control"
 pooled "a quantity it cannot read" '.reserved.cpu = "1.5"' "gitlab-runner/pool.yaml: reserved.cpu \[1.5\] is not"

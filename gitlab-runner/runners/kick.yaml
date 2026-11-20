@@ -4,8 +4,8 @@
 # behind eight reports on control, and nothing started tacplus's manager. Its tags are arm64 and kick, never control:
 # GitLab gives a runner every job whose tags it holds, so holding control it would fill with reports too; and no
 # other runner holds kick (ci/policy.sh). It tolerates no spot taint and refuses a spot node by its label or GKE's. No
-# privilege, no privilege escalation, no host path, no Docker socket. Its defaults are control's (a kicker or a plan
-# asks less than a report: tacplus-dev/looper#165), as are its ceilings.
+# privilege, no privilege escalation, no host path, no Docker socket. Its defaults are a kicker's or a plan's, the
+# looper's .control requests (50m, 256Mi: tacplus-dev/looper#165; #39), less than a report's; its ceilings are control's.
 #
 # Its concurrent is fixed and small, the kicker and the plan side by side; render.sh counts it out of the normal
 # pool's room before control's (gitlab-runner/pool.yaml).
@@ -34,9 +34,9 @@ runners:
         privileged = false
         allow_privilege_escalation = false
         poll_timeout = 600
-        cpu_request = "100m"
+        cpu_request = "50m"
         cpu_limit = "1"
-        memory_request = "512Mi"
+        memory_request = "256Mi"
         memory_limit = "2Gi"
         cpu_request_overwrite_max_allowed = "1500m"
         cpu_limit_overwrite_max_allowed = "1500m"

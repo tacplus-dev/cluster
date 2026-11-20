@@ -14,7 +14,9 @@
 # autoscale-16, gce) on any runner; an infra pipeline's tag (cloud, cluster, deploy) on build or control, infra
 # taking any other tag, or not protected refs only (#25); kick taking a tag but arm64 and kick, or not kick, and kick
 # on any other runner (#36); a runner manager on a read-only root filesystem without a
-# writable emptyDir where GitLab Runner writes (/tmp or its TMPDIR, its home; #37); a token by latest; cluster RBAC,
+# writable emptyDir where GitLab Runner writes (/tmp or its TMPDIR, its home; #37); a runner manager not at the
+# PriorityClass ci-runner-manager, none, another, or one that is the default, never preempts, or is not above the jobs
+# and below the system's, and a job at a priority class (#39); a token by latest; cluster RBAC,
 # a `*`, a resource the executor does not need, another namespace's account or object, a Secret. Needs bash, yq, jq, helm.
 #
 #   tests/policy_test.sh
@@ -129,6 +131,17 @@ breach_ci "a token by latest" "$(deployment control '.metadata.annotations."tacp
 breach_ci "a privileged runner manager" "$(deployment build '.spec.containers[0].securityContext.privileged') = true" "Deployment gitlab-runner-build: the container gitlab-runner-build is privileged"
 breach_ci "a host path in a runner manager" "$(deployment build '.spec.volumes') += [{\"name\": \"docker\", \"hostPath\": {\"path\": \"/var/run/docker.sock\"}}]" "the volume docker is a host path"
 breach_ci "a runner manager image by tag only" "$(deployment control '.spec.containers[0].image') = \"registry.gitlab.com/gitlab-org/gitlab-runner:latest\"" "the image \[registry.gitlab.com/gitlab-org/gitlab-runner:latest\] is not pinned by digest"
+# The runner managers first (#39): each at the PriorityClass ci-runner-manager, above the jobs, preempting them, never
+# the cluster's default nor a system priority; no job at a priority class of its own.
+pc='(select(.kind == "PriorityClass") | '
+breach_ci "a runner manager without the managers' priority" "del($(deployment control '.spec.priorityClassName'))" "Deployment gitlab-runner-control does not run at the runner managers' priority (priorityClassName ci-runner-manager)"
+breach_ci "no PriorityClass for the managers" 'del(select(.kind == "PriorityClass"))' "no PriorityClass ci-runner-manager"
+breach_ci "another PriorityClass" '.' "the PriorityClass high, not ci-runner-manager" '{"apiVersion": "scheduling.k8s.io/v1", "kind": "PriorityClass", "metadata": {"name": "high"}, "value": 1000}'
+breach_ci "the managers' priority the cluster's default" "$pc.globalDefault) = true" "the PriorityClass ci-runner-manager is the cluster's default"
+breach_ci "the managers' priority not preempting" "$pc.preemptionPolicy) = \"Never\"" "the PriorityClass ci-runner-manager does not preempt the jobs (preemptionPolicy PreemptLowerPriority)"
+breach_ci "the managers' priority not above the jobs'" "$pc.value) = 0" "the PriorityClass ci-runner-manager's value \[0\] is not above the jobs' (0) and below the system's"
+breach_ci "the managers' priority a system one" "$pc.value) = 2000000000" "the PriorityClass ci-runner-manager's value \[2000000000\] is not above"
+breach_ci "a job at a priority class" "$(toml kick 'privileged = false' 'privileged = false\n    priority_class_name = \"ci-runner-manager\"')" "gitlab-runner-kick: its jobs set a priority class (priority_class_name)"
 breach_ci "a runner manager on spot" "$(deployment control '.spec.tolerations') += [{\"key\": \"spot\", \"operator\": \"Exists\"}]" "Deployment gitlab-runner-control tolerates spot"
 # Where the runner manager writes, on its read-only root filesystem (#37: no /tmp failed every job at once).
 mounts=$(deployment control '.spec.containers[0].volumeMounts')

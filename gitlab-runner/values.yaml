@@ -73,6 +73,12 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
+# The runner managers first (#39): a manager that cannot schedule takes its whole runner down, so each runs at the
+# PriorityClass ci-runner-manager (render.sh renders it in 20-ci.yaml), above the jobs' pods, which set none, and
+# preempting one when there is no room for it: during a rollout, when the old manager's jobs still run beside the new
+# one's, or after a bad pack. A manager is counted in the pool's room (gitlab-runner/pool.yaml), so it takes back only
+# what it is owed; the job it evicts fails and is retried.
+priorityClassName: ci-runner-manager
 # The normal pool: arm64 (GKE taints Arm nodes kubernetes.io/arch=arm64:NoSchedule), and never a spot node, by its
 # label or GKE's.
 nodeSelector:

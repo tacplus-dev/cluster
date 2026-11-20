@@ -12,7 +12,8 @@
 #                                   operator account (config/deployment-namespace) unless it has none, and the
 #                                   deploy account's Role and RoleBinding (fleet-deploy), in tac-<name> only
 #   OUT/20-ci.yaml                  CI in the cluster (README, CI in the cluster): the namespace ci, the jobs' service
-#                                   account ci-job (no token), the NetworkPolicy that keeps its pods off the metadata
+#                                   account ci-job (no token), the runner managers' PriorityClass ci-runner-manager
+#                                   (above their jobs, #39), the NetworkPolicy that keeps its pods off the metadata
 #                                   server, the admission policy refusing a privileged pod, a host path or a host
 #                                   namespace in ci, and one GitLab Runner per gitlab-runner/runners/<runner>.yaml:
 #                                   the chart (gitlab-runner/release, checked against its SHA256SUMS) rendered with
@@ -315,6 +316,18 @@ metadata:
   name: ci
   labels:
     tacplus.dev/ci: "true"
+---
+# The runner managers' priority (gitlab-runner/values.yaml's priorityClassName, #39): above the jobs' pods (0, none
+# set), preempting one when a manager has no room, so a runner is never down for want of its manager's pod. Never the
+# cluster's default; far below the system's (over 1000000000).
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ci-runner-manager
+value: 1000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: GitLab Runner managers in ci (tacplus-dev/cluster), ahead of their jobs' pods.
 ---
 # The jobs' pods' account: no role anywhere, and no token in the pod.
 apiVersion: v1
