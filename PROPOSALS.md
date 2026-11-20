@@ -173,7 +173,11 @@ the looper then marks it `promoted` or `declined` here with the date.
   nightly scan filing it) would rewrite those from its own output, as `deploymentproxy/bump.sh` does, and a land's
   gates prove the new digests on another machine. Until then it is by hand (README, Our GitLab Runner images). The
   image already pushed keeps running meanwhile: the job on main pulls a digest the registry has instead of
-  building it.
+  building it. The refusal does not name the changed package. It lists every package in the image, and only
+  `build.packages`' direct ones are pinned, so a transitive rebuild has to be found by hand against Alpine's index.
+  That happened on 2026-11-20 (nightly scan): libssl3/libcrypto3 went to 3.5.9-r1, built 2026-11-18 23:31Z. A
+  recorded package set per image (`pin.yaml`, or a file beside it) would let the refusal say which package changed
+  and from what version.
 - **GO-2026-6859 in kubectl and gke-gcloud-auth-plugin after 2026-11-25** (2026-11-13, #21): the interim entry
   (CVE-2026-97054) now covers only kubectl v1.34.13 (go1.26.10) and gke-gcloud-auth-plugin 0.5.21 (go1.27.3), no
   release of either with the fix, and it expires on 2026-11-25 as the hub dated it. Before then: a kubectl 1.34
