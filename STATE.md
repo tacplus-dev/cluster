@@ -32,9 +32,11 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-19 by th
   the three infrastructure pipelines', protected refs only (`tacplus.protected`, on every runner's pods as
   `tacplus.dev/runner-protected`), the normal pool as control, no token in the pod; the policy admits those three tags
   to `infra` alone, refuses it any other tag and an `infra` not protected) and `kick` (#36: `arm64, kick`, the looper's
-  kicker and plan on slots of their own, `concurrent` 2, the normal pool; the policy keeps `kick` its tag alone and
-  it on `arm64, kick` only), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
-  `gitlab-runner/pool.yaml`, 12 today beside `kick`'s 2, CPU the bound; its default CPU request a report's 100m, looper#165; the pool's reserve, kube-system and the
+  kicker and plan on slots of their own, `concurrent` 2, the normal pool, its jobs at the looper's `.control` 50m/256Mi,
+  #39; the policy keeps `kick` its tag alone and it on `arm64, kick` only); every runner manager at the PriorityClass
+  `ci-runner-manager`, above the jobs and preempting them (#39: `kick`'s manager stayed Pending while `control`'s old
+  manager's jobs ran beside the new one's after an apply), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
+  `gitlab-runner/pool.yaml`, 12 today beside `kick`'s 2, CPU the bound, 140m left; its default CPU request a report's 100m, looper#165; the pool's reserve, kube-system and the
   deployments' pods, CPU from looper#165's evidence and memory an estimate, not measured on the nodes, PROPOSALS.md), the
   render refusing runners the pool cannot hold; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
   the job image, and `git config --global` failed on `//.gitconfig`); each runner's own container CPU-limited to 500m (#34) and on a
@@ -110,8 +112,8 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
-- **Blocked on:** the hub's re-pin of the cluster to a commit with `gitlab-runner/runners/kick.yaml` (5848411 or
-  later), then tacplus-dev/looper#197 (`.control` tagged `arm64, kick`; in that order, or `.control` jobs find no
+- **Blocked on:** the hub's re-pin of the cluster to a commit with `gitlab-runner/runners/kick.yaml` and the runner
+  managers' PriorityClass (#39's, or later: on 6dcbdf7, pipeline 3092313841, `gitlab-runner-kick` stayed Pending), then tacplus-dev/looper#197 (`.control` tagged `arm64, kick`; in that order, or `.control` jobs find no
   runner), for #36's runner reserved for the looper's kicker and plan, so they never wait behind reports;
   tacplus-dev/tacplus#315 (rootless BuildKit in the build image), for unpausing the in-cluster `build`
   runner 58541760 only; tacplus-dev/looper#190 (looper-scan leaving vendored paths out of Trivy's config scan), for
