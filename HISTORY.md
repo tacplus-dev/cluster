@@ -37,3 +37,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-19 looper issue STATE.md's Blocked on line is stale: it names closed tacplus-dev/cloud#81 (the kick runner now waits on the re-pin and looper#197) and cites closed looper#165 (#38)
 - 2026-11-20 looper issue The kick runner can't schedule: control's concurrent 'pool' takes the normal pool's whole room, leaving none for gitlab-runner-kick (#39)
 - 2026-11-20 looper issue Alpine rebuilt openssl (libssl3/libcrypto3 3.5.9-r1, 5 CVEs): runner-images no longer reproduces pin.yaml's runner and helper digests, failing main's nightly gates (#40)
+- 2026-11-21 looper issue STATE.md's Blocked on line is stale: it names closed #39 (landed as 16adabe); the kick runner now waits only on the hub's re-pin and looper#197 (#43)
