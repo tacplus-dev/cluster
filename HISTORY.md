@@ -40,3 +40,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-21 looper issue STATE.md's Blocked on line is stale: it names closed #39 (landed as 16adabe); the kick runner now waits only on the hub's re-pin and looper#197 (#43)
 - 2026-11-22 looper issue ci/security.sh refuses an exception's where: (looper#182), so KSV-0053/0056/0109 stay accepted on any Role or ConfigMap and the report warns on all 15 entries (#45)
 - 2026-11-22 looper issue Pinned images behind their lines: relock (build.lock: ghcr.io/tacplus-dev/tacplus/build:2.6.12 → ghcr.io/tacplus-dev/tacplus/build:2.6.13) (#44)
+- 2026-11-22 looper issue security fails on main: the CI image build:2.5 (2.5.11) carries 7 fixed HIGH Debian CVEs (ImageMagick deb13u14, apt 3.0.4) (#8)
