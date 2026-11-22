@@ -15,6 +15,9 @@ Nothing built yet. The design is approved (tacplus-dev/roadmap#1, 2026-11-02).
 - deployments.yaml: the test-idp deployment, operator optional (#17). Agent, at Jody's request, 2026-11-09 (fleet-seatrials#27).
 - The tacplus-reader key moves to tacplus-ci: TACPLUS_READER_KMS_KEY (#19). Agent, at Jody's request, 2026-11-11 (tacplus-dev/cloud#30).
 - The `infra` runner: an in-cluster runner for the cloud, cluster and deploy pipelines, protected refs only, so the runner VMs can go (#25; for tacplus-dev/cloud#11). Hub, under Jody's cluster-only goal, 2026-11-16.
+- The build runner's concurrent counted from the spot pool's room, as control's is (#41; the cluster half of tacplus-dev/looper#204). Hub, on Jody's standing authority, 2026-11-22 (`tacplus-dev/roadmap:suggestions/2026-11-22-an-issue-an-accepted-suggestion-names-in-another-repository-is-approved-with-it-tacplus-892-cluster-41-and-cluster-42-wait-unapproved.md`).
+- A report-build runner entry whose pods a land's build preempts, by PriorityClass (#42; the cluster half of tacplus-dev/looper#209). Hub, on Jody's standing authority, 2026-11-22 (`tacplus-dev/roadmap:suggestions/2026-11-22-an-issue-an-accepted-suggestion-names-in-another-repository-is-approved-with-it-tacplus-892-cluster-41-and-cluster-42-wait-unapproved.md`).
+- A nightly runner entry on the normal pool (`arm64, build-nightly`), concurrent from the pool's room, for the nightly security fan-out (#46; the cluster half of tacplus-dev/looper#220). Hub, on Jody's standing authority, 2026-11-22 (`tacplus-dev/roadmap:suggestions/2026-11-22-the-nightly-security-floor-runs-where-a-node-is-free-its-security-jobs-on-a-nightly-runner-entry-of-the-normal-pool-and-a-nightly-that-publishes-nothing-is-red-not-last-night-s-report-read-as-tonight-s.md`).
 
 ## Later
 - A reconciler (GKE Config Sync or Argo CD) instead of a manual apply, if standing privilege becomes acceptable (roadmap#1, alternative ii).
