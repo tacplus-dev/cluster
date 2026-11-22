@@ -1,9 +1,11 @@
 # Copyright (c) 2026 Jody Scott
 # SPDX-License-Identifier: Apache-2.0
 #
-# The known vulnerabilities this repository accepts, each until its expiry, in the form looper-scan reads
-# (tacplus-dev/looper#49: exactly id, reason, decided_by and expires, YYYY-MM-DD). The security job
-# (ci/security.sh) enforces it: an expired entry fails the pipeline. Found by `govulncheck -mode=binary` (symbols
+# The known vulnerabilities this repository accepts, each until its expiry and each where it is, in the form
+# looper-scan reads (tacplus-dev/looper#49: exactly id, reason, decided_by and expires, YYYY-MM-DD; and where,
+# tacplus-dev/looper#182: a path or a path glob, matched against the finding's where without its line, or the place in
+# its parentheses: a binary's name, an image). The security job (ci/security.sh) enforces it: an expired entry fails
+# the pipeline. Every entry has a where (#45): one per binary, image or file its reason names, never rule-wide. Found by `govulncheck -mode=binary` (symbols
 # present) in the pinned tools of ci/tools.sh, each at its latest upstream release (kubectl: the latest of the
 # cluster's minor), none with the fixed version; everything else the first run found is fixed there (the Go tools
 # built with the pinned toolchain, kubectl and the GKE auth plugin pinned rather than the CI image's). Track and
@@ -29,68 +31,118 @@
 # Trivy's config checks (looper-scan's nightly, on the tree): KSV-0109 is a false positive on GitLab Runner chart
 # 0.94.3's entrypoint ConfigMap, which names the secret files it reads and holds no secret (#30); its two KSV-01010
 # findings, MEDIUM, are in security-baseline.json. Re-check both when the chart is moved. KSV-0053 and KSV-0056 are
-# the RBAC this repository grants by design (#28): looper-scan matches an entry by id alone, so on any Role, and
-# ci/grants.sh (tests/grants_test.sh, in ci/checks.sh) holds them to the Roles their reasons name, each on the
-# resources it has today. Once an exception takes a `where` (tacplus-dev/looper#182), they become one entry per file
-# and the guard goes. The MEDIUM KSV-0048, KSV-0049 and KSV-0113 on the same Roles are in security-baseline.json.
+# the RBAC this repository grants by design (#28), one entry per file Trivy finds them in: the render's (its fixture,
+# tests/fixtures/render/out/, the render the tree holds) and deploymentproxy's vendored ClusterRole. A grant of them in
+# any other file is a new decision: its own entry. The MEDIUM KSV-0048, KSV-0049 and KSV-0113 on the same Roles are in
+# security-baseline.json.
 exceptions:
   - id: GO-2026-5158
     reason: "otel baggage header length (kubectl v1.34.13, otel v1.41.0): kubectl takes no baggage header from anyone but the cluster's API server, over TLS. Fixed in otel v1.42.0; no kubectl 1.34 release with it yet."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
     expires: 2026-12-04
+    where: "kubectl"
   - id: GO-2026-5932
     reason: "x/crypto/openpgp, unmaintained (gitlab-runner and gitlab-runner-helper 19.5.3, our build, x/crypto v0.58.0, #21; Trivy's match in the CI image's gh and docker-buildx, v0.58.0; trivy's own since v0.76.2 at module level only, #23): the runner and the helper call no openpgp code, and no job here has gh or buildx read an OpenPGP key or message from outside. No fixed release (x/crypto has only a pseudo-version past it), as tacplus handles it."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04; the runner images: hub, tacplus-dev/cluster#21, 2026-11-12)"
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04; the runner images: hub, tacplus-dev/cluster#21, 2026-11-12); scoped: #45"
     expires: 2026-12-04
+    where: "us-central1-docker.pkg.dev/tacplus-dev/ci-images/**"
+  - id: GO-2026-5932
+    reason: "x/crypto/openpgp, unmaintained (gitlab-runner and gitlab-runner-helper 19.5.3, our build, x/crypto v0.58.0, #21; Trivy's match in the CI image's gh and docker-buildx, v0.58.0; trivy's own since v0.76.2 at module level only, #23): the runner and the helper call no openpgp code, and no job here has gh or buildx read an OpenPGP key or message from outside. No fixed release (x/crypto has only a pseudo-version past it), as tacplus handles it."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04; the runner images: hub, tacplus-dev/cluster#21, 2026-11-12); scoped: #45"
+    expires: 2026-12-04
+    where: "ghcr.io/tacplus-dev/tacplus/build:**"
   - id: GO-2026-6603
     reason: "x/net HTTP/2 server, Trailer headers (kubectl v1.34.13, x/net v0.56.0): kubectl runs no HTTP/2 server here (no kubectl proxy); it is a client of the cluster's API server only. Fixed in x/net v0.60.0; no kubectl 1.34 release with it yet."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
     expires: 2026-12-04
+    where: "kubectl"
   - id: GO-2026-6610
     reason: "x/net HTTP/2 transport, malformed framing headers (kubectl v1.34.13, x/net v0.56.0): kubectl's only peer is the cluster's API server, over TLS. Fixed in x/net v0.60.0; no kubectl 1.34 release with it yet."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
     expires: 2026-12-04
+    where: "kubectl"
   - id: GO-2026-6611
     reason: "x/net HTTP/2 transport, CPU on repeated window changes (kubectl v1.34.13, x/net v0.56.0): kubectl's only peer is the cluster's API server, over TLS. Fixed in x/net v0.60.0; no kubectl 1.34 release with it yet."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
     expires: 2026-12-04
+    where: "kubectl"
   - id: GO-2026-6612
     reason: "x/net HTTP/2 server streams, flow control refund (kubectl v1.34.13, x/net v0.56.0): kubectl runs no HTTP/2 server here. Fixed in x/net v0.60.0; no kubectl 1.34 release with it yet."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
     expires: 2026-12-04
+    where: "kubectl"
   - id: GO-2026-6617
     reason: "x/net HTTP/2 server, HPACK encoder race (kubectl v1.34.13, x/net v0.56.0): kubectl runs no HTTP/2 server here. Fixed in x/net v0.60.0; no kubectl 1.34 release with it yet."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
     expires: 2026-12-04
+    where: "kubectl"
   - id: GO-2026-6629
     reason: "x/text precis panic on crafted input (kubectl v1.34.13, x/text v0.39.0): kubectl's input is this repository's render and the cluster's API server. Fixed in x/text v0.41.0; no kubectl 1.34 release with it yet."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
     expires: 2026-12-04
+    where: "kubectl"
   - id: GO-2026-6860
     reason: "x/net/html quadratic text coalescing (kubectl v1.34.13 x/net v0.56.0, gke-gcloud-auth-plugin 0.5.21 v0.61.0): neither parses HTML from outside here; their peers are the cluster and Google's token endpoints. Fixed in x/net v0.62.0; no release of either with it yet."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
     expires: 2026-12-04
+    where: "kubectl"
+  - id: GO-2026-6860
+    reason: "x/net/html quadratic text coalescing (kubectl v1.34.13 x/net v0.56.0, gke-gcloud-auth-plugin 0.5.21 v0.61.0): neither parses HTML from outside here; their peers are the cluster and Google's token endpoints. Fixed in x/net v0.62.0; no release of either with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
+    expires: 2026-12-04
+    where: "gke-gcloud-auth-plugin"
   - id: GO-2026-6866
     reason: "x/net/html raw text rendering (kubectl v1.34.13, gke-gcloud-auth-plugin 0.5.21): neither renders HTML here. Fixed in x/net v0.62.0; no release of either with it yet."
-    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04)"
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
     expires: 2026-12-04
+    where: "kubectl"
+  - id: GO-2026-6866
+    reason: "x/net/html raw text rendering (kubectl v1.34.13, gke-gcloud-auth-plugin 0.5.21): neither renders HTML here. Fixed in x/net v0.62.0; no release of either with it yet."
+    decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04); scoped: #45"
+    expires: 2026-12-04
+    where: "gke-gcloud-auth-plugin"
   - id: CVE-2026-97054
     reason: "GO-2026-6859, an HTTP/1 server crash in net/http (gke-gcloud-auth-plugin 0.5.21, go1.27.3; kubectl v1.34.13, go1.26.10; fixed in go1.26.11 and go1.27.4): kubectl and its auth plugin serve no HTTP, and nothing untrusted reaches them; no kubectl 1.34 or plugin release has the fix yet. The tools built here, and GitLab Runner's runner and helper since #21, are built with go1.27.4 (ci/tools.sh, ci/runner-images.sh); the hub's interim for upstream's runner images ended with them."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12; kubectl and its plugin as #5 decided their other findings: no release of the tool with the fix)"
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12; kubectl and its plugin as #5 decided their other findings: no release of the tool with the fix); scoped: #45"
     expires: 2026-11-25
+    where: "kubectl"
+  - id: CVE-2026-97054
+    reason: "GO-2026-6859, an HTTP/1 server crash in net/http (gke-gcloud-auth-plugin 0.5.21, go1.27.3; kubectl v1.34.13, go1.26.10; fixed in go1.26.11 and go1.27.4): kubectl and its auth plugin serve no HTTP, and nothing untrusted reaches them; no kubectl 1.34 or plugin release has the fix yet. The tools built here, and GitLab Runner's runner and helper since #21, are built with go1.27.4 (ci/tools.sh, ci/runner-images.sh); the hub's interim for upstream's runner images ended with them."
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12; kubectl and its plugin as #5 decided their other findings: no release of the tool with the fix); scoped: #45"
+    expires: 2026-11-25
+    where: "gke-gcloud-auth-plugin"
   - id: KSV-0109
-    reason: "Trivy's ConfigMap with secrets, a false positive on GitLab Runner chart 0.94.3's entrypoint ConfigMap (gitlab-runner/release/templates/configmap.yaml, rendered in out/20-ci.yaml): its script names the files under /secrets it reads and the variables it exports from them (CI_SERVER_TOKEN, CACHE_S3_SECRET_KEY), and holds no secret; the tokens come from Secret Manager at apply time (ci/runner-tokens.sh) into a Secret projected on /secrets, and gitleaks finds nothing in the tree or its history. Upstream's script, the chart pinned by archive digest: not edited here. Accepts KSV-0109 by id, so on any ConfigMap: re-check it when the chart is moved, and when any other ConfigMap is added. The two KSV-01010 findings on the same script are in security-baseline.json."
-    decided_by: "jodydadescott (tacplus-dev/cluster#30, 2026-11-17)"
+    reason: "Trivy's ConfigMap with secrets, a false positive on GitLab Runner chart 0.94.3's entrypoint ConfigMap (gitlab-runner/release/templates/configmap.yaml, rendered in out/20-ci.yaml): its script names the files under /secrets it reads and the variables it exports from them (CI_SERVER_TOKEN, CACHE_S3_SECRET_KEY), and holds no secret; the tokens come from Secret Manager at apply time (ci/runner-tokens.sh) into a Secret projected on /secrets, and gitleaks finds nothing in the tree or its history. Upstream's script, the chart pinned by archive digest: not edited here. Trivy finds it in the render (its fixture, the four runners' ConfigMaps), not in the template: re-check it when the chart is moved. The two KSV-01010 findings on the same script are in security-baseline.json."
+    decided_by: "jodydadescott (tacplus-dev/cluster#30, 2026-11-17); scoped: #45"
     expires: 2026-12-31
+    where: "tests/fixtures/render/out/20-ci.yaml"
   - id: KSV-0053
-    reason: "Trivy's exec into pods, by design on the runners' Roles only: gitlab-runner-build, gitlab-runner-control and gitlab-runner-infra in ci (gitlab-runner/values.yaml rbac.rules, rendered in out/20-ci.yaml) grant pods/exec and pods/attach because GitLab's Kubernetes executor runs a job's script by attaching and exec-ing into the job pod it creates; without them no job runs. The Roles are in ci alone, on its job pods, which run as ci-job without a token. Accepts KSV-0053 by id, so on any Role: ci/grants.sh (in ci/checks.sh) fails any other Role or ClusterRole granting pods/exec or pods/attach, until the entry can be scoped by file (tacplus-dev/looper#182)."
-    decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17)"
+    reason: "Trivy's exec into pods, by design on the runners' Roles only: gitlab-runner-build, gitlab-runner-control and gitlab-runner-infra in ci (gitlab-runner/values.yaml rbac.rules, rendered in out/20-ci.yaml) grant pods/exec and pods/attach because GitLab's Kubernetes executor runs a job's script by attaching and exec-ing into the job pod it creates; without them no job runs. The Roles are in ci alone, on its job pods, which run as ci-job without a token. In the render (its fixture) only: a Role elsewhere granting them is a new decision."
+    decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17); scoped: #45"
     expires: 2026-12-31
+    where: "tests/fixtures/render/out/20-ci.yaml"
   - id: KSV-0056
-    reason: "Trivy's manage Kubernetes networking, by design on three grants only: the runners' Roles gitlab-runner-* in ci (services create and get: the Kubernetes executor's job services; out/20-ci.yaml); each deployment's Role fleet-deploy in its own tac-<name> namespace (services, networkpolicies; endpoints read only: what the fleet's helm release ships there; render.sh, out/10-deployment-<name>.yaml); and deploymentproxy's ClusterRole (networkpolicies, delete only: to remove those earlier versions kept in tenant namespaces, #14; deploymentproxy/release/config/rbac/cluster_role.yaml, upstream v0.2.2 pinned by checksum, rendered in out/00-deploymentproxy.yaml), a rule that can go upstream once no tenant namespace holds one. Accepts KSV-0056 by id, so on any Role: ci/grants.sh (in ci/checks.sh) fails any other Role or ClusterRole granting services, endpoints, endpointslices, networkpolicies or ingresses, and these three any more of them, until the entry can be scoped by file (tacplus-dev/looper#182)."
-    decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17)"
+    reason: "Trivy's manage Kubernetes networking, by design on the runners' Roles gitlab-runner-* in ci (gitlab-runner/values.yaml rbac.rules, rendered in out/20-ci.yaml): services create and get, the Kubernetes executor's job services. In the render (its fixture) only."
+    decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17); scoped: #45"
     expires: 2026-12-31
+    where: "tests/fixtures/render/out/20-ci.yaml"
+  - id: KSV-0056
+    reason: "Trivy's manage Kubernetes networking, by design on each deployment's Role fleet-deploy in its own tac-<name> namespace (render.sh, out/10-deployment-<name>.yaml): services, networkpolicies; endpoints read only: what the fleet's helm release ships there. In the render (its fixture) only."
+    decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17); scoped: #45"
+    expires: 2026-12-31
+    where: "tests/fixtures/render/out/10-deployment-*.yaml"
+  - id: KSV-0056
+    reason: "Trivy's manage Kubernetes networking, by design on deploymentproxy's ClusterRole: networkpolicies, delete only, to remove those earlier versions kept in tenant namespaces (#14; deploymentproxy/release/config/rbac/cluster_role.yaml, upstream v0.2.2 pinned by checksum, rendered in out/00-deploymentproxy.yaml), a rule that can go upstream once no tenant namespace holds one. In the render (its fixture) only."
+    decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17); scoped: #45"
+    expires: 2026-12-31
+    where: "tests/fixtures/render/out/00-deploymentproxy.yaml"
+  - id: KSV-0056
+    reason: "Trivy's manage Kubernetes networking, by design on deploymentproxy's ClusterRole: networkpolicies, delete only, to remove those earlier versions kept in tenant namespaces (#14; deploymentproxy/release/config/rbac/cluster_role.yaml, upstream v0.2.2 pinned by checksum, rendered in out/00-deploymentproxy.yaml), a rule that can go upstream once no tenant namespace holds one. In the vendored release only."
+    decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17); scoped: #45"
+    expires: 2026-12-31
+    where: "deploymentproxy/release/config/rbac/cluster_role.yaml"
   - id: CVE-2026-95839
     reason: "containerd v2.4.1 in docker-buildx of the CI image (ghcr.io/tacplus-dev/tacplus/build:2.6.12, from docker:29-cli): the CI image only builds images inside CI jobs; nothing is deployed or exposed from it. No fixed docker:29-cli yet; bump and remove when upstream rebuilds (tacplus-dev/tacplus#901). Same exception as tacplus-dev/cloud's."
-    decided_by: "jodydadescott (hub, in chat, 2026-11-20: 14 days, CI image only; tacplus-dev/cloud 3fd806e5)"
+    decided_by: "jodydadescott (hub, in chat, 2026-11-20: 14 days, CI image only; tacplus-dev/cloud 3fd806e5); scoped: #45"
     expires: 2026-12-04
+    where: "ghcr.io/tacplus-dev/tacplus/build:**"

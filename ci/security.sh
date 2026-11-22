@@ -9,7 +9,8 @@
 #   OSV-Scanner               the tree's dependency manifests and lock files
 #   govulncheck -mode=binary  each BINARY (ci/tools.sh's bin/: yq, kubeconform, kubectl, gke-gcloud-auth-plugin,
 #                             gitleaks, osv-scanner, govulncheck, trivy); a finding is the vulnerable symbol in the
-#                             binary, counted HIGH (govulncheck gives no severity), as looper-scan counts it
+#                             binary, counted HIGH (govulncheck gives no severity), as looper-scan counts it, and
+#                             its where as looper-scan writes it: "<module>@<version> (<binary's name>, called: ...)"
 #   gitleaks                  the tree, and every commit of the history
 #   Trivy                     IMAGE, the image the jobs run in (its platform: this machine's); and each image the
 #                             tree's pins deploy, by digest, for linux/arm64 (the cluster's): gitlab-runner/pin.yaml's
@@ -18,9 +19,12 @@
 #                             runner-images job's OCI layouts (ci/runner-images.sh), each the digest its pin names
 #
 # The policy (looper-scan's): a secret fails, and so does a HIGH or CRITICAL finding with a fixed version, unless
-# an unexpired entry of the commit's security-exceptions.yaml names it (its id or an alias: a CVE, a GHSA). An
-# entry has exactly id, reason, decided_by and expires (YYYY-MM-DD), the file a strict subset of YAML that
-# looper-scan reads too; an entry that has expired, or says less, fails, and so does a tool that cannot run. The
+# an unexpired entry of the commit's security-exceptions.yaml names it (its id or an alias: a CVE, a GHSA) and, if
+# it has a where, the finding is there (tacplus-dev/looper#182: a path or a path glob, matched as looper-scan
+# matches it). An entry has exactly id, reason, decided_by and expires (YYYY-MM-DD), and an optional where, the file
+# a strict subset of YAML that looper-scan reads too; an entry that has expired, or says less, or has an empty where,
+# fails, and so does a tool that cannot run; an entry without a where is warned about (it accepts its id in every
+# file). The
 # reports go to SECURITY_OUT (default ./security): findings.json (every finding, with excepted and blocking),
 # summary.md, verdict, raw/ (each tool's own JSON). Exits 1 on a fail.
 #
@@ -86,7 +90,7 @@ for b in "$@"; do
     | [.[] | .finding // empty | select(.trace[0].function != null)]
     | unique_by(.osv) | map(.trace[0] as $t
       | finding("govulncheck"; "sca"; .osv; ($osv[.osv].aliases // []); "HIGH"; ((.fixed_version // "") != "");
-                ($bin + " (" + $t.module + "@" + ($t.version // "") + ", " + ($t.package // "") + "." + ($t.function // "") + ")");
+                ($t.module + "@" + ($t.version // "") + " (" + $bin + ", called: " + ($t.package // "") + "." + ($t.function // "") + ")");
                 $osv[.osv].summary))' "$raw" --arg bin "$name"
 done
 
@@ -148,7 +152,8 @@ for pin in gitlab-runner/pin.yaml:runner gitlab-runner/pin.yaml:helper gitlab-ru
 done
 
 # security-exceptions.yaml, read as looper-scan reads it: a list "exceptions:" of entries with exactly id, reason,
-# decided_by and expires. A JSON array on stdout; a file it cannot read that way is a problem, never an empty list.
+# decided_by and expires, and an optional where. A JSON array on stdout; a file it cannot read that way is a
+# problem, never an empty list.
 read_exceptions() {
   [ -f "$1" ] || { echo '[]'; return 0; }
   awk '
@@ -157,7 +162,7 @@ read_exceptions() {
       if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2)
       gsub(/\\/, "\\\\", v); gsub(/"/, "\\\"", v); return "\"" v "\"" }
     function field(s, k, v) { k = s; sub(/:.*/, "", k); v = s; sub(/^[^:]*:/, "", v)
-      if (k !~ /^(id|reason|decided_by|expires)$/) { print "line " NR ": unknown key \"" k "\"" > "/dev/stderr"; bad = 1 }
+      if (k !~ /^(id|reason|decided_by|expires|where)$/) { print "line " NR ": unknown key \"" k "\"" > "/dev/stderr"; bad = 1 }
       cur = cur (n++ ? "," : "{") "\"" k "\":" str(v) }
     BEGIN { printf "[" }
     /^[ \t]*(#|$)/ { next }
@@ -177,24 +182,42 @@ while IFS= read -r e; do [ -n "$e" ] && problems+=("$e"); done < <(jq -r --arg t
   elif ((.reason // "") == "" or (.decided_by // "") == "") then "exception \(.id): it needs a reason and who decided (decided_by)"
   elif ((.expires // "") | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$") | not) then "exception \(.id): expires \(.expires // "" | @json) is not a date YYYY-MM-DD"
   elif .expires < $today then "exception \(.id) expired on \(.expires) (\(.decided_by): \(.reason))"
+  elif has("where") and .where == "" then "exception \(.id): its where is empty (a path or a path glob, or no where)"
   else empty end' <<<"$exceptions")
+mapfile -t warnings < <(jq -r '.[] | select(has("where") | not) | "exception \(.id) has no where: it accepts \(.id) in every file (scope it: where)"' <<<"$exceptions")
+
+# An exception's where (looper-scan's, tacplus-dev/looper#182), a path glob, as a regular expression on a finding's
+# where without its line: * and ? match within a path segment, ** across them ("**/" also none); every other
+# character is itself. A dependency's where is its package and, in parentheses, its place (a file, a binary, an
+# image): that matches too.
+JQ_GLOB='
+def file_of: .where | sub(":[0-9]+(-[0-9]+)?$"; "");
+def glob_re: "^" + (split("**/") | map(split("**") | map(split("*") | map(split("?")
+    | map(gsub("(?<c>[.+^$()|{}\\[\\]\\\\])"; "\\\(.c)")) | join("[^/]")) | join("[^/]*")) | join(".*")) | join("(.*/)?")) + "$";
+def in_where($glob): ($glob | glob_re) as $re
+  | (file_of | test($re)) or any(.where | capture("^[^ ]+ \\((?<p>[^,)]+)[,)]").p; test($re));
+def accepts($f): (.id as $x | $f.id == $x or any($f.aliases[]; . == $x))
+  and ((has("where") | not) or (.where != "" and (.where as $w | $f | in_where($w))));
+'
 
 # The policy.
 mapfile -t norms < <(find "$out/norm" -name '*.json' | LC_ALL=C sort)
 [ ${#norms[@]} -gt 0 ] || norms=(/dev/null)
-jq -s --argjson exc "$exceptions" --arg today "$today" '
+jq -s --argjson exc "$exceptions" --arg today "$today" "$JQ_GLOB"'
   [.[][]] | unique_by([.tool, .id, .where]) | map(
       . as $f
-      | ([$exc[] | select(.expires >= $today and (.id as $x | $f.id == $x or any($f.aliases[]; . == $x)))][0]) as $e
+      | ([$exc[] | select(.expires >= $today and accepts($f))][0]) as $e
       | . + {excepted: ($e.id // null),
              blocking: ($e == null and (.kind == "secret" or ((.severity == "HIGH" or .severity == "CRITICAL") and .fix)))})
   | sort_by(if .blocking then 0 else 1 end, {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}[.severity] // 4, .tool, .id, .where)' \
   "${norms[@]}" > "$out/findings.json" || { log "the findings could not be read together"; exit 1; }
 
-# Unused exceptions are listed, so that a fixed finding's entry is removed: but not those of Trivy's config checks
-# (KSV-), which looper-scan's nightly runs on the tree and this job does not (#30).
-unused=$(jq -r --slurpfile f "$out/findings.json" '.[] | .id as $x | select($x | startswith("KSV-") | not)
-  | select([$f[0][] | select(.id == $x or any(.aliases[]; . == $x))] | length == 0) | .id' <<<"$exceptions")
+# Unused exceptions are listed, so that a fixed finding's entry is removed (a scoped one when no finding of its id
+# is in its where): but not those of Trivy's config checks (KSV-), which looper-scan's nightly runs on the tree and
+# this job does not (#30).
+mapfile -t unused < <(jq -r --slurpfile f "$out/findings.json" "$JQ_GLOB"'.[] | select(.id | startswith("KSV-") | not)
+  | . as $e | select([$f[0][] | select(. as $x | $e | accepts($x))] | length == 0)
+  | .id + (if has("where") then " (where \(.where))" else "" end)' <<<"$exceptions")
 blocking=$(jq '[.[] | select(.blocking)] | length' "$out/findings.json")
 {
   echo "## Security checks: $(git -C "$repo" rev-parse HEAD)"
@@ -209,7 +232,8 @@ blocking=$(jq '[.[] | select(.blocking)] | length' "$out/findings.json")
     echo; echo "### Accepted (security-exceptions.yaml)"
     jq -r '.[] | select(.excepted) | "- \(.excepted): \(.tool) \(.where)"' "$out/findings.json"
   fi
-  if [ -n "$unused" ]; then echo; echo "### Exceptions no finding needs (remove them)"; printf -- '- %s\n' $unused; fi
+  if [ ${#unused[@]} -gt 0 ]; then echo; echo "### Exceptions no finding needs (remove them)"; printf -- '- %s\n' "${unused[@]}"; fi
+  if [ ${#warnings[@]} -gt 0 ]; then echo; echo "### Warnings (none fails the job)"; printf -- '- %s\n' "${warnings[@]}"; fi
 } > "$out/summary.md"
 cat "$out/summary.md" >&2
 if [ ${#problems[@]} -gt 0 ]; then

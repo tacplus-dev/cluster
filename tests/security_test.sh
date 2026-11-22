@@ -8,9 +8,10 @@
 # govulncheck on a binary, OSV-Scanner on the tree, Trivy on the image or on an image the tree's pins deploy (each
 # by its digest, for linux/arm64; a pin without its image, or not by digest, fails; our GitLab Runner images, in pin.yaml's
 # build.registry, from SECURITY_IMAGES' layouts, refused unless each is its pinned digest), unless an unexpired exception names it
-# (by its id or an alias); an expired exception fails the job, with or without its finding, and so does an entry
-# with a field missing or one too many, or a tool that cannot run; a finding without a fix, or below HIGH, passes.
-# This repository's own files hold no secret, and its security-exceptions.yaml reads, each entry with its four fields. OSV-Scanner, govulncheck
+# (by its id or an alias), and with a where, only there (a path or a path glob: a binary, an image; an empty one
+# fails); an expired exception fails the job, with or without its finding, and so does an entry with a field
+# missing or one it does not have, or a tool that cannot run; a finding without a fix, or below HIGH, passes.
+# This repository's own files hold no secret, and its security-exceptions.yaml reads, no KSV- entry in every file. OSV-Scanner, govulncheck
 # and Trivy are stubs (tests/stub/security: they need the network and their databases). Needs bash, git, jq, tar,
 # openssl and gitleaks (ci/tools.sh builds it into bin/).
 #
@@ -91,7 +92,7 @@ rm -rf "$work/full"
 repo
 govulncheck_finding v0.62.0
 fails "a vulnerable symbol in a binary, with a fix" "GO-2026-6860"
-jq -e '.[0] | .tool == "govulncheck" and .severity == "HIGH" and .fix and (.where | startswith("kubectl (golang.org/x/net@v0.60.0"))' \
+jq -e '.[0] | .tool == "govulncheck" and .severity == "HIGH" and .fix and (.where | startswith("golang.org/x/net@v0.60.0 (kubectl, called: golang.org/x/net/http2.Read"))' \
   "$work/security/findings.json" >/dev/null && ok "govulncheck's finding names the binary and the module" ||
   fail "govulncheck's finding: $(cat "$work/security/findings.json")"
 exceptions "$(entry GO-2026-6860 "$later")"
@@ -102,6 +103,20 @@ exceptions "$(entry CVE-2026-1111 "$today")"
 passes "the same, accepted by its alias, the last day of the exception"
 exceptions "$(entry GO-2026-6860 "$earlier")"
 fails "the same, its exception expired" "exception GO-2026-6860 expired on $earlier"
+# An entry with a where (tacplus-dev/looper#182, as looper-scan matches it): its id there only, a path or a path glob
+# against the finding's where without its line, or the place in its parentheses (a binary, an image).
+exceptions "$(entry GO-2026-6860 "$later")" "    where: kubectl"
+passes "the same, accepted by an exception scoped to its binary"
+jq -e '.[0].excepted == "GO-2026-6860"' "$work/security/findings.json" >/dev/null && ok "the scoped exception accepts it" ||
+  fail "the scoped finding: $(cat "$work/security/findings.json")"
+exceptions "$(entry GO-2026-6860 "$later")" "    where: gke-gcloud-auth-plugin"
+fails "the same, its exception scoped to another binary" "GO-2026-6860"
+grep -q 'GO-2026-6860 (where gke-gcloud-auth-plugin)' "$work/security/summary.md" &&
+  ok "the summary lists the scoped exception its where does not need" || fail "the scoped miss: $(cat "$work/security/summary.md")"
+exceptions "$(entry GO-2026-6860 "$later")" "    where: kube*"
+passes "the same, accepted by an exception scoped by a glob"
+exceptions "$(entry GO-2026-6860 "$later")" "    where: \"\""
+fails "an exception whose where is empty" "its where is empty"
 
 repo
 exceptions "$(entry GO-2026-0001 "$earlier")"
@@ -110,9 +125,11 @@ exceptions "$(entry GO-2026-0001 "$later")"
 passes "an unexpired exception with no finding"
 grep -q 'Exceptions no finding needs' "$work/security/summary.md" && ok "the summary lists an exception no finding needs" ||
   fail "the unused exception: $(cat "$work/security/summary.md")"
+grep -q 'exception GO-2026-0001 has no where' "$work/security/summary.md" && ok "the summary warns of an exception with no where" ||
+  fail "the unscoped exception: $(cat "$work/security/summary.md")"
 exceptions "$(entry KSV-0109 "$later")"
 passes "an exception for Trivy's config checks, which looper-scan's nightly runs and this job does not"
-grep -q 'KSV-0109' "$work/security/summary.md" && fail "the summary lists KSV-0109 to remove: $(cat "$work/security/summary.md")" ||
+grep -q '^- KSV-0109' "$work/security/summary.md" && fail "the summary lists KSV-0109 to remove: $(cat "$work/security/summary.md")" ||
   ok "the summary does not list a config check's exception to remove"
 exceptions "  - id: GO-2026-0001" "    reason: no fix yet" "    expires: $later"
 fails "an exception without decided_by" "needs a reason and who decided"
@@ -161,6 +178,10 @@ jq -e --arg image "${deployed[1]}" '[.[] | select(.blocking)] | length == 1 and 
   fail "the deployed image's finding: $(cat "$work/security/findings.json")"
 exceptions "$(entry CVE-2026-42496 "$later")"
 passes "the same, accepted by an unexpired exception"
+exceptions "$(entry CVE-2026-42496 "$later")" "    where: registry.example/runner-helper:**"
+passes "the same, accepted by an exception scoped to its image by a glob"
+exceptions "$(entry CVE-2026-42496 "$later")" "    where: registry.example/runner:**"
+fails "the same, its exception scoped to another image" "CVE-2026-42496"
 printf 'repository: tacplus-dev/deploymentproxy\n' > "$work/repo/deploymentproxy/pin.yaml" && commit "no image"
 fails "a pin without its image" 'deploymentproxy/pin.yaml: no "image:" image to scan'
 pins
@@ -205,7 +226,7 @@ touch "$SSTUB/govulncheck-fails"
 fails "a tool that cannot run" "govulncheck .*kubectl: .*not a Go binary"
 
 # This repository's own files, as they are (its pins' checksums are no secret, its exceptions read, each entry
-# with its four fields: whether one has expired is the security job's to say).
+# with its four fields and its where: whether one has expired is the security job's to say).
 repo
 (cd "$here" && tar -c --exclude=./out --exclude=./bin --exclude=./security --exclude=./.git .) | tar -x -C "$work/repo" &&
   commit "this repository's files"
@@ -213,6 +234,8 @@ run
 if grep -q 'gitleaks\|security-exceptions.yaml\|needs a reason\|is not a date' "$work/security/summary.md"; then
   fail "this repository's files: $(cat "$work/security/summary.md")"
 else ok "this repository's files: no secret, and its security-exceptions.yaml reads"; fi
+grep 'exception KSV-[0-9]* has no where' "$work/security/summary.md" && fail "a KSV- exception accepts its rule in every file" ||
+  ok "this repository's KSV- exceptions are each scoped by a where"
 [ -f "$work/repo/security-exceptions.yaml" ] || fail "the repository has no security-exceptions.yaml"
 
 [ "$failed" = 0 ] && echo "security: all passed" || { echo "security: FAILED"; exit 1; }

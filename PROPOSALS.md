@@ -255,9 +255,9 @@ the looper then marks it `promoted` or `declined` here with the date.
   ours. Links: #31, #28.
 - **deploymentproxy's ClusterRole without `networkpolicies: [delete]`** (2026-11-17, #28): the rule is there only to
   remove the NetworkPolicies releases before #14 kept in tenant namespaces; it is one of the three grants
-  `security-exceptions.yaml`'s KSV-0056 entry and `ci/grants.sh` accept. Once no tenant namespace holds one (`kubectl
+  `security-exceptions.yaml`'s KSV-0056 entries accept. Once no tenant namespace holds one (`kubectl
   get networkpolicies -A -l` deploymentproxy's owner label, empty), a tacplus-dev/deploymentproxy release could drop
-  it, and `deploymentproxy/bump.sh` to it would take its line out of `ci/grants.sh` and the entry's reason. No
+  it, and `deploymentproxy/bump.sh` to it would take out its two entries (the vendored ClusterRole and the render). No
   deploymentproxy issue asks for it yet. Links: #28, #14, tacplus-dev/looper#182 (the entries per file).
 
 ## Promoted / declined
