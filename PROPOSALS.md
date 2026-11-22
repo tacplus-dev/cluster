@@ -28,6 +28,16 @@ the looper then marks it `promoted` or `declined` here with the date.
   version 1) takes no job until tacplus-dev/looper#197 tags its `.control` jobs (the kicker and the plan) `arm64, kick`,
   after the hub re-pins the cluster to a commit with it. Until then `control` holds the 2 slots' room it no longer
   uses. Ordered: the re-pin first, or `.control` jobs find no runner.
+- **The report builds on the build-report runner** (2026-11-22, #42; tacplus-dev/looper#209):
+  `gitlab-runner/runners/build-report.yaml` (tags `arm64, build-report`, `concurrent` 6, the spot pool, its jobs at
+  the PriorityClass `build-report`, which a land's build preempts) takes no job until tacplus-dev/cloud#93 registers
+  it and writes `gitlab-runner-build-report` version 1, the hub re-pins the cluster to a commit with it (its `apply`
+  fails at `runner-tokens` before cloud#93), and the hub sets tacplus-dev/build's `BUILD_REPORT_TAGS` to
+  `arm64, build-report`, in that order, or report builds find no runner. Then #42's done-when, unverified here: with
+  the spot pool full of report builds, a land's gates pod starts within minutes (`kubectl -n ci get events
+  --field-selector reason=Preempted`). Its `concurrent` 6 is `build`'s; #41, which counts `build`'s from the spot
+  pool's room, should count the two together, since they share the pool (the looper's report slots,
+  `BUILD_POOL_NODES - 1`, already bound the report builds' gates).
 - **A runner change proven by a job before main takes it** (2026-11-19, #37): e246907's runners rolled out green
   (`apply` waits for their rollouts) yet failed every job at once, because nothing here starts a job: `ci/policy.sh`
   now refuses a read-only root filesystem without a writable emptyDir where GitLab Runner writes, but only for the
