@@ -100,9 +100,10 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   0.94.3's entrypoint ConfigMap, which names the secret files it reads and holds no secret, and its two KSV-01010 in
   `security-baseline.json` (#30); re-check both when the chart moves. KSV-0053 and KSV-0056 accepted until 2026-12-31
   on the RBAC granted by design (#28): the runners' `gitlab-runner-*` (exec, attach, services), `fleet-deploy`
-  (services, networkpolicies) and deploymentproxy's ClusterRole (networkpolicies delete). The entries match by id, so
-  `ci/grants.sh` (`tests/grants_test.sh`) fails any other Role granting them, until tacplus-dev/looper#182 scopes
-  them by file; their KSV-0048, -0049 and -0113 in `security-baseline.json`. KSV-0014 (HIGH) on the chart's template,
+  (services, networkpolicies) and deploymentproxy's ClusterRole (networkpolicies delete), each entry scoped by its
+  `where` to its own file, the render's fixture or the vendored ClusterRole (#45, tacplus-dev/looper#182; `ci/grants.sh`,
+  the interim guard, is gone); their KSV-0048, -0049 and -0113 in `security-baseline.json`. Every entry of
+  `security-exceptions.yaml` has a `where` (its binary, image or file), which `ci/security.sh` applies as looper-scan does. KSV-0014 (HIGH) on the chart's template,
   upstream's defaults, still fails the nightly (#33). The render's runners have a read-only root (#29,
   `tests/render_test.sh`). The hub decided to fix the scan, with no exception: the vendored releases are left out
   of Trivy's config scan and the render is still scanned. That needs looper-scan to read a repository's vendored
