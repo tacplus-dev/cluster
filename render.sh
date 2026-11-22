@@ -13,7 +13,8 @@
 #                                   deploy account's Role and RoleBinding (fleet-deploy), in tac-<name> only
 #   OUT/20-ci.yaml                  CI in the cluster (README, CI in the cluster): the namespace ci, the jobs' service
 #                                   account ci-job (no token), the runner managers' PriorityClass ci-runner-manager
-#                                   (above their jobs, #39), the NetworkPolicy that keeps its pods off the metadata
+#                                   (above their jobs, #39), the report builds' build-report (below a land's build's
+#                                   jobs, #42), the NetworkPolicy that keeps its pods off the metadata
 #                                   server, the admission policy refusing a privileged pod, a host path or a host
 #                                   namespace in ci, and one GitLab Runner per gitlab-runner/runners/<runner>.yaml:
 #                                   the chart (gitlab-runner/release, checked against its SHA256SUMS) rendered with
@@ -318,7 +319,7 @@ metadata:
     tacplus.dev/ci: "true"
 ---
 # The runner managers' priority (gitlab-runner/values.yaml's priorityClassName, #39): above the jobs' pods (0, none
-# set), preempting one when a manager has no room, so a runner is never down for want of its manager's pod. Never the
+# set but the report builds', below), preempting one when a manager has no room, so a runner is never down for want of its manager's pod. Never the
 # cluster's default; far below the system's (over 1000000000).
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
@@ -328,6 +329,19 @@ value: 1000000
 globalDefault: false
 preemptionPolicy: PreemptLowerPriority
 description: GitLab Runner managers in ci (tacplus-dev/cluster), ahead of their jobs' pods.
+---
+# The report builds' jobs' priority (gitlab-runner/runners/build-report.yaml's priority_class_name, #42;
+# tacplus-dev/looper#209): below a land's build's jobs (0, build's set none), which preempt them when the spot pool is
+# full, and preempting nothing themselves. At or above the cluster autoscaler's expendable cutoff (-10), so a report
+# build's pending pod still scales the spot pool up. Never the cluster's default.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: build-report
+value: -1
+globalDefault: false
+preemptionPolicy: Never
+description: Report builds in ci (tacplus-dev/cluster), preempted by a land's build.
 ---
 # The jobs' pods' account: no role anywhere, and no token in the pod.
 apiVersion: v1

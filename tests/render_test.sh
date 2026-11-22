@@ -11,7 +11,10 @@
 # pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
 # is protected refs only, and no other runner is; kick's pods name arm64, kick (#36), control's arm64, control; kick's
 # jobs default to 50m and 256Mi (#39); every runner manager runs at the PriorityClass ci-runner-manager, above its
-# jobs and preempting them, and no job at any (#39); kick's concurrent is its own (2), control's the normal pool's room
+# jobs and preempting them, and no job at any but build-report's (#39); build-report's jobs are build's (the spot pool,
+# its security context and ceilings) at the PriorityClass build-report, below a land's build's pods (0) and preempted by
+# them, never preempting, not the cluster's default and not expendable to the autoscaler (#42), its pods naming arm64,
+# build-report; kick's concurrent is its own (2), control's the normal pool's room
 # (gitlab-runner/pool.yaml), CPU or memory the bound, and runners the pool cannot hold, a second runner on its room,
 # one off the normal pool on it, or a quantity it cannot read, are refused;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
@@ -71,7 +74,7 @@ images=$(yq ea '[select(.kind == "Deployment") | .spec.template.spec | (.contain
 runner_cfg() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.template.toml"' "$ci" |
   yq -p toml ".runners[0] | $2"; }
 runner_toml() { runner_cfg "$1" ".kubernetes | $2"; }
-jobs=$(for r in build control infra kick; do runner_toml $r '.image + " " + .helper_image'; done | sort -u)
+jobs=$(for r in build build-report control infra kick; do runner_toml $r '.image + " " + .helper_image'; done | sort -u)
 [ "$jobs" = "$(yq '.job + " " + .helper' "$runner_pin")" ] &&
   ok "every runner's jobs default to the pinned job image, with the pinned helper, by digest" || fail "the jobs' images are [$jobs]"
 ! grep -qiE 'image.*:latest|latest@' "$ci" && ok "nothing in ci's render names latest" || fail "ci's render names latest"
@@ -79,8 +82,17 @@ jobs=$(for r in build control infra kick; do runner_toml $r '.image + " " + .hel
   [ "$(yq ea '[select(.kind == "Role" or .kind == "RoleBinding") | .metadata.namespace] | unique | join(" ")' "$ci")" = ci ] &&
   [ "$(yq ea '[select(.kind == "RoleBinding") | .roleRef.kind] | unique | join(" ")' "$ci")" = Role ] &&
   ok "the runners' accounts hold Roles in ci only, no cluster RBAC" || fail "ci's RBAC: $(yq -N 'select(.kind | test("Role")) | .kind + " " + (.metadata.namespace // "")' "$ci")"
-[ "$(runner_toml build '.node_selector.spot + " " + .node_tolerations."spot=true"')" = "true NoSchedule" ] &&
-  ok "build jobs select and tolerate the tainted spot pool" || fail "build jobs' placement"
+for r in build build-report; do
+  [ "$(runner_toml $r '.node_selector.spot + " " + .node_tolerations."spot=true"')" = "true NoSchedule" ] &&
+    ok "$r jobs select and tolerate the tainted spot pool" || fail "$r jobs' placement"
+done
+# The report builds' runner (#42; tacplus-dev/looper#209): build's jobs as they are (the spot pool, the security
+# context, the defaults and ceilings), but at the PriorityClass build-report, so a land's build preempts them.
+[ "$(runner_toml build-report 'del(.priority_class_name, .pod_labels) | to_json(0)')" = "$(runner_toml build 'del(.pod_labels) | to_json(0)')" ] &&
+  [ "$(runner_toml build-report '.priority_class_name + " " + .pod_labels."tacplus.dev/ci-runner"')" = "build-report build-report" ] &&
+  [ "$(runner_cfg build-report 'del(.kubernetes) | to_json(0)')" = "$(runner_cfg build 'del(.kubernetes) | to_json(0)')" ] &&
+  ok "build-report's jobs are build's, at the PriorityClass build-report" ||
+  fail "build-report's jobs differ from build's: $(diff <(runner_cfg build-report '.') <(runner_cfg build '.'))"
 for r in control infra kick; do
   [ "$(runner_toml $r '[(.node_selector // {}) | keys[], (.node_tolerations // {}) | keys[]] | map(select(test("spot"))) | length')" = 0 ] &&
     [ "$(runner_toml $r '.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms[0].match_expressions[] | select(.key == "spot") | .operator + " " + .values[0]')" = "NotIn true" ] &&
@@ -89,14 +101,14 @@ for r in control infra kick; do
 done
 # A job runs as a user with no home in the job image (uid 1000), so each runner gives it HOME on an emptyDir of its
 # own, writable and there before the script runs (#20: git config --global wrote //.gitconfig).
-for r in build control infra kick; do
+for r in build build-report control infra kick; do
   home=$(runner_cfg $r '(.environment // [])[] | select(test("^HOME=")) | sub("^HOME="; "")')
   [ -n "$home" ] && [ "$home" != / ] &&
     [ "$(H=$home runner_toml $r '[(.volumes.empty_dir // [])[] | select(.mount_path == strenv(H))] | length')" = 1 ] &&
     ok "$r jobs have HOME=$home, an emptyDir" || fail "$r jobs' HOME is [$home], or no emptyDir is mounted there"
 done
 # Each runner's own container has a CPU limit (#34: KSV-0011), the chart's resources value, gitlab-runner/values.yaml's.
-for r in build control infra kick; do
+for r in build build-report control infra kick; do
   cpu=$(R=$r yq 'select(.kind == "Deployment" and .metadata.name == "gitlab-runner-" + strenv(R)) | .spec.template.spec.containers[0].resources.limits.cpu' "$ci")
   [ "$cpu" = 500m ] && ok "$r's runner has its CPU limited to 500m" || fail "$r's runner's CPU limit is [$cpu]"
 done
@@ -106,7 +118,7 @@ done
 pod() { R=$r yq "select(.kind == \"Deployment\" and .metadata.name == \"gitlab-runner-\" + strenv(R)) | .spec.template.spec | $1" "$ci"; }
 emptydir() { local v; v=$(pod ".containers[0].volumeMounts[] | select(.mountPath == \"$1\") | .name")
   [ -n "$v" ] && [ "$(pod ".volumes[] | select(.name == \"$v\" and has(\"emptyDir\")) | .name")" = "$v" ] && echo 1 || echo 0; }
-for r in build control infra kick; do
+for r in build build-report control infra kick; do
   [ "$(pod '.containers[0].securityContext.readOnlyRootFilesystem')" = true ] &&
     [ "$(emptydir /tmp)" = 1 ] && [ "$(emptydir /home/gitlab-runner)" = 1 ] &&
     [ "$(emptydir /home/gitlab-runner/.gitlab-runner)" = 1 ] &&
@@ -114,7 +126,7 @@ for r in build control infra kick; do
     fail "$r's runner: readOnlyRootFilesystem [$(pod '.containers[0].securityContext.readOnlyRootFilesystem')], /tmp [$(emptydir /tmp)], home [$(emptydir /home/gitlab-runner)], config [$(emptydir /home/gitlab-runner/.gitlab-runner)]"
 done
 [ "$(yq ea '[select(.kind == "Deployment") | .spec.template.metadata.annotations."tacplus.dev/runner-token"] | join(" ")' "$ci")" = \
-  "$(for r in build control infra kick; do yq '.tacplus.token' "$here/gitlab-runner/runners/$r.yaml"; done | paste -sd ' ')" ] &&
+  "$(for r in build-report build control infra kick; do yq '.tacplus.token' "$here/gitlab-runner/runners/$r.yaml"; done | paste -sd ' ')" ] &&
   ok "each runner's pods name its token's Secret Manager version" || fail "the runners' token versions"
 # The infra runner (#25): the cloud, cluster and deploy pipelines' tags, nothing else, protected refs only; the other
 # two neither protected nor holding one of its tags. Its pods say so (the hub registers it as its file says).
@@ -122,10 +134,15 @@ annotation() { R=$1 A=$2 yq 'select(.kind == "Deployment" and .metadata.name == 
 [ "$(annotation infra runner-tags)" = "cloud,cluster,deploy" ] && [ "$(annotation infra runner-protected)" = true ] &&
   ok "infra's pods name its tags cloud, cluster, deploy, and that it is protected refs only" ||
   fail "infra's pods: tags [$(annotation infra runner-tags)], protected [$(annotation infra runner-protected)]"
-[ "$(annotation build runner-protected) $(annotation control runner-protected) $(annotation kick runner-protected)" = "false false false" ] &&
-  ! [[ ",$(annotation build runner-tags),$(annotation control runner-tags),$(annotation kick runner-tags)," =~ ,(cloud|cluster|deploy), ]] &&
-  ok "build, control and kick are not protected and hold none of infra's tags" ||
-  fail "build [$(annotation build runner-tags), protected $(annotation build runner-protected)], control [$(annotation control runner-tags), protected $(annotation control runner-protected)], kick [$(annotation kick runner-tags), protected $(annotation kick runner-protected)]"
+[ "$(annotation build runner-protected) $(annotation build-report runner-protected) $(annotation control runner-protected) $(annotation kick runner-protected)" = "false false false false" ] &&
+  ! [[ ",$(annotation build runner-tags),$(annotation build-report runner-tags),$(annotation control runner-tags),$(annotation kick runner-tags)," =~ ,(cloud|cluster|deploy), ]] &&
+  ok "build, build-report, control and kick are not protected and hold none of infra's tags" ||
+  fail "build [$(annotation build runner-tags), protected $(annotation build runner-protected)], build-report [$(annotation build-report runner-tags), protected $(annotation build-report runner-protected)], control [$(annotation control runner-tags), protected $(annotation control runner-protected)], kick [$(annotation kick runner-tags), protected $(annotation kick runner-protected)]"
+# The report builds' runner (#42): arm64 and build-report, never build (GitLab would give it a land's build's jobs too),
+# so tacplus-dev/build's report builds (BUILD_REPORT_TAGS) reach it and a land's (arm64, build) never does.
+[ "$(annotation build-report runner-tags)" = "arm64,build-report" ] && [ "$(annotation build runner-tags)" = "arm64,build" ] &&
+  ok "build-report's pods name its tags arm64, build-report; build's arm64, build" ||
+  fail "build-report's tags [$(annotation build-report runner-tags)], build's [$(annotation build runner-tags)]"
 # The kick runner (#36): the looper's kicker and plan (.control, tagged arm64, kick) on a runner of their own, so they
 # never wait behind the reports filling control: arm64 and kick, never control (GitLab would give it the reports too).
 [ "$(annotation kick runner-tags)" = "arm64,kick" ] && [ "$(annotation control runner-tags)" = "arm64,control" ] &&
@@ -137,14 +154,23 @@ annotation() { R=$1 A=$2 yq 'select(.kind == "Deployment" and .metadata.name == 
   ok "kick's jobs default to 50m and 256Mi, a kicker's or a plan's requests" ||
   fail "kick's jobs default to [$(runner_toml kick '.cpu_request + " " + .memory_request')]"
 # The runner managers first (#39): a manager that cannot schedule takes its whole runner down, so each runs at the
-# PriorityClass ci-runner-manager, above the jobs' pods (0, none set), preempting them; never the cluster's default.
-[ "$(yq ea '[select(.kind == "PriorityClass")] | length' "$ci")" = 1 ] &&
-  [ "$(yq 'select(.kind == "PriorityClass") | .metadata.name + " " + (.value > 0 | tostring) + " " + .preemptionPolicy + " " + (.globalDefault // false | tostring)' "$ci")" = "ci-runner-manager true PreemptLowerPriority false" ] &&
+# PriorityClass ci-runner-manager, above the jobs' pods (0, none set but build-report's), preempting them; never the
+# cluster's default.
+pclass() { N=$1 yq 'select(.kind == "PriorityClass" and .metadata.name == strenv(N)) | (.value | tostring) + " " + .preemptionPolicy + " " + (.globalDefault // false | tostring)' "$ci"; }
+[ "$(yq ea '[select(.kind == "PriorityClass") | .metadata.name] | join(" ")' "$ci")" = "ci-runner-manager build-report" ] &&
+  [ "$(pclass ci-runner-manager)" = "1000000 PreemptLowerPriority false" ] &&
   ok "the PriorityClass ci-runner-manager, above the jobs, preempting them, not the cluster's default" ||
-  fail "the PriorityClass: $(yq -o=json -I=0 'select(.kind == "PriorityClass")' "$ci")"
-for r in build control infra kick; do
-  [ "$(pod '.priorityClassName')" = ci-runner-manager ] && [ "$(runner_toml $r '.priority_class_name // ""')" = "" ] &&
-    ok "$r's runner runs at ci-runner-manager, its jobs at none" ||
+  fail "the PriorityClasses: $(yq -o=json -I=0 'select(.kind == "PriorityClass")' "$ci")"
+# The report builds' jobs (#42; tacplus-dev/looper#209): a land's build (0, build's jobs set none) preempts them when the
+# spot pool is full, so it never waits ~55 minutes for a report build to end; they preempt nothing themselves, and stay
+# at or above the cluster autoscaler's expendable cutoff (-10), so they still scale the spot pool up.
+[ "$(pclass build-report)" = "-1 Never false" ] &&
+  ok "the PriorityClass build-report, below a land's build's jobs (0), never preempting, not expendable, not the default" ||
+  fail "the PriorityClass build-report: [$(pclass build-report)]"
+for r in build build-report control infra kick; do
+  want=; [ "$r" != build-report ] || want=build-report
+  [ "$(pod '.priorityClassName')" = ci-runner-manager ] && [ "$(runner_toml $r '.priority_class_name // ""')" = "$want" ] &&
+    ok "$r's runner runs at ci-runner-manager, its jobs at ${want:-none}" ||
     fail "$r's runner's priorityClassName [$(pod '.priorityClassName')], its jobs' [$(runner_toml $r '.priority_class_name // ""')]"
 done
 [ "$(yq '.tacplus.protected' "$here/gitlab-runner/runners/infra.yaml")" = true ] && ok "gitlab-runner/runners/infra.yaml says protected: true" || fail "infra.yaml's protected is [$(yq '.tacplus.protected' "$here/gitlab-runner/runners/infra.yaml")]"
@@ -237,13 +263,14 @@ refused_runner "no config" 'del(.runners.config)' "no runners.config"
 # memory both; never a fixed number.
 concurrent() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.toml"' "$2" |
   sed -n 's/^ *concurrent = //p'; }
-# 3 x 1930m - 1200m - 4 x 50m (managers) - 50m (deploymentproxy) - 4 x 550m (infra) - 2 x 100m (kick) = 1940m, 12
-# pods of 150m, 140m left (#39); memory 3 x 6144Mi - 3Gi - 4 x 128Mi - 64Mi - 4 x 1088Mi - 2 x 320Mi = 9792Mi, 17 of
-# 576Mi.
+# 3 x 1930m - 1200m - 5 x 50m (managers, build-report's since #42) - 50m (deploymentproxy) - 4 x 550m (infra) - 2 x
+# 100m (kick) = 1890m, 12 pods of 150m, 90m left (#39, #42); memory 3 x 6144Mi - 3Gi - 5 x 128Mi - 64Mi - 4 x 1088Mi -
+# 2 x 320Mi = 9664Mi, 16 of 576Mi. The spot pool's runners (build, build-report) take nothing of it but their managers.
 [ "$(concurrent control "$ci")" = 12 ] && [ "$(concurrent infra "$ci")" = 4 ] && [ "$(concurrent kick "$ci")" = 2 ] &&
+  [ "$(concurrent build "$ci") $(concurrent build-report "$ci")" = "6 6" ] &&
   grep -q '^# The runner control .*concurrent 12, the normal pool.s room' "$ci" &&
-  ok "control's concurrent is the normal pool's room for its jobs (12), infra's and kick's their own (4, 2)" ||
-  fail "concurrent: control [$(concurrent control "$ci")], infra [$(concurrent infra "$ci")], kick [$(concurrent kick "$ci")]"
+  ok "control's concurrent is the normal pool's room for its jobs (12), infra's, kick's, build's and build-report's their own (4, 2, 6, 6)" ||
+  fail "concurrent: control [$(concurrent control "$ci")], infra [$(concurrent infra "$ci")], kick [$(concurrent kick "$ci")], build [$(concurrent build "$ci")], build-report [$(concurrent build-report "$ci")]"
 # pooled NAME YQ WANT: control's concurrent with gitlab-runner/pool.yaml changed by YQ is WANT, or render.sh refuses it
 # saying WANT.
 pooled() {
@@ -255,7 +282,7 @@ pooled() {
     grep -q -- "$3" "$work/log" && ok "pool: refused: $1" || fail "pool: $1: $(cat "$work/log")"
   fi
 }
-pooled "two nodes, CPU the bound" '.nodes = 2 | .reserved.cpu = "900m"' 2
+pooled "two nodes, CPU the bound" '.nodes = 2 | .reserved.cpu = "900m"' 1
 pooled "4Gi nodes, memory the bound" '.allocatable.memory = "4Gi"' 6
 pooled "a larger reserve" '.reserved.cpu = "1500m"' 10
 pooled "no room for one job" '.reserved.cpu = "3000m"' "the normal pool has no room for one job of control"

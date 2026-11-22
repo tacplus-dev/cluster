@@ -16,7 +16,10 @@
 # on any other runner (#36); a runner manager on a read-only root filesystem without a
 # writable emptyDir where GitLab Runner writes (/tmp or its TMPDIR, its home; #37); a runner manager not at the
 # PriorityClass ci-runner-manager, none, another, or one that is the default, never preempts, or is not above the jobs
-# and below the system's, and a job at a priority class (#39); a token by latest; cluster RBAC,
+# and below the system's, and a job at a priority class but build-report's (#39); build-report's jobs not at the
+# PriorityClass build-report or off the spot pool, build-report taking a tag but arm64 and build-report, or not
+# build-report, build-report on any other runner, and the PriorityClass build-report missing, the default, preempting,
+# not below the jobs' (0), or expendable to the autoscaler (below -10) (#42); a token by latest; cluster RBAC,
 # a `*`, a resource the executor does not need, another namespace's account or object, a Secret. Needs bash, yq, jq, helm.
 #
 #   tests/policy_test.sh
@@ -133,15 +136,30 @@ breach_ci "a host path in a runner manager" "$(deployment build '.spec.volumes')
 breach_ci "a runner manager image by tag only" "$(deployment control '.spec.containers[0].image') = \"registry.gitlab.com/gitlab-org/gitlab-runner:latest\"" "the image \[registry.gitlab.com/gitlab-org/gitlab-runner:latest\] is not pinned by digest"
 # The runner managers first (#39): each at the PriorityClass ci-runner-manager, above the jobs, preempting them, never
 # the cluster's default nor a system priority; no job at a priority class of its own.
-pc='(select(.kind == "PriorityClass") | '
+pc='(select(.kind == "PriorityClass" and .metadata.name == "ci-runner-manager") | '
 breach_ci "a runner manager without the managers' priority" "del($(deployment control '.spec.priorityClassName'))" "Deployment gitlab-runner-control does not run at the runner managers' priority (priorityClassName ci-runner-manager)"
-breach_ci "no PriorityClass for the managers" 'del(select(.kind == "PriorityClass"))' "no PriorityClass ci-runner-manager"
-breach_ci "another PriorityClass" '.' "the PriorityClass high, not ci-runner-manager" '{"apiVersion": "scheduling.k8s.io/v1", "kind": "PriorityClass", "metadata": {"name": "high"}, "value": 1000}'
+breach_ci "no PriorityClass for the managers" 'del(select(.kind == "PriorityClass" and .metadata.name == "ci-runner-manager"))' "no PriorityClass ci-runner-manager"
+breach_ci "another PriorityClass" '.' "the PriorityClass high, not ci-runner-manager or build-report" '{"apiVersion": "scheduling.k8s.io/v1", "kind": "PriorityClass", "metadata": {"name": "high"}, "value": 1000}'
 breach_ci "the managers' priority the cluster's default" "$pc.globalDefault) = true" "the PriorityClass ci-runner-manager is the cluster's default"
 breach_ci "the managers' priority not preempting" "$pc.preemptionPolicy) = \"Never\"" "the PriorityClass ci-runner-manager does not preempt the jobs (preemptionPolicy PreemptLowerPriority)"
 breach_ci "the managers' priority not above the jobs'" "$pc.value) = 0" "the PriorityClass ci-runner-manager's value \[0\] is not above the jobs' (0) and below the system's"
 breach_ci "the managers' priority a system one" "$pc.value) = 2000000000" "the PriorityClass ci-runner-manager's value \[2000000000\] is not above"
 breach_ci "a job at a priority class" "$(toml kick 'privileged = false' 'privileged = false\n    priority_class_name = \"ci-runner-manager\"')" "gitlab-runner-kick: its jobs set a priority class (priority_class_name)"
+# The report builds' runner (#42; tacplus-dev/looper#209): its jobs at the PriorityClass build-report, below a land's
+# build's (0), preempted by them and preempting nothing, on the spot pool as build's; its tag its own.
+rc='(select(.kind == "PriorityClass" and .metadata.name == "build-report") | '
+breach_ci "a land's build's jobs at build-report" "$(toml build 'privileged = false' 'privileged = false\n    priority_class_name = \"build-report\"')" "gitlab-runner-build: its jobs set a priority class (priority_class_name)"
+breach_ci "build-report's jobs at no priority class" "$(toml build-report 'priority_class_name = \"build-report\"' '')" "gitlab-runner-build-report: its jobs do not run at the report builds' priority (priority_class_name = \"build-report\")"
+breach_ci "build-report's jobs at the managers' priority" "$(toml build-report 'priority_class_name = \"build-report\"' 'priority_class_name = \"ci-runner-manager\"')" "gitlab-runner-build-report: its jobs do not run at the report builds' priority"
+breach_ci "build-report's jobs off the spot pool" "$(toml build-report '\"spot\" = \"true\"' '\"pool\" = \"any\"')" "gitlab-runner-build-report: its build jobs do not select the spot pool"
+breach_ci "build-report taking build" "$(deployment build-report '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,build-report,build\"" "gitlab-runner-build-report: takes a tag that is not arm64 or build-report (build)"
+breach_ci "build-report without its tag" "$(deployment build-report '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64\"" "gitlab-runner-build-report: does not take build-report"
+breach_ci "build taking build-report's tag" "$(deployment build '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,build,build-report\"" "gitlab-runner-build: takes build-report, the report builds' runner's tag"
+breach_ci "no PriorityClass for the report builds" 'del(select(.kind == "PriorityClass" and .metadata.name == "build-report"))' "no PriorityClass build-report"
+breach_ci "the report builds' priority the cluster's default" "$rc.globalDefault) = true" "the PriorityClass build-report is the cluster's default"
+breach_ci "the report builds' priority preempting" "$rc.preemptionPolicy) = \"PreemptLowerPriority\"" "the PriorityClass build-report preempts (preemptionPolicy Never)"
+breach_ci "the report builds' priority a land's build's" "$rc.value) = 0" "the PriorityClass build-report's value \[0\] is not below the jobs' (0) and at or above the autoscaler's expendable cutoff (-10)"
+breach_ci "the report builds' priority expendable" "$rc.value) = -11" "the PriorityClass build-report's value \[-11\] is not below"
 breach_ci "a runner manager on spot" "$(deployment control '.spec.tolerations') += [{\"key\": \"spot\", \"operator\": \"Exists\"}]" "Deployment gitlab-runner-control tolerates spot"
 # Where the runner manager writes, on its read-only root filesystem (#37: no /tmp failed every job at once).
 mounts=$(deployment control '.spec.containers[0].volumeMounts')

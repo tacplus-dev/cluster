@@ -1,0 +1,77 @@
+# The report builds' runner (#42; tacplus-dev/looper#209): the tacplus-dev group's jobs tagged `arm64, build-report`,
+# tacplus-dev/build's report builds (every build but a manager's land: BUILD_REPORT_TAGS), each a pod on the spot pool
+# as build's are, so a land's build always gets a node first. Its jobs are build's (the spot pool's node selector and
+# toleration, the security context, rootless BuildKit's Unconfined build container, the defaults and ceilings) but at
+# the PriorityClass build-report (render.sh), below a land's build's pods (0, none set) and never preempting: when the
+# spot pool is full of report builds, the scheduler evicts one for a land's gates pod instead of leaving it to wait for
+# a report build to end (~55 minutes for tacplus's: the hub's evidence of 2026-11-21, pipeline 3096869974). The
+# evicted job fails runner_system_failure, which tacplus-dev/build's CI file retries. Its tags are arm64 and
+# build-report, never build: GitLab gives a runner every job whose tags it holds, so holding build it would take a
+# land's jobs too, at the report builds' priority; and no other runner holds build-report (ci/policy.sh).
+#
+#   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
+#   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
+#                   writes it into the Secret gitlab-runner-build-report at apply time
+tacplus:
+  tags: [arm64, build-report]
+  token: projects/tacplus-dev/secrets/gitlab-runner-build-report/versions/1
+concurrent: 6
+runners:
+  name: tacplus-dev build-report (cluster, ci, spot pool, preemptible)
+  config: |
+    [[runners]]
+      executor = "kubernetes"
+      # uid 1000 has no home in the job image, so HOME would be / (#20): HOME is the emptyDir below instead.
+      environment = ["HOME=/tmp/home"]
+      [runners.kubernetes]
+        namespace = "ci"
+        image = "{{ .Values.pinned.job }}"
+        helper_image = "{{ .Values.pinned.helper }}"
+        service_account = "ci-job"
+        automount_service_account_token = false
+        privileged = false
+        # Below a land's build's jobs, which preempt it (#42).
+        priority_class_name = "build-report"
+        # A spot node from 0 takes minutes to come up.
+        poll_timeout = 900
+        cpu_request = "1"
+        cpu_limit = "3"
+        memory_request = "4Gi"
+        memory_limit = "8Gi"
+        cpu_request_overwrite_max_allowed = "3500m"
+        cpu_limit_overwrite_max_allowed = "3500m"
+        memory_request_overwrite_max_allowed = "12Gi"
+        memory_limit_overwrite_max_allowed = "12Gi"
+        helper_cpu_request = "100m"
+        helper_cpu_limit = "1"
+        helper_memory_request = "128Mi"
+        helper_memory_limit = "512Mi"
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "home"
+          mount_path = "/tmp/home"
+        [runners.kubernetes.pod_labels]
+          "tacplus.dev/ci-runner" = "build-report"
+        [runners.kubernetes.node_selector]
+          "kubernetes.io/arch" = "arm64"
+          "spot" = "true"
+        [runners.kubernetes.node_tolerations]
+          "spot=true" = "NoSchedule"
+          "kubernetes.io/arch=arm64" = "NoSchedule"
+        [runners.kubernetes.pod_security_context]
+          run_as_non_root = true
+          run_as_user = 1000
+          run_as_group = 1000
+          fs_group = 1000
+          [runners.kubernetes.pod_security_context.seccomp_profile]
+            type = "RuntimeDefault"
+        # Rootless BuildKit: user namespaces and mounts (unshare, mount) need these two unconfined; its
+        # newuidmap is setuid, so privilege escalation stays allowed in this container. No capability is added.
+        [runners.kubernetes.build_container_security_context]
+          [runners.kubernetes.build_container_security_context.seccomp_profile]
+            type = "Unconfined"
+          [runners.kubernetes.build_container_security_context.app_armor_profile]
+            type = "Unconfined"
+        [runners.kubernetes.helper_container_security_context]
+          allow_privilege_escalation = false
+          [runners.kubernetes.helper_container_security_context.capabilities]
+            drop = ["ALL"]

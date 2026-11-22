@@ -19,7 +19,7 @@ by Jody 2026-11-02).
   - the fleet deploy account's namespace-scoped Role and RoleBinding;
   - the fleet `operator` service account's binding, if it has one (`operator` is optional: test-idp has none).
 - **CI in the cluster** (the namespace `ci`): GitLab Runner with the Kubernetes executor, one runner for builds
-  (spot pool), one for control work (normal pool), one, `kick`, for the looper's kicker and plan alone (normal pool,
+  (spot pool), one, `build-report`, for report builds a land's build preempts (spot pool, #42), one for control work (normal pool), one, `kick`, for the looper's kicker and plan alone (normal pool,
   #36) and one, `infra`, for the cloud, cluster and deploy pipelines (normal pool, protected refs only), registered to the tacplus-dev group ([CI in the cluster](#ci-in-the-cluster)).
 - **Cluster-scoped objects a fleet's chart needs** (CRDs, ClusterRoles), and only from here. None yet: the render
   has no place for them until a fleet needs one (PROPOSALS.md).
@@ -42,7 +42,7 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `gitlab-runner/pin.yaml` | GitLab Runner's chart (version, archive digest) and its images, the runner's, the helper's and the jobs' default, by digest; the runner's and the helper's recipe (`build:`, ours: [Our GitLab Runner images](#our-gitlab-runner-images)). |
 | `gitlab-runner/release/` | The chart as fetched (`gitlab-runner/fetch.sh`), with its `SHA256SUMS`. Never edited. |
 | `gitlab-runner/values.yaml` | The chart's values every runner shares: the runner manager's pod, its Role in `ci`, its placement. |
-| `gitlab-runner/runners/<runner>.yaml` | One runner each (`build`, `control`, `infra`, `kick`): its tags, whether it takes protected refs only, its token's Secret Manager version, its jobs' `config.toml`. |
+| `gitlab-runner/runners/<runner>.yaml` | One runner each (`build`, `build-report`, `control`, `infra`, `kick`): its tags, whether it takes protected refs only, its token's Secret Manager version, its jobs' `config.toml`. |
 | `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
 | `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `rollback` (the way back without a runner: Rolling back, below); `lib.sh` (credentials); `tools.sh` (the pinned tools). |
@@ -181,14 +181,18 @@ Before the first pipeline:
    created in GitLab as a **group runner of tacplus-dev** with its `tacplus.tags`, "run untagged jobs" off and, where
    its file says `tacplus.protected: true` (`infra`), protected refs only (the access level `ref_protected`), its
    authentication token (`glrt-...`) stored as the version of the Secret Manager secret its `tacplus.token` names
-   (`gitlab-runner-build`, `gitlab-runner-control`, `gitlab-runner-infra` and `gitlab-runner-kick` in `tacplus-dev`, version 1: tacplus-dev/cloud's
+   (`gitlab-runner-build`, `gitlab-runner-build-report`, `gitlab-runner-control`, `gitlab-runner-infra` and `gitlab-runner-kick` in `tacplus-dev`, version 1: tacplus-dev/cloud's
    `dev` stack makes them), and `cluster-admin-pipeline` allowed to read those secrets
    (`roles/secretmanager.secretAccessor` on each). The runners are GitLab's
    58541760 (`build`) and 58541761 (`control`), registered paused (#18), and `infra`, which tacplus-dev/cloud's
    `gitlab` stack registers paused and whose token it writes as `gitlab-runner-infra`'s version 1 itself (cloud#64:
    no person or agent copies a token; #25; [The infra runner](#the-infra-runner) says how it is switched on), and
    `kick`, which that stack registers unpaused and whose token it writes as `gitlab-runner-kick`'s version 1
-   (tacplus-dev/cloud#81; #36: it takes jobs once tacplus-dev/looper tags `.control` `arm64, kick`);
+   (tacplus-dev/cloud#81; #36: it takes jobs once tacplus-dev/looper tags `.control` `arm64, kick`), and
+   `build-report` (#42), registered and written the same way (tacplus-dev/cloud#93), unpaused (no job carries `build-report` until the
+   next step); then tacplus-dev/build's project variable `BUILD_REPORT_TAGS` set to `arm64, build-report`, once
+   `apply` has run the runner, and `BUILD_POOL_NODES` to the spot pool's nodes whenever that changes
+   (tacplus-dev/looper#209);
    tacplus-dev/build's scheduled jobs need
    `build` unpaused once `apply` has written its token. A new token is a new version
    and a pull request moving `tacplus.token` to it. Until every runner's version is readable, `apply` fails after
@@ -256,15 +260,16 @@ The chart is pinned by the SHA-256 of its archive, and the runner, helper and de
 | Runner | Tags | Its jobs' pods | Default requests / limits | Ceiling a job may raise them to |
 |---|---|---|---|---|
 | `build` | `arm64`, `build` | the spot pool only: node selector `spot=true`, toleration `spot=true:NoSchedule` | CPU 1 / 3, memory 4Gi / 8Gi | CPU 3500m, memory 12Gi (a c4a-standard-4) |
+| `build-report` | `arm64`, `build-report` (tacplus-dev/build's report builds: every build but a manager's land, `BUILD_REPORT_TAGS`; #42) | as `build`, at the PriorityClass `build-report`: a land's build preempts them | as `build` | as `build` |
 | `control` | `arm64`, `control` (the looper's reports, managers, scans) | the normal pool: no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 100m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
 | `infra` | `cloud`, `cluster`, `deploy` (tacplus-dev/cloud's, this pipeline, fleet-seatrials' deploy), **protected refs only** | the normal pool, as `control` | CPU 500m / 1500m, memory 1Gi / 4Gi | CPU 1500m, memory 4Gi |
 | `kick` | `arm64`, `kick` (the looper's kicker and plan, its `.control` jobs; #36) | the normal pool, as `control` | CPU 50m / 1, memory 256Mi / 2Gi (the looper's `.control` requests, #39) | CPU 1500m, memory 4Gi |
 
-**How many jobs at once** (`concurrent`): `build` 6, `infra` 4 and `kick` 2, fixed; `control` as many as the normal pool has
+**How many jobs at once** (`concurrent`): `build` 6, `build-report` 6, `infra` 4 and `kick` 2, fixed; `control` as many as the normal pool has
 room for (`concurrent: pool`, #36), which `render.sh` counts from `gitlab-runner/pool.yaml` (its nodes, a node's
 allocatable, a reserve for kube-system and the deployments' pods) less every runner manager, deploymentproxy and
 `infra`'s and `kick`'s jobs at their full concurrent, by each job pod's default requests (job and helper) in CPU and
-memory: 12 today, CPU the bound, 140m left. The render refuses runners the pool cannot hold. `control`'s defaults are its largest
+memory: 12 today, CPU the bound, 90m left (`build-report`'s manager took 50m, #42). The render refuses runners the pool cannot hold. `control`'s defaults are its largest
 kind's, a report's (tacplus-dev/looper#165), so the count holds for every looper job; a job that raises its own is
 not counted. A larger pool, or a measured reserve, is a change to `gitlab-runner/pool.yaml`, and the count follows.
 
@@ -272,12 +277,24 @@ A job raises its own with GitLab's variables (`KUBERNETES_CPU_REQUEST`, `KUBERNE
 to the ceiling; the helper container has its own small defaults. It may override nothing else: not its node
 selector, tolerations, namespace, service account or pod annotations (the policy refuses any
 `*_overwrite_allowed`). The runner managers (one Deployment per runner, in `ci`) run on the normal pool too, at the
-PriorityClass `ci-runner-manager` (#39), above every job's pod (none sets one) and preempting one when a manager has
+PriorityClass `ci-runner-manager` (#39), above every job's pod (none sets one but `build-report`'s, below) and preempting one when a manager has
 no room: a manager that cannot schedule takes its whole runner down, as `kick`'s did while `control`'s old manager
 still ran its jobs beside the new one's after an apply. A manager is counted in the pool's room, so it only takes back
 its own; the job it evicts fails and is retried. A spot
 node from 0 takes minutes, so a build job waits up to 15 minutes for its pod (`poll_timeout`); preemption is
 handled the GitLab way, with `retry:` in the pipeline files (`runner_system_failure`, `stuck_or_timeout_failure`).
+
+**A land's build first** (#42; tacplus-dev/looper#209). The looper starts every build but a manager's land as a report
+build, on tacplus-dev/build's `BUILD_REPORT_TAGS`; their gates hold at most one node fewer than the spot pool has
+(`BUILD_POOL_NODES`), and on `arm64, build-report` they run on `build-report`, whose jobs are `build`'s at the
+PriorityClass `build-report`: value -1, below a land's build's jobs (0, `build`'s set none), `preemptionPolicy: Never`,
+not the cluster's default. When the spot pool is full of report builds, the scheduler evicts one for a land's gates
+pod at once instead of leaving it to wait for a report build to end (~55 minutes for tacplus's: on 2026-11-21 a
+24-land candidate's first jobs got no pod for 16 minutes, the pool's 2 nodes held by four report builds, and the
+manager gave up). The evicted job fails `runner_system_failure`, which tacplus-dev/build's CI file retries (twice).
+The value stays at or above the cluster autoscaler's expendable cutoff (-10), so a pending report build still scales
+the spot pool up. `ci/policy.sh` keeps the class's value in -10 to -1, never preempting, `build-report` its runner's
+tag alone, and every other runner's jobs at no priority class.
 
 - **No privileged pod, no host path, no Docker socket.** Image builds use rootless BuildKit in the build job's own
   container (tacplus-dev/tacplus#315): every container of a build pod runs as uid 1000, and the build container
@@ -351,7 +368,8 @@ now pass), then `UPDATE=1 tests/render_test.sh`. The land's gates build it again
 agree. Then remove the `security-exceptions.yaml` entries the `security` job lists as needed by no finding.
 
 **Moving jobs over** is tacplus-dev/looper's (tacplus-dev/looper#84): a job moves here by switching its tags to
-`arm64, control`, `arm64, kick` (the kicker and the plan, #36) or `arm64, build`, these runners' own; no in-cluster
+`arm64, control`, `arm64, kick` (the kicker and the plan, #36), `arm64, build` or `arm64, build-report` (report
+builds, #42), these runners' own; no in-cluster
 runner holds a VM runner's tag (`autoscale`, `autoscale-16`, `gce`; `ci/policy.sh` refuses one), so a job still
 tagged for the VMs never lands here (#13). The
 GitLab runners' tags follow `tacplus.tags` (the hub's step 7); `control` stays paused until tacplus-dev/looper#84
