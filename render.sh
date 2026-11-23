@@ -21,7 +21,7 @@
 #                                   gitlab-runner/values.yaml, the runner's file and the images of
 #                                   gitlab-runner/pin.yaml, its token's Secret Manager version, its tags and whether
 #                                   it takes protected refs only on its pods, and its concurrent (the normal pool's
-#                                   room for the one that says pool: gitlab-runner/pool.yaml)
+#                                   room, and the looper pool's, for the one that says pool: gitlab-runner/pool.yaml)
 #
 # A removed entry renders nothing, and the apply never deletes (ci/apply.sh). Every entry is checked before
 # anything is written; a bad one is refused with what is wrong.
@@ -103,7 +103,8 @@ done
 
 # The normal pool's room (gitlab-runner/pool.yaml, #36): what its nodes can allocate, less the reserve, every runner
 # manager (all on the normal pool), deploymentproxy and every normal-pool runner's jobs at its fixed concurrent; the
-# runner that says `concurrent: pool` takes as many jobs as fit in the rest, CPU and memory both. A job's pod is its
+# runner that says `concurrent: pool` takes as many jobs as fit in the rest, and in the looper pool's room (#47) when
+# its jobs tolerate that pool's taint, CPU and memory both. A job's pod is its
 # runner's default requests, its job container's and its helper's.
 pool=${POOL:-$here/gitlab-runner/pool.yaml}
 [ -f "$pool" ] || die "no $pool"
@@ -156,7 +157,7 @@ for r in "${runners[@]}"; do
   cpu=$((job_cpu + helper_cpu)) mem=$((job_mem + helper_mem))
   if [ "$c" = pool ]; then
     [ -z "$pooled" ] || die "runner $r: concurrent pool, as $pooled: one runner only takes the pool's room"
-    pooled=$r pod_cpu=$cpu pod_mem=$mem
+    pooled=$r pod_cpu=$cpu pod_mem=$mem pooled_looper=$(yq -p json '.node_tolerations."looper=true" // ""' <<<"$k")
   else
     concurrent[$r]=$c
     free_cpu=$((free_cpu - c * cpu)) free_mem=$((free_mem - c * mem))
@@ -164,7 +165,24 @@ for r in "${runners[@]}"; do
 done
 [ "$free_cpu" -ge 0 ] && [ "$free_mem" -ge 0 ] ||
   die "the normal pool has no room for its runners' jobs: ${free_cpu}m CPU and ${free_mem}Mi memory left (gitlab-runner/pool.yaml)"
+# The looper pool (#47): the pooled runner's jobs, when they tolerate its taint, overflow there; it counts at its max
+# nodes, less each node's daemonsets. Without it in gitlab-runner/pool.yaml, none.
+looper_nodes=0 looper_cpu=0 looper_mem=0 looper_room=
+if [ "$(yq 'has("looper")' "$pool")" = true ]; then
+  looper_nodes=$(yq '.looper.max_nodes // ""' "$pool")
+  [[ $looper_nodes =~ ^[0-9]+$ ]] || die "gitlab-runner/pool.yaml: looper.max_nodes [$looper_nodes] is not a number of nodes"
+  looper_node_cpu=$(pool_q looper.allocatable.cpu m)
+  looper_node_mem=$(pool_q looper.allocatable.memory Mi)
+  looper_ds_cpu=$(pool_q looper.daemonsets.cpu m)
+  looper_ds_mem=$(pool_q looper.daemonsets.memory Mi)
+  [ "$looper_ds_cpu" -le "$looper_node_cpu" ] && [ "$looper_ds_mem" -le "$looper_node_mem" ] ||
+    die "gitlab-runner/pool.yaml: the looper pool's daemonsets ask more than a node's allocatable"
+  looper_cpu=$((looper_nodes * (looper_node_cpu - looper_ds_cpu))) looper_mem=$((looper_nodes * (looper_node_mem - looper_ds_mem)))
+fi
 if [ -n "$pooled" ]; then
+  if [ "$looper_nodes" -gt 0 ] && [ "$pooled_looper" = NoSchedule ]; then
+    free_cpu=$((free_cpu + looper_cpu)) free_mem=$((free_mem + looper_mem)) looper_room=true
+  fi
   c=$((free_cpu / pod_cpu < free_mem / pod_mem ? free_cpu / pod_cpu : free_mem / pod_mem))
   [ "$c" -le 99 ] || c=99
   [ "$c" -ge 1 ] || die "the normal pool has no room for one job of $pooled (${pod_cpu}m, ${pod_mem}Mi): ${free_cpu}m CPU and ${free_mem}Mi memory left (gitlab-runner/pool.yaml)"
@@ -440,7 +458,7 @@ EOF
     [ "$upstream" = "registry.gitlab.com/gitlab-org/gitlab-runner:alpine-v$app" ] ||
       die "runner $r: the chart's Deployment runs $upstream, not its appVersion $app"
     echo ---
-    echo "# The runner $r (gitlab-runner/runners/$r.yaml), tags $(yq '.tacplus.tags | join(", ")' "$f")$([ "$protected" != true ] || echo ", protected refs only"), concurrent ${concurrent[$r]}$([ "$r" != "$pooled" ] || echo ", the normal pool's room (gitlab-runner/pool.yaml)"): GitLab Runner's chart $(yq '.version' "$runner_release/Chart.yaml")."
+    echo "# The runner $r (gitlab-runner/runners/$r.yaml), tags $(yq '.tacplus.tags | join(", ")' "$f")$([ "$protected" != true ] || echo ", protected refs only"), concurrent ${concurrent[$r]}$([ "$r" != "$pooled" ] || echo ", the normal pool's room$([ -z "$looper_room" ] || echo " and the looper pool's at its max nodes") (gitlab-runner/pool.yaml)"): GitLab Runner's chart $(yq '.version' "$runner_release/Chart.yaml")."
     # checksum/secrets is the hash of the chart's own Secret, which it does not render here (the token's Secret is
     # ci/runner-tokens.sh's): an empty file's, and nothing to roll the pods on.
     IMAGE=$runner_image yq '(select(.kind == "Deployment") | .spec.template.spec.containers[0].image) = strenv(IMAGE) |

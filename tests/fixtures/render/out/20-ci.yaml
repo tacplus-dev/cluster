@@ -926,7 +926,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 12, the normal pool's room (gitlab-runner/pool.yaml): GitLab Runner's chart 0.94.3.
+# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 33, the normal pool's room and the looper pool's at its max nodes (gitlab-runner/pool.yaml): GitLab Runner's chart 0.94.3.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -1002,7 +1002,7 @@ data:
       --working-directory=/home/gitlab-runner
   config.toml: |
     shutdown_timeout = 0
-    concurrent = 12
+    concurrent = 33
     check_interval = 3
     log_level = "info"
   config.template.toml: |
@@ -1018,7 +1018,8 @@ data:
         automount_service_account_token = false
         privileged = false
         allow_privilege_escalation = false
-        poll_timeout = 600
+        # A looper node from 0 takes minutes to come up (#47).
+        poll_timeout = 900
         cpu_request = "100m"
         cpu_limit = "1"
         memory_request = "512Mi"
@@ -1038,10 +1039,19 @@ data:
           "tacplus.dev/ci-runner" = "control"
         [runners.kubernetes.node_selector]
           "kubernetes.io/arch" = "arm64"
+        # The looper pool's taint (#47): its jobs alone tolerate it, and prefer the normal pool (below).
         [runners.kubernetes.node_tolerations]
           "kubernetes.io/arch=arm64" = "NoSchedule"
+          "looper=true" = "NoSchedule"
         [runners.kubernetes.affinity]
           [runners.kubernetes.affinity.node_affinity]
+            [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution]]
+              weight = 100
+              [runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference]
+                [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference.match_expressions]]
+                  key = "looper"
+                  operator = "NotIn"
+                  values = ["true"]
             [runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution]
               [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms]]
                 [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
@@ -1208,7 +1218,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: f54aa35593d498bf726f3b98153b7e442287cade33159d1720ba844569523686
+        checksum/configmap: 03eca13af93feef6a8d61f5113e5da8e2f0b7579170d13f52e3d1418bd557376
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
