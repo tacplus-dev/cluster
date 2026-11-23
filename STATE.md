@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-23 by the looper (#49).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-23 by the looper (#50).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -132,12 +132,12 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
 - **Expected, not a fault:** a build pod is `Unschedulable` (`Insufficient memory`, the normal pool's nodes not
   matching) while the spot pool scales up from 0; the node comes up in minutes and `poll_timeout = 900` waits for it
   (#20).
-- **Blocked on:** the hub's re-pin of the cluster to 16adabe or later (main, 88904be, also carries #40's runner and
-  helper digests) and its apply, then tacplus-dev/looper#197 (`.control` tagged `arm64, kick`; in that order, or
+- **Blocked on:** the hub's re-pin of the cluster to 16adabe or later (main, which also has the runner and helper
+  digests of 88904be) and its apply, then tacplus-dev/looper#197 (`.control` tagged `arm64, kick`; in that order, or
   `.control` jobs find no runner), for #36's runner reserved for the looper's kicker and plan, so they never wait behind reports;
-  the apply of cloud's stacks with cloud#93 (the `build-report` runner's registration and token), then the hub's
-  re-pin to a commit with #42 and `BUILD_REPORT_TAGS` set to `arm64, build-report`, for report builds a land's build
-  preempts (#42);
+  the apply of cloud's stacks (the `build-report` runner's registration and its token secret, landed in cloud), then
+  the hub's re-pin to 8ee7a8e or later and `BUILD_REPORT_TAGS` set to `arm64, build-report`, for report builds a
+  land's build preempts (landed as 8ee7a8e);
   tacplus-dev/tacplus#315 (rootless BuildKit in the build image), for unpausing the in-cluster `build`
   runner 58541760 only; tacplus-dev/looper#190 (looper-scan leaving vendored paths out of Trivy's config scan), for
   a green nightly (#33). Nothing else in this repository waits.
