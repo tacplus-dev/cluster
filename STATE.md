@@ -73,9 +73,10 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   tacplus-dev/build's scheduled jobs. `kick` (#36; registered by cloud's `gitlab` stack, cloud#81) takes no job until
   the hub re-pins to a commit with it and tacplus-dev/looper#197 tags `.control` (the kicker, the plan) `arm64, kick`;
   that its token's version 1 is readable is cloud#81's, unverified here (until it is, `apply` fails after the rest,
-  at `runner-tokens`). `build-report` (#42) takes no job until tacplus-dev/cloud#93 registers it and writes
-  `gitlab-runner-build-report` version 1 (until then `apply` of a commit with it fails at `runner-tokens`), the hub
-  re-pins to a commit with it, and the hub sets tacplus-dev/build's `BUILD_REPORT_TAGS` to `arm64, build-report`;
+  at `runner-tokens`). `build-report` (#42; registered by cloud's `gitlab` stack, cloud#93, landed 2026-11-23 as 1d87fd9) takes no job
+  until cloud's `dev` and `gitlab` stacks apply it (until `gitlab-runner-build-report` version 1 is readable, `apply` of
+  a commit with it fails at `runner-tokens`), the hub re-pins to a commit with it, and the hub sets tacplus-dev/build's
+  `BUILD_REPORT_TAGS` to `arm64, build-report`;
   #42's done-when (a land's gates pod starting within minutes on a spot pool full of report builds) is unverified. Whether this project's nightly schedule 4547285 is on is not recorded: the hub's
   closing comments do not say, and no looper has a GitLab token to see it. The `ci` NetworkPolicy holds only where
   NetworkPolicy is enforced (Dataplane V2: tacplus-dev/cloud's `dev` cluster has it).
@@ -122,8 +123,9 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
 - **Blocked on:** the hub's re-pin of the cluster to 16adabe or later (main, 88904be, also carries #40's runner and
   helper digests) and its apply, then tacplus-dev/looper#197 (`.control` tagged `arm64, kick`; in that order, or
   `.control` jobs find no runner), for #36's runner reserved for the looper's kicker and plan, so they never wait behind reports;
-  tacplus-dev/cloud#93 (the `build-report` runner's registration and token), then the hub's re-pin to a commit with
-  #42 and `BUILD_REPORT_TAGS` set to `arm64, build-report`, for report builds a land's build preempts (#42);
+  the apply of cloud's stacks with cloud#93 (the `build-report` runner's registration and token), then the hub's
+  re-pin to a commit with #42 and `BUILD_REPORT_TAGS` set to `arm64, build-report`, for report builds a land's build
+  preempts (#42);
   tacplus-dev/tacplus#315 (rootless BuildKit in the build image), for unpausing the in-cluster `build`
   runner 58541760 only; tacplus-dev/looper#190 (looper-scan leaving vendored paths out of Trivy's config scan), for
   a green nightly (#33). Nothing else in this repository waits.
