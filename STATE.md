@@ -31,7 +31,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-22 by th
   `arm64, build-report`, tacplus-dev/build's report builds, `build`'s jobs at the PriorityClass `build-report`, -1,
   `preemptionPolicy: Never`, so a land's build (0) preempts them when the spot pool is full; the policy keeps the class
   in -10 to -1, never preempting, `build-report` its runner's tag alone, and every other runner's jobs at no class), `control` (`arm64, control`, #13;
-  no VM runner's tag, the policy refuses one; the normal pool) and `infra` (#25, for cloud#11: `cloud, cluster, deploy`,
+  no VM runner's tag, the policy refuses one; the normal pool, its overflow on the looper pool, #47) and `infra` (#25, for cloud#11: `cloud, cluster, deploy`,
   the three infrastructure pipelines', protected refs only (`tacplus.protected`, on every runner's pods as
   `tacplus.dev/runner-protected`), the normal pool as control, no token in the pod; the policy admits those three tags
   to `infra` alone, refuses it any other tag and an `infra` not protected) and `kick` (#36: `arm64, kick`, the looper's
@@ -39,7 +39,10 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-22 by th
   #39; the policy keeps `kick` its tag alone and it on `arm64, kick` only); every runner manager at the PriorityClass
   `ci-runner-manager`, above the jobs and preempting them (#39: `kick`'s manager stayed Pending while `control`'s old
   manager's jobs ran beside the new one's after an apply), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
-  `gitlab-runner/pool.yaml`, 12 today beside `kick`'s 2, CPU the bound, 90m left since `build-report`'s manager (#42); its default CPU request a report's 100m, looper#165; the pool's reserve, kube-system and the
+  `gitlab-runner/pool.yaml`, 12 beside `kick`'s 2, CPU the bound, 90m left since `build-report`'s manager (#42)) plus
+  the looper pool's at its max nodes (#47, tacplus-dev/cloud#95: 2 c4a-standard-2 from 0, less an estimated 400m/1Gi
+  of daemonsets a node, PROPOSALS.md): 33; `control`'s jobs alone tolerate `looper=true:NoSchedule`, preferring the
+  normal pool, and the policy refuses the taint's toleration anywhere else; its default CPU request a report's 100m, looper#165; the pool's reserve, kube-system and the
   deployments' pods, CPU from looper#165's evidence and memory an estimate, not measured on the nodes, PROPOSALS.md), the
   render refusing runners the pool cannot hold; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
   the job image, and `git config --global` failed on `//.gitconfig`); each runner's own container CPU-limited to 500m (#34) and on a
@@ -77,7 +80,10 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   until cloud's `dev` and `gitlab` stacks apply it (until `gitlab-runner-build-report` version 1 is readable, `apply` of
   a commit with it fails at `runner-tokens`), the hub re-pins to a commit with it, and the hub sets tacplus-dev/build's
   `BUILD_REPORT_TAGS` to `arm64, build-report`;
-  #42's done-when (a land's gates pod starting within minutes on a spot pool full of report builds) is unverified. Whether this project's nightly schedule 4547285 is on is not recorded: the hub's
+  #42's done-when (a land's gates pod starting within minutes on a spot pool full of report builds) is unverified.
+  #47 (`control` 33, its overflow on the looper pool) reaches the cluster when the hub re-pins to a commit with it, once
+  cloud's `dev` has applied the looper pool (tacplus-dev/cloud#95); its done-when (a looper node up in a busy hour,
+  back to 0 after) is unverified. Whether this project's nightly schedule 4547285 is on is not recorded: the hub's
   closing comments do not say, and no looper has a GitLab token to see it. The `ci` NetworkPolicy holds only where
   NetworkPolicy is enforced (Dataplane V2: tacplus-dev/cloud's `dev` cluster has it).
   `runner-images` needs tacplus-dev/cloud's `apply:dev` to have created `ci-images` (cloud#45, landed) before it
