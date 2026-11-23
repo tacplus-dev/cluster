@@ -54,7 +54,7 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
   1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
   `ci/policy.sh`. Tests green (`ci/checks.sh`), here and in the CI image.
-- **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6.13's since 2026-11-22, #44; 2.6.12's from 2026-11-15, #24; 2.6.10's, OpenEXR-free (tacplus#554), from 2026-11-12; 2.6.2's since #16 before that,
+- **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6's rebuild 20261123-ef62327's since 2026-11-23, #48; 2.6.13's from 2026-11-22, #44; 2.6.12's from 2026-11-15, #24; 2.6.10's, OpenEXR-free (tacplus#554), from 2026-11-12; 2.6.2's since #16 before that,
   `gitlab-runner/pin.yaml`'s `job:`) and `gates.yaml` its one set, full (`ci/tools.sh`, the render, `ci/validate.sh
   out`, `ci/checks.sh`), so tacplus-dev/build builds this repository in that image, with no Docker, and runs its
   security checks; `tests/ci_test.sh` refuses a `build.lock` that is not that `job:`, of the CI image's line. Verified
@@ -106,8 +106,9 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   only, no release of either with the fix (PROPOSALS.md). Every Go tool `ci/tools.sh` builds, Trivy too since #21,
   is built with go1.27.4. deploymentproxy
   0.2.2's image (#22): only GO-2026-6859 (Trivy's CVE-2026-97054, its go1.27.3), with no severity, so not failing the
-  policy (2026-11-15). The CI image `build:2.6` (2.6.12 since #24, also `gitlab-runner/pin.yaml`'s `job:`, #12): only
-  GO-2026-5932 in its gh and docker-buildx, in its entry; #15's CVE-2026-78661 entry went when its gh got x/net v0.62.0 (tacplus-dev/tacplus#350, #32); 2.6.10's six linux-libc-dev CVEs went with the move to 2.6.12 (#24), and #16's zlib1g
+  policy (2026-11-15). The CI image `build:2.6` (its rebuild 20261123-ef62327 since #48, also `gitlab-runner/pin.yaml`'s `job:`, #12): only
+  GO-2026-5932 in its gh and docker-buildx, in its entry; 2.6.13's 159 HIGH Debian findings with a fix (krb5,
+  linux-libc-dev, ...) and docker-buildx's containerd CVE-2026-95839 (its entry gone) went with the move to that rebuild (#48); #15's CVE-2026-78661 entry went when its gh got x/net v0.62.0 (tacplus-dev/tacplus#350, #32); 2.6.10's six linux-libc-dev CVEs went with the move to 2.6.12 (#24), and #16's zlib1g
   exceptions with 2.6.10, which had the fix. #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
   Trivy's config checks (looper-scan's nightly, on the tree): KSV-0109 accepted until 2026-12-31 on GitLab Runner chart
   0.94.3's entrypoint ConfigMap, which names the secret files it reads and holds no secret, and its two KSV-01010 in
