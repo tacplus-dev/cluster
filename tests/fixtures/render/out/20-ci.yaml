@@ -8,7 +8,7 @@ metadata:
     tacplus.dev/ci: "true"
 ---
 # The runner managers' priority (gitlab-runner/values.yaml's priorityClassName, #39): above the jobs' pods (0, none
-# set but the report builds', below), preempting one when a manager has no room, so a runner is never down for want of its manager's pod. Never the
+# set but the report builds' and control's, below), preempting one when a manager has no room, so a runner is never down for want of its manager's pod. Never the
 # cluster's default; far below the system's (over 1000000000).
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
@@ -31,6 +31,20 @@ value: -1
 globalDefault: false
 preemptionPolicy: Never
 description: Report builds in ci (tacplus-dev/cluster), preempted by a land's build.
+---
+# control's jobs' priority (gitlab-runner/runners/control.yaml's priority_class_name, #49): below infra's and kick's
+# jobs (0, theirs set none), which preempt them when the normal pool is full, so a cloud or cluster apply never waits
+# Pending behind the looper's reports; below deploymentproxy's and the deployments' pods too, which a CI job never
+# evicts. Preempting nothing themselves; at or above the cluster autoscaler's expendable cutoff (-10), so their pending
+# pods still scale the looper pool up. Never the cluster's default.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: control-job
+value: -1
+globalDefault: false
+preemptionPolicy: Never
+description: control's jobs in ci (tacplus-dev/cluster), preempted by infra's and kick's.
 ---
 # The jobs' pods' account: no role anywhere, and no token in the pod.
 apiVersion: v1
@@ -1018,6 +1032,8 @@ data:
         automount_service_account_token = false
         privileged = false
         allow_privilege_escalation = false
+        # Below infra's and kick's jobs, which preempt it (#49).
+        priority_class_name = "control-job"
         # A looper node from 0 takes minutes to come up (#47).
         poll_timeout = 900
         cpu_request = "100m"
@@ -1218,7 +1234,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: 551552d64c8f46a4089bfb5be7470f4066cde933b9f76ffb58fb61ecbedcaa6e
+        checksum/configmap: c4a0b68024beef964db13c9fd25b0294a38674e8294620e6905f9704d0e9c11d
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"

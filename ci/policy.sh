@@ -15,12 +15,14 @@
 #                               deploymentproxy, CRDs, ClusterRoles and ClusterRoleBindings.
 #   20-ci.yaml                  namespaced objects only in ci, and only service accounts, ConfigMaps, NetworkPolicies,
 #                               Roles, RoleBindings and Deployments; cluster-scoped, only the Namespace ci, the
-#                               admission policy ci-pods, the runner managers' PriorityClass ci-runner-manager and
-#                               the report builds' build-report (no ClusterRole, no ClusterRoleBinding): every
-#                               manager runs at ci-runner-manager, and it is above the jobs (0, which set none but
-#                               build-report's), preempts them, is no default and no system priority (#39); the
-#                               report builds' jobs alone run at build-report, below the jobs' (0) and at or above
-#                               the autoscaler's expendable cutoff (-10), never preempting, no default (#42). A Role
+#                               admission policy ci-pods, the runner managers' PriorityClass ci-runner-manager, the
+#                               report builds' build-report and control's jobs' control-job (no ClusterRole, no
+#                               ClusterRoleBinding): every manager runs at ci-runner-manager, and it is above the
+#                               jobs (0, which set none but build-report's and control's), preempts them, is no
+#                               default and no system priority (#39); the report builds' jobs alone run at
+#                               build-report (#42), control's alone at control-job (#49: infra's and kick's preempt
+#                               them), each below the jobs' (0) and at or above the autoscaler's expendable cutoff
+#                               (-10), never preempting, no default. A Role
 #                               names only
 #                               what the Kubernetes executor needs (CI_RESOURCES below), every verb, no escalate,
 #                               bind or impersonate; a RoleBinding binds a Role to service accounts of ci. The
@@ -97,7 +99,7 @@ ci_runner_writes() {
 
 # ci_runner FILE DEPLOYMENT RENDER: the runner DEPLOYMENT's config.toml (its ConfigMap's config.template.toml) keeps
 # the job rules: one Kubernetes runner, its jobs in ci, as ci-job without a token, images by digest, no privilege,
-# no host path, no Docker socket, no capability added, no priority class but the report builds' (below), nothing a
+# no host path, no Docker socket, no capability added, no priority class but the report builds' and control's (below), nothing a
 # job may override but its resources up to a ceiling;
 # a default and a ceiling for CPU and memory. A runner tagged build places its jobs on the spot pool only (its node
 # selector and the spot taint's toleration), takes no other tag but arm64, runs them non-root, and is the only one
@@ -112,7 +114,8 @@ ci_runner_writes() {
 # report's, so they never wait behind control's. The tag build-report is the runner build-report's alone (#42;
 # tacplus-dev/looper#209), which takes no other but arm64, places its jobs as a build runner's (the spot pool, non-root,
 # its build container alone Unconfined), and runs them at the PriorityClass build-report, below a land's build's, which
-# preempt them; no other runner's jobs set a priority class.
+# preempt them. control's jobs run at the PriorityClass control-job (#49), below infra's and kick's, which preempt them
+# when the normal pool is full of control's; no other runner's jobs set a priority class.
 ci_runner() {
   local b=$1 d=$2 render=$3 tags protected token secret toml json m
   tags=$(D=$d yq 'select(.kind == "Deployment" and .metadata.name == strenv(D)) | .spec.template.metadata.annotations."tacplus.dev/runner-tags" // ""' "$render")
@@ -145,8 +148,10 @@ ci_runner() {
     (select($k | has("pod_spec")) | "it patches its jobs pod spec (pod_spec)"),
     (if $report then
       (select($k.priority_class_name != "build-report") | "its jobs do not run at the report builds\u0027 priority (priority_class_name = \"build-report\"): a land\u0027s build would wait for them to end")
+    elif $control then
+      (select($k.priority_class_name != "control-job") | "its jobs do not run at control\u0027s priority (priority_class_name = \"control-job\"): infra\u0027s and kick\u0027s jobs would wait Pending for them to end")
     else
-      (select($k | has("priority_class_name")) | "its jobs set a priority class (priority_class_name): only the runner managers run above the jobs, and the report builds below them")
+      (select($k | has("priority_class_name")) | "its jobs set a priority class (priority_class_name): only the runner managers run above the jobs, and the report builds and control\u0027s below them")
     end),
     (select($k.service_account != "ci-job") | "its jobs run as [\($k.service_account // "")], not ci-job"),
     (select($k.automount_service_account_token != false) | "its jobs get a service account token"),
@@ -277,11 +282,11 @@ for b in "${files[@]##*/}"; do
           ValidatingAdmissionPolicy|ValidatingAdmissionPolicyBinding)
             [ "$name" = ci-pods ] || breach "$b: the $kind $name, not ci-pods" ;;
           PriorityClass)
-            [ "$name" = ci-runner-manager ] || [ "$name" = build-report ] ||
-              breach "$b: the PriorityClass $name, not ci-runner-manager or build-report" ;;
+            [ "$name" = ci-runner-manager ] || [ "$name" = build-report ] || [ "$name" = control-job ] ||
+              breach "$b: the PriorityClass $name, not ci-runner-manager, build-report or control-job" ;;
           ServiceAccount|ConfigMap|NetworkPolicy|Role|RoleBinding|Deployment)
             [ "$ns" = ci ] || breach "$b: $kind $name in [$ns], not ci" ;;
-          *) breach "$b: $kind $name: ci holds only its Namespace, its admission policy, the runner managers' and the report builds' PriorityClasses, and service accounts, ConfigMaps, NetworkPolicies, Roles, RoleBindings and Deployments in ci" ;;
+          *) breach "$b: $kind $name: ci holds only its Namespace, its admission policy, the runner managers', the report builds' and control's PriorityClasses, and service accounts, ConfigMaps, NetworkPolicies, Roles, RoleBindings and Deployments in ci" ;;
         esac
         case $kind in
           Role)
@@ -327,20 +332,22 @@ for b in "${files[@]##*/}"; do
       else
         breach "$b: no PriorityClass ci-runner-manager"
       fi
-      # The report builds' priority (#42): below the jobs' (0: a land's build's preempt them), at or above the cluster
-      # autoscaler's expendable cutoff (-10: below it, their pods would scale nothing up), preempting nothing, never the
-      # cluster's default.
-      if has "$f" PriorityClass build-report; then
-        pc='select(.kind == "PriorityClass" and .metadata.name == "build-report")'
-        [ "$(yq "$pc | .globalDefault // false" "$f")" = false ] || breach "$b: the PriorityClass build-report is the cluster's default"
-        [ "$(yq "$pc | .preemptionPolicy // \"PreemptLowerPriority\"" "$f")" = Never ] ||
-          breach "$b: the PriorityClass build-report preempts (preemptionPolicy Never): a report build would evict another's pod"
-        value=$(yq "$pc | .value // 0" "$f")
-        [[ $value =~ ^-([1-9]|10)$ ]] ||
-          breach "$b: the PriorityClass build-report's value [$value] is not below the jobs' (0) and at or above the autoscaler's expendable cutoff (-10)"
-      else
-        breach "$b: no PriorityClass build-report"
-      fi
+      # The report builds' priority (#42) and control's jobs' (#49): below the jobs' (0: a land's build's, and infra's
+      # and kick's, preempt them), at or above the cluster autoscaler's expendable cutoff (-10: below it, their pods
+      # would scale nothing up), preempting nothing, never the cluster's default.
+      for n in build-report control-job; do
+        if has "$f" PriorityClass "$n"; then
+          pc="select(.kind == \"PriorityClass\" and .metadata.name == \"$n\")"
+          [ "$(yq "$pc | .globalDefault // false" "$f")" = false ] || breach "$b: the PriorityClass $n is the cluster's default"
+          [ "$(yq "$pc | .preemptionPolicy // \"PreemptLowerPriority\"" "$f")" = Never ] ||
+            breach "$b: the PriorityClass $n preempts (preemptionPolicy Never): its job would evict another's pod"
+          value=$(yq "$pc | .value // 0" "$f")
+          [[ $value =~ ^-([1-9]|10)$ ]] ||
+            breach "$b: the PriorityClass $n's value [$value] is not below the jobs' (0) and at or above the autoscaler's expendable cutoff (-10)"
+        else
+          breach "$b: no PriorityClass $n"
+        fi
+      done
       [ ${#runners[@]} -gt 0 ] || breach "$b: no runner"
       for d in "${runners[@]}"; do ci_runner "$b" "$d" "$f"; done
       ;;

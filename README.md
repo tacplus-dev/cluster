@@ -262,7 +262,7 @@ The chart is pinned by the SHA-256 of its archive, and the runner, helper and de
 |---|---|---|---|---|
 | `build` | `arm64`, `build` | the spot pool only: node selector `spot=true`, toleration `spot=true:NoSchedule` | CPU 1 / 3, memory 4Gi / 8Gi | CPU 3500m, memory 12Gi (a c4a-standard-4) |
 | `build-report` | `arm64`, `build-report` (tacplus-dev/build's report builds: every build but a manager's land, `BUILD_REPORT_TAGS`; #42) | as `build`, at the PriorityClass `build-report`: a land's build preempts them | as `build` | as `build` |
-| `control` | `arm64`, `control` (the looper's reports, managers, scans) | the normal pool, its overflow on the looper pool (#47): a toleration `looper=true:NoSchedule` and a preferred node affinity for nodes without `looper=true`; no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 100m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
+| `control` | `arm64`, `control` (the looper's reports, managers, scans) | at the PriorityClass `control-job`: `infra`'s and `kick`'s jobs preempt them (#49); the normal pool, its overflow on the looper pool (#47): a toleration `looper=true:NoSchedule` and a preferred node affinity for nodes without `looper=true`; no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 100m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
 | `infra` | `cloud`, `cluster`, `deploy` (tacplus-dev/cloud's, this pipeline, fleet-seatrials' deploy), **protected refs only** | the normal pool only: as `control`, without the looper toleration | CPU 500m / 1500m, memory 1Gi / 4Gi | CPU 1500m, memory 4Gi |
 | `kick` | `arm64`, `kick` (the looper's kicker and plan, its `.control` jobs; #36) | the normal pool only, as `infra` | CPU 50m / 1, memory 256Mi / 2Gi (the looper's `.control` requests, #39) | CPU 1500m, memory 4Gi |
 
@@ -282,7 +282,7 @@ A job raises its own with GitLab's variables (`KUBERNETES_CPU_REQUEST`, `KUBERNE
 to the ceiling; the helper container has its own small defaults. It may override nothing else: not its node
 selector, tolerations, namespace, service account or pod annotations (the policy refuses any
 `*_overwrite_allowed`). The runner managers (one Deployment per runner, in `ci`) run on the normal pool too, at the
-PriorityClass `ci-runner-manager` (#39), above every job's pod (none sets one but `build-report`'s, below) and preempting one when a manager has
+PriorityClass `ci-runner-manager` (#39), above every job's pod (none sets one but `build-report`'s and `control`'s, below) and preempting one when a manager has
 no room: a manager that cannot schedule takes its whole runner down, as `kick`'s did while `control`'s old manager
 still ran its jobs beside the new one's after an apply. A manager is counted in the pool's room, so it only takes back
 its own; the job it evicts fails and is retried. A spot
@@ -299,7 +299,20 @@ pod at once instead of leaving it to wait for a report build to end (~55 minutes
 manager gave up). The evicted job fails `runner_system_failure`, which tacplus-dev/build's CI file retries (twice).
 The value stays at or above the cluster autoscaler's expendable cutoff (-10), so a pending report build still scales
 the spot pool up. `ci/policy.sh` keeps the class's value in -10 to -1, never preempting, `build-report` its runner's
-tag alone, and every other runner's jobs at no priority class.
+tag alone, and every other runner's jobs at no priority class but `control`'s (below).
+
+**The infra pipelines before the looper's reports** (#49). `control`'s jobs fill the normal pool first and only their
+overflow scales the looper pool up (#47), so on 2026-11-23 tacplus-dev/cloud's pipelines 3100887560 and 3101379440
+(`infra`, protected refs) had five jobs time out Pending (`0/8 nodes are available: 3 Insufficient cpu`) behind
+report pods: `pool.yaml` counts `infra`'s and `kick`'s full concurrent, but the scheduler holds no room for them.
+`control`'s jobs run at the PriorityClass `control-job`: value -1, below `infra`'s and `kick`'s jobs (0, theirs set
+none) and below deploymentproxy's and the deployments' pods, `preemptionPolicy: Never`, not the cluster's default. When
+the normal pool is full, the scheduler evicts a `control` job for an `infra` or `kick` job's pod at once; the evicted
+job fails `runner_system_failure`, which the looper's CI files retry (twice: tacplus-dev/looper's
+`ci/tacplus-dev.gitlab-ci.yml`, `.control`; `ci/instance.gitlab-ci.yml`), its pod Pending again until there is room. Below 0 rather than `infra` and `kick` above it: a class above 0
+that preempts would evict deploymentproxy's or a deployment's pods (0) as readily as a report's. Its value stays at or
+above the autoscaler's expendable cutoff (-10), so `control`'s overflow still scales the looper pool up; `ci/policy.sh`
+keeps it so, never preempting, `control`'s jobs at it and no other runner's.
 
 - **No privileged pod, no host path, no Docker socket.** Image builds use rootless BuildKit in the build job's own
   container (tacplus-dev/tacplus#315): every container of a build pod runs as uid 1000, and the build container

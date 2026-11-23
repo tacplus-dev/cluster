@@ -10,6 +10,12 @@
 # build runner). A job may raise its requests and limits up to the *_overwrite_max_allowed ceilings, which fit a
 # c4a-standard-2 (2 CPUs, 8 GB) beside the platform; it may not move its pod, its namespace or its account.
 #
+# Its jobs run at the PriorityClass control-job (render.sh, #49), below every other pod on the normal pool (0: infra's,
+# kick's, deploymentproxy's, the deployments') and never preempting: when the normal pool is full of its jobs, the
+# scheduler evicts one for an infra or kick job's pod instead of leaving it Pending until it times out (cloud's
+# pipelines 3100887560 and 3101379440, 2026-11-23). The evicted job fails runner_system_failure, which the looper's
+# CI files retry (tacplus-dev/looper ci/tacplus-dev.gitlab-ci.yml's .control, ci/instance.gitlab-ci.yml).
+#
 # Its concurrent is the normal pool's room and the looper pool's at its max nodes (#36, #47: `pool`,
 # gitlab-runner/pool.yaml), counted by its default requests,
 # which are its largest kind's (a report's, 100m and 512Mi: tacplus-dev/looper#165; a manager, the kicker and the plan
@@ -38,6 +44,8 @@ runners:
         automount_service_account_token = false
         privileged = false
         allow_privilege_escalation = false
+        # Below infra's and kick's jobs, which preempt it (#49).
+        priority_class_name = "control-job"
         # A looper node from 0 takes minutes to come up (#47).
         poll_timeout = 900
         cpu_request = "100m"

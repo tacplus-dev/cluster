@@ -21,7 +21,9 @@
 # and below the system's, and a job at a priority class but build-report's (#39); build-report's jobs not at the
 # PriorityClass build-report or off the spot pool, build-report taking a tag but arm64 and build-report, or not
 # build-report, build-report on any other runner, and the PriorityClass build-report missing, the default, preempting,
-# not below the jobs' (0), or expendable to the autoscaler (below -10) (#42); a token by latest; cluster RBAC,
+# not below the jobs' (0), or expendable to the autoscaler (below -10) (#42); control's jobs not at the PriorityClass
+# control-job, infra's or kick's at it, and the PriorityClass control-job missing, the default, preempting, not below
+# the jobs' (0), or expendable (#49); a token by latest; cluster RBAC,
 # a `*`, a resource the executor does not need, another namespace's account or object, a Secret. Needs bash, yq, jq, helm.
 #
 #   tests/policy_test.sh
@@ -151,7 +153,7 @@ breach_ci "a runner manager image by tag only" "$(deployment control '.spec.cont
 pc='(select(.kind == "PriorityClass" and .metadata.name == "ci-runner-manager") | '
 breach_ci "a runner manager without the managers' priority" "del($(deployment control '.spec.priorityClassName'))" "Deployment gitlab-runner-control does not run at the runner managers' priority (priorityClassName ci-runner-manager)"
 breach_ci "no PriorityClass for the managers" 'del(select(.kind == "PriorityClass" and .metadata.name == "ci-runner-manager"))' "no PriorityClass ci-runner-manager"
-breach_ci "another PriorityClass" '.' "the PriorityClass high, not ci-runner-manager or build-report" '{"apiVersion": "scheduling.k8s.io/v1", "kind": "PriorityClass", "metadata": {"name": "high"}, "value": 1000}'
+breach_ci "another PriorityClass" '.' "the PriorityClass high, not ci-runner-manager, build-report or control-job" '{"apiVersion": "scheduling.k8s.io/v1", "kind": "PriorityClass", "metadata": {"name": "high"}, "value": 1000}'
 breach_ci "the managers' priority the cluster's default" "$pc.globalDefault) = true" "the PriorityClass ci-runner-manager is the cluster's default"
 breach_ci "the managers' priority not preempting" "$pc.preemptionPolicy) = \"Never\"" "the PriorityClass ci-runner-manager does not preempt the jobs (preemptionPolicy PreemptLowerPriority)"
 breach_ci "the managers' priority not above the jobs'" "$pc.value) = 0" "the PriorityClass ci-runner-manager's value \[0\] is not above the jobs' (0) and below the system's"
@@ -172,6 +174,18 @@ breach_ci "the report builds' priority the cluster's default" "$rc.globalDefault
 breach_ci "the report builds' priority preempting" "$rc.preemptionPolicy) = \"PreemptLowerPriority\"" "the PriorityClass build-report preempts (preemptionPolicy Never)"
 breach_ci "the report builds' priority a land's build's" "$rc.value) = 0" "the PriorityClass build-report's value \[0\] is not below the jobs' (0) and at or above the autoscaler's expendable cutoff (-10)"
 breach_ci "the report builds' priority expendable" "$rc.value) = -11" "the PriorityClass build-report's value \[-11\] is not below"
+# control's jobs (#49): at the PriorityClass control-job, below infra's and kick's (0), which preempt them when the
+# normal pool is full, and preempting nothing themselves; infra's and kick's never at it.
+cc='(select(.kind == "PriorityClass" and .metadata.name == "control-job") | '
+breach_ci "control's jobs at no priority class" "$(toml control 'priority_class_name = \"control-job\"' '')" "gitlab-runner-control: its jobs do not run at control's priority (priority_class_name = \"control-job\")"
+breach_ci "control's jobs at the report builds' priority" "$(toml control 'priority_class_name = \"control-job\"' 'priority_class_name = \"build-report\"')" "gitlab-runner-control: its jobs do not run at control's priority"
+breach_ci "infra's jobs at control's priority" "$(toml infra 'privileged = false' 'privileged = false\n    priority_class_name = \"control-job\"')" "gitlab-runner-infra: its jobs set a priority class (priority_class_name)"
+breach_ci "kick's jobs at control's priority" "$(toml kick 'privileged = false' 'privileged = false\n    priority_class_name = \"control-job\"')" "gitlab-runner-kick: its jobs set a priority class (priority_class_name)"
+breach_ci "no PriorityClass for control's jobs" 'del(select(.kind == "PriorityClass" and .metadata.name == "control-job"))' "no PriorityClass control-job"
+breach_ci "control's priority the cluster's default" "$cc.globalDefault) = true" "the PriorityClass control-job is the cluster's default"
+breach_ci "control's priority preempting" "$cc.preemptionPolicy) = \"PreemptLowerPriority\"" "the PriorityClass control-job preempts (preemptionPolicy Never)"
+breach_ci "control's priority infra's" "$cc.value) = 0" "the PriorityClass control-job's value \[0\] is not below the jobs' (0) and at or above the autoscaler's expendable cutoff (-10)"
+breach_ci "control's priority expendable" "$cc.value) = -11" "the PriorityClass control-job's value \[-11\] is not below"
 breach_ci "a runner manager on spot" "$(deployment control '.spec.tolerations') += [{\"key\": \"spot\", \"operator\": \"Exists\"}]" "Deployment gitlab-runner-control tolerates spot"
 breach_ci "a runner manager on the looper pool" "$(deployment kick '.spec.tolerations') += [{\"key\": \"looper\", \"operator\": \"Exists\"}]" "the Deployment gitlab-runner-kick tolerates the looper taint"
 breach_ci "a runner manager tolerating every taint" "$(deployment kick '.spec.tolerations') += [{\"operator\": \"Exists\"}]" "the Deployment gitlab-runner-kick tolerates the looper taint"

@@ -11,10 +11,12 @@
 # pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
 # is protected refs only, and no other runner is; kick's pods name arm64, kick (#36), control's arm64, control; kick's
 # jobs default to 50m and 256Mi (#39); every runner manager runs at the PriorityClass ci-runner-manager, above its
-# jobs and preempting them, and no job at any but build-report's (#39); build-report's jobs are build's (the spot pool,
+# jobs and preempting them, and no job at any but build-report's and control's (#39); build-report's jobs are build's (the spot pool,
 # its security context and ceilings) at the PriorityClass build-report, below a land's build's pods (0) and preempted by
 # them, never preempting, not the cluster's default and not expendable to the autoscaler (#42), its pods naming arm64,
-# build-report; control's jobs alone tolerate the looper pool's taint, preferring the normal pool (#47); kick's
+# build-report; control's jobs at the PriorityClass control-job, below infra's and kick's (0, none set), which preempt
+# them, never preempting, not the cluster's default and not expendable (#49); control's jobs alone tolerate the looper
+# pool's taint, preferring the normal pool (#47); kick's
 # concurrent is its own (2), control's the normal pool's room and the looper pool's at its max nodes
 # (gitlab-runner/pool.yaml), CPU or memory the bound, and runners the pool cannot hold, a second runner on its room,
 # one off the normal pool on it, or a quantity it cannot read, are refused;
@@ -166,10 +168,10 @@ annotation() { R=$1 A=$2 yq 'select(.kind == "Deployment" and .metadata.name == 
   ok "kick's jobs default to 50m and 256Mi, a kicker's or a plan's requests" ||
   fail "kick's jobs default to [$(runner_toml kick '.cpu_request + " " + .memory_request')]"
 # The runner managers first (#39): a manager that cannot schedule takes its whole runner down, so each runs at the
-# PriorityClass ci-runner-manager, above the jobs' pods (0, none set but build-report's), preempting them; never the
+# PriorityClass ci-runner-manager, above the jobs' pods (0, none set but build-report's and control's), preempting them; never the
 # cluster's default.
 pclass() { N=$1 yq 'select(.kind == "PriorityClass" and .metadata.name == strenv(N)) | (.value | tostring) + " " + .preemptionPolicy + " " + (.globalDefault // false | tostring)' "$ci"; }
-[ "$(yq ea '[select(.kind == "PriorityClass") | .metadata.name] | join(" ")' "$ci")" = "ci-runner-manager build-report" ] &&
+[ "$(yq ea '[select(.kind == "PriorityClass") | .metadata.name] | join(" ")' "$ci")" = "ci-runner-manager build-report control-job" ] &&
   [ "$(pclass ci-runner-manager)" = "1000000 PreemptLowerPriority false" ] &&
   ok "the PriorityClass ci-runner-manager, above the jobs, preempting them, not the cluster's default" ||
   fail "the PriorityClasses: $(yq -o=json -I=0 'select(.kind == "PriorityClass")' "$ci")"
@@ -179,8 +181,15 @@ pclass() { N=$1 yq 'select(.kind == "PriorityClass" and .metadata.name == strenv
 [ "$(pclass build-report)" = "-1 Never false" ] &&
   ok "the PriorityClass build-report, below a land's build's jobs (0), never preempting, not expendable, not the default" ||
   fail "the PriorityClass build-report: [$(pclass build-report)]"
+# control's jobs (#49): infra's and kick's (0, theirs set none) preempt them when the normal pool is full of them, so a
+# cloud or cluster apply never waits Pending behind the looper's reports (cloud's pipelines 3100887560 and 3101379440,
+# 2026-11-23); they preempt nothing themselves, below deploymentproxy's and the deployments' pods, and stay at or above
+# the autoscaler's expendable cutoff, so they still scale the looper pool up.
+[ "$(pclass control-job)" = "-1 Never false" ] &&
+  ok "the PriorityClass control-job, below infra's and kick's jobs (0), never preempting, not expendable, not the default" ||
+  fail "the PriorityClass control-job: [$(pclass control-job)]"
 for r in build build-report control infra kick; do
-  want=; [ "$r" != build-report ] || want=build-report
+  want=; [ "$r" != build-report ] || want=build-report; [ "$r" != control ] || want=control-job
   [ "$(pod '.priorityClassName')" = ci-runner-manager ] && [ "$(runner_toml $r '.priority_class_name // ""')" = "$want" ] &&
     ok "$r's runner runs at ci-runner-manager, its jobs at ${want:-none}" ||
     fail "$r's runner's priorityClassName [$(pod '.priorityClassName')], its jobs' [$(runner_toml $r '.priority_class_name // ""')]"
