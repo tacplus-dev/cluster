@@ -4,8 +4,9 @@
 #
 # GitLab Runner's runner and helper images, built here from source (#21): upstream's (gitlab-runner/pin.yaml's
 # build: block names its release) are built with go1.26.10 (GO-2026-6859), x/net v0.58.0 and go-jose v4.1.4, on
-# Alpine packages since fixed (git 2.54.0-r0). This builds the same release's two binaries with go1.27.4, x/net
-# v0.62.0, klauspost/compress v1.20.2 and go-jose v4.1.6, as tacplus-dev/cloud's ci/runner.sh builds the VM
+# Alpine packages since fixed (git 2.54.0-r0). This builds the same release's two binaries with go1.27.4 and at least
+# x/net v0.62.0, klauspost/compress v1.20.2 and go-jose v4.1.6 (each only raised: v19.6.0 requires compress v1.20.3,
+# which stays, #52), as tacplus-dev/cloud's ci/runner.sh builds the VM
 # manager's runner (one release in both places: the runner's SHA-256 is cloud's runner_sha256), and puts each on a
 # pinned alpine:3.24 with upstream's packages, files and config (its base images' Dockerfiles, at the commit
 # build.base_images), without docker-machine (the Kubernetes executor never runs it). No container runtime: the
@@ -128,8 +129,14 @@ rm -rf "$src/.git"
   export GOTOOLCHAIN=$go_version GOFLAGS=-mod=mod CGO_ENABLED=0 GOOS=linux GOARCH=arm64 GOARM64=v8.0 GOEXPERIMENT='' \
     GONOSUMDB='' GOPRIVATE='' GOINSECURE='' GOFIPS140=off
   get=()
-  for d in "${deps[@]}"; do (cd "$src" && go list -m "${d%@*}" >/dev/null 2>&1) && get+=("$d"); done
-  (cd "$src" && go get "${get[@]}" > "$tmp/get.log" 2>&1) || { cat "$tmp/get.log" >&2; die "cannot require ${get[*]}"; }
+  for d in "${deps[@]}"; do
+    # Only a module it requires, and only raised: a newer requirement (v19.6.0's klauspost/compress v1.20.3) stays.
+    have=$(cd "$src" && go list -m -f '{{.Version}}' "${d%@*}" 2>/dev/null) || continue
+    [ "$(printf '%s\n' "$have" "${d#*@}" | sort -V | head -1)" = "$have" ] && [ "$have" != "${d#*@}" ] && get+=("$d")
+  done
+  if ((${#get[@]})); then
+    (cd "$src" && go get "${get[@]}" > "$tmp/get.log" 2>&1) || { cat "$tmp/get.log" >&2; die "cannot require ${get[*]}"; }
+  fi
   [ "$(cd "$src" && go version | cut -d' ' -f3)" = "$go_version" ] || die "go is $(cd "$src" && go version), not $go_version"
   r=gitlab.com/gitlab-org/gitlab-runner/common
   for name in gitlab-runner gitlab-runner-helper; do
@@ -140,7 +147,7 @@ rm -rf "$src/.git"
     got=$(sha256sum "$tmp/bin/$name" | cut -c1-64)
     if [ "$name" = gitlab-runner ]; then want=$(b runner_sha256); else want=$(b helper_sha256); fi
     [ "$got" = "$want" ] || die "the build of $name has SHA-256 $got, not the pinned $want"
-    say "$name $version ($go_version, ${get[*]}) for linux/arm64, SHA-256 $got"
+    say "$name $version ($go_version, ${get[*]:-its own requirements}) for linux/arm64, SHA-256 $got"
   done
 )
 

@@ -46,12 +46,12 @@ exceptions:
     expires: 2026-12-04
     where: "kubectl"
   - id: GO-2026-5932
-    reason: "x/crypto/openpgp, unmaintained (gitlab-runner and gitlab-runner-helper 19.5.3, our build, x/crypto v0.58.0, #21; Trivy's match in the CI image's gh and docker-buildx, v0.58.0; trivy's own since v0.76.2 at module level only, #23): the runner and the helper call no openpgp code, and no job here has gh or buildx read an OpenPGP key or message from outside. No fixed release (x/crypto has only a pseudo-version past it), as tacplus handles it."
+    reason: "x/crypto/openpgp, unmaintained (gitlab-runner and gitlab-runner-helper 19.6.0, our build, x/crypto v0.58.0, #21, #52; Trivy's match in the CI image's gh and docker-buildx, v0.58.0; trivy's own since v0.76.2 at module level only, #23): the runner and the helper call no openpgp code, and no job here has gh or buildx read an OpenPGP key or message from outside. No fixed release (x/crypto has only a pseudo-version past it), as tacplus handles it."
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04; the runner images: hub, tacplus-dev/cluster#21, 2026-11-12); scoped: #45"
     expires: 2026-12-04
     where: "us-central1-docker.pkg.dev/tacplus-dev/ci-images/**"
   - id: GO-2026-5932
-    reason: "x/crypto/openpgp, unmaintained (gitlab-runner and gitlab-runner-helper 19.5.3, our build, x/crypto v0.58.0, #21; Trivy's match in the CI image's gh and docker-buildx, v0.58.0; trivy's own since v0.76.2 at module level only, #23): the runner and the helper call no openpgp code, and no job here has gh or buildx read an OpenPGP key or message from outside. No fixed release (x/crypto has only a pseudo-version past it), as tacplus handles it."
+    reason: "x/crypto/openpgp, unmaintained (gitlab-runner and gitlab-runner-helper 19.6.0, our build, x/crypto v0.58.0, #21, #52; Trivy's match in the CI image's gh and docker-buildx, v0.58.0; trivy's own since v0.76.2 at module level only, #23): the runner and the helper call no openpgp code, and no job here has gh or buildx read an OpenPGP key or message from outside. No fixed release (x/crypto has only a pseudo-version past it), as tacplus handles it."
     decided_by: "jodydadescott (tacplus-dev/cluster#5, 2026-11-04; the runner images: hub, tacplus-dev/cluster#21, 2026-11-12); scoped: #45"
     expires: 2026-12-04
     where: "ghcr.io/tacplus-dev/tacplus/build:**"

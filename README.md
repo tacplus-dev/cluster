@@ -256,7 +256,7 @@ ci/tools.sh security && ci/security.sh . ghcr.io/tacplus-dev/tacplus/build:2.6 b
 The tacplus-dev group's CI jobs run in the cluster, each as a pod of GitLab Runner's Kubernetes executor, in the
 namespace `ci` (Jody, `tacplus-dev/roadmap:decisions/only-vms-are-k8s-nodes-2026-11-04.md` and its addendum; #6).
 This pipeline applies it like the rest, from `out/20-ci.yaml`: GitLab's own chart (`gitlab-runner/release`, chart
-0.94.3, GitLab Runner 19.5.3), rendered by `helm template` with `gitlab-runner/values.yaml` and one file per runner.
+0.95.0, GitLab Runner 19.6.0), rendered by `helm template` with `gitlab-runner/values.yaml` and one file per runner.
 The chart is pinned by the SHA-256 of its archive, and the runner, helper and default job images by digest
 (`gitlab-runner/pin.yaml`); nothing resolves a moving tag or "latest".
 
@@ -355,9 +355,10 @@ tests/render_test.sh`; review the diff of `release/` and the fixture.
 ### Our GitLab Runner images
 
 The runner manager's image and the jobs' helper image are built here (#21; the hub's decision on #21), not
-upstream's: GitLab's 19.5.3 images are built with go1.26.10 (GO-2026-6859) and git 2.54.0-r0, and no newer release
-exists. `ci/runner-images.sh` builds GitLab Runner's release at its commit (`gitlab-runner/pin.yaml`'s `build:`)
-with go1.27.4, x/net v0.62.0, klauspost/compress v1.20.2 and go-jose v4.1.6, the recipe of tacplus-dev/cloud's
+upstream's: GitLab's 19.5.3 images, when #21 moved to our own, were built with go1.26.10 (GO-2026-6859) and git
+2.54.0-r0, and no newer release existed. `ci/runner-images.sh` builds GitLab Runner's release at its commit (`gitlab-runner/pin.yaml`'s `build:`)
+with go1.27.4 and at least x/net v0.62.0, klauspost/compress v1.20.2 and go-jose v4.1.6 (a module the release
+already requires newer, as 19.6.0's compress v1.20.3, stays), the recipe of tacplus-dev/cloud's
 `ci/runner.sh` for the VM manager's runner (so the runner binary's SHA-256 is cloud's `runner_sha256`), and puts
 each binary on `alpine:3.24` (pinned by digest) with upstream's packages, files and config, from its base images'
 Dockerfiles at the release's `RUNNER_IMAGES_VERSION` (`build.base_images`), without docker-machine (the

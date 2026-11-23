@@ -122,7 +122,7 @@ spec:
       matchLabels:
         kubernetes.io/metadata.name: ci
 ---
-# The runner build-report (gitlab-runner/runners/build-report.yaml), tags arm64, build-report, concurrent 6: GitLab Runner's chart 0.94.3.
+# The runner build-report (gitlab-runner/runners/build-report.yaml), tags arm64, build-report, concurrent 6: GitLab Runner's chart 0.95.0.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -131,7 +131,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-build-report
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-build-report"
     heritage: "Helm"
 ---
@@ -143,7 +143,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-build-report
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-build-report"
     heritage: "Helm"
 data:
@@ -209,7 +209,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.5.3@sha256:01b0df0ec09a013acac65437343e3aff0e9af4ded3ac83e7e0ddd07e9b4943ae"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -335,7 +335,7 @@ metadata:
   name: gitlab-runner-build-report
   labels:
     app: gitlab-runner-build-report
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-build-report"
     heritage: "Helm"
   namespace: "ci"
@@ -369,7 +369,7 @@ metadata:
   name: gitlab-runner-build-report
   labels:
     app: gitlab-runner-build-report
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-build-report"
     heritage: "Helm"
   namespace: "ci"
@@ -390,7 +390,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-build-report
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-build-report"
     heritage: "Helm"
 spec:
@@ -402,12 +402,12 @@ spec:
     metadata:
       labels:
         app: gitlab-runner-build-report
-        chart: gitlab-runner-0.94.3
+        chart: gitlab-runner-0.95.0
         release: "gitlab-runner-build-report"
         heritage: "Helm"
         tacplus.dev/ci-runner: build-report
       annotations:
-        checksum/configmap: e517da47b1228e10511d771e82da8b89de5090ab4ac2a8b7b371970ed32c3f55
+        checksum/configmap: 233d8d61e9fa96657ae56ae8d92064faf9b00cb675fa82c63a552f380a0dc768
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build-report"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build-report/versions/1"
@@ -424,7 +424,7 @@ spec:
       serviceAccountName: "gitlab-runner-build-report"
       containers:
         - name: gitlab-runner-build-report
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.5.3@sha256:c293204b8fe475d83a29baf6cae0cb5169a67979b39dbea01f0aaef6c71e46c6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false
@@ -532,7 +532,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner build (gitlab-runner/runners/build.yaml), tags arm64, build, concurrent 6: GitLab Runner's chart 0.94.3.
+# The runner build (gitlab-runner/runners/build.yaml), tags arm64, build, concurrent 6: GitLab Runner's chart 0.95.0.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -541,7 +541,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-build
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-build"
     heritage: "Helm"
 ---
@@ -553,7 +553,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-build
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-build"
     heritage: "Helm"
 data:
@@ -619,7 +619,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.5.3@sha256:01b0df0ec09a013acac65437343e3aff0e9af4ded3ac83e7e0ddd07e9b4943ae"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -743,7 +743,7 @@ metadata:
   name: gitlab-runner-build
   labels:
     app: gitlab-runner-build
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-build"
     heritage: "Helm"
   namespace: "ci"
@@ -777,7 +777,7 @@ metadata:
   name: gitlab-runner-build
   labels:
     app: gitlab-runner-build
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-build"
     heritage: "Helm"
   namespace: "ci"
@@ -798,7 +798,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-build
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-build"
     heritage: "Helm"
 spec:
@@ -810,12 +810,12 @@ spec:
     metadata:
       labels:
         app: gitlab-runner-build
-        chart: gitlab-runner-0.94.3
+        chart: gitlab-runner-0.95.0
         release: "gitlab-runner-build"
         heritage: "Helm"
         tacplus.dev/ci-runner: build
       annotations:
-        checksum/configmap: 6225e3d94f73607fe5d54ff35f1f3a80a7b23e7035c36bd8f4026359b258e9e5
+        checksum/configmap: 37bb30d35384ede0da8960d21382955f445befa1814c5c2bd2f4f3db05a2df57
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build/versions/1"
@@ -832,7 +832,7 @@ spec:
       serviceAccountName: "gitlab-runner-build"
       containers:
         - name: gitlab-runner-build
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.5.3@sha256:c293204b8fe475d83a29baf6cae0cb5169a67979b39dbea01f0aaef6c71e46c6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false
@@ -940,7 +940,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 33, the normal pool's room and the looper pool's at its max nodes (gitlab-runner/pool.yaml): GitLab Runner's chart 0.94.3.
+# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 33, the normal pool's room and the looper pool's at its max nodes (gitlab-runner/pool.yaml): GitLab Runner's chart 0.95.0.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -949,7 +949,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-control
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-control"
     heritage: "Helm"
 ---
@@ -961,7 +961,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-control
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-control"
     heritage: "Helm"
 data:
@@ -1027,7 +1027,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.5.3@sha256:01b0df0ec09a013acac65437343e3aff0e9af4ded3ac83e7e0ddd07e9b4943ae"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -1162,7 +1162,7 @@ metadata:
   name: gitlab-runner-control
   labels:
     app: gitlab-runner-control
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-control"
     heritage: "Helm"
   namespace: "ci"
@@ -1196,7 +1196,7 @@ metadata:
   name: gitlab-runner-control
   labels:
     app: gitlab-runner-control
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-control"
     heritage: "Helm"
   namespace: "ci"
@@ -1217,7 +1217,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-control
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-control"
     heritage: "Helm"
 spec:
@@ -1229,12 +1229,12 @@ spec:
     metadata:
       labels:
         app: gitlab-runner-control
-        chart: gitlab-runner-0.94.3
+        chart: gitlab-runner-0.95.0
         release: "gitlab-runner-control"
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: f7fab4b9b4cfbe18be805d7e5f13b291654b52213c75bfd209d6c7b80541b1c2
+        checksum/configmap: 563f3e43fc61b9512f658c29e07d8efaf9c6b22c539d70cb196bc136561b6ac4
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
@@ -1251,7 +1251,7 @@ spec:
       serviceAccountName: "gitlab-runner-control"
       containers:
         - name: gitlab-runner-control
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.5.3@sha256:c293204b8fe475d83a29baf6cae0cb5169a67979b39dbea01f0aaef6c71e46c6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false
@@ -1359,7 +1359,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner infra (gitlab-runner/runners/infra.yaml), tags cloud, cluster, deploy, protected refs only, concurrent 4: GitLab Runner's chart 0.94.3.
+# The runner infra (gitlab-runner/runners/infra.yaml), tags cloud, cluster, deploy, protected refs only, concurrent 4: GitLab Runner's chart 0.95.0.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -1368,7 +1368,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-infra
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-infra"
     heritage: "Helm"
 ---
@@ -1380,7 +1380,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-infra
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-infra"
     heritage: "Helm"
 data:
@@ -1446,7 +1446,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.5.3@sha256:01b0df0ec09a013acac65437343e3aff0e9af4ded3ac83e7e0ddd07e9b4943ae"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -1569,7 +1569,7 @@ metadata:
   name: gitlab-runner-infra
   labels:
     app: gitlab-runner-infra
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-infra"
     heritage: "Helm"
   namespace: "ci"
@@ -1603,7 +1603,7 @@ metadata:
   name: gitlab-runner-infra
   labels:
     app: gitlab-runner-infra
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-infra"
     heritage: "Helm"
   namespace: "ci"
@@ -1624,7 +1624,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-infra
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-infra"
     heritage: "Helm"
 spec:
@@ -1636,12 +1636,12 @@ spec:
     metadata:
       labels:
         app: gitlab-runner-infra
-        chart: gitlab-runner-0.94.3
+        chart: gitlab-runner-0.95.0
         release: "gitlab-runner-infra"
         heritage: "Helm"
         tacplus.dev/ci-runner: infra
       annotations:
-        checksum/configmap: 315802a0086c5bf86cb3747f4f925fc735f3497d477a89d57bdecad8cc0e2711
+        checksum/configmap: 4d460a81cd8fda3877cfec5e9aaafb19ab866002f977da3635facf87832a89f9
         tacplus.dev/runner-protected: "true"
         tacplus.dev/runner-tags: "cloud,cluster,deploy"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-infra/versions/1"
@@ -1658,7 +1658,7 @@ spec:
       serviceAccountName: "gitlab-runner-infra"
       containers:
         - name: gitlab-runner-infra
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.5.3@sha256:c293204b8fe475d83a29baf6cae0cb5169a67979b39dbea01f0aaef6c71e46c6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false
@@ -1766,7 +1766,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner kick (gitlab-runner/runners/kick.yaml), tags arm64, kick, concurrent 2: GitLab Runner's chart 0.94.3.
+# The runner kick (gitlab-runner/runners/kick.yaml), tags arm64, kick, concurrent 2: GitLab Runner's chart 0.95.0.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -1775,7 +1775,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-kick
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-kick"
     heritage: "Helm"
 ---
@@ -1787,7 +1787,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-kick
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-kick"
     heritage: "Helm"
 data:
@@ -1853,7 +1853,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.5.3@sha256:01b0df0ec09a013acac65437343e3aff0e9af4ded3ac83e7e0ddd07e9b4943ae"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -1976,7 +1976,7 @@ metadata:
   name: gitlab-runner-kick
   labels:
     app: gitlab-runner-kick
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-kick"
     heritage: "Helm"
   namespace: "ci"
@@ -2010,7 +2010,7 @@ metadata:
   name: gitlab-runner-kick
   labels:
     app: gitlab-runner-kick
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-kick"
     heritage: "Helm"
   namespace: "ci"
@@ -2031,7 +2031,7 @@ metadata:
   namespace: "ci"
   labels:
     app: gitlab-runner-kick
-    chart: gitlab-runner-0.94.3
+    chart: gitlab-runner-0.95.0
     release: "gitlab-runner-kick"
     heritage: "Helm"
 spec:
@@ -2043,12 +2043,12 @@ spec:
     metadata:
       labels:
         app: gitlab-runner-kick
-        chart: gitlab-runner-0.94.3
+        chart: gitlab-runner-0.95.0
         release: "gitlab-runner-kick"
         heritage: "Helm"
         tacplus.dev/ci-runner: kick
       annotations:
-        checksum/configmap: f77ec771e29e065060e704c266e097d8b038d9d0cff5d82837feeb5e11061d46
+        checksum/configmap: f755081525285e801b33afbbd6a3def35ac7644e151d138b54d9c7b3726076cc
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,kick"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-kick/versions/1"
@@ -2065,7 +2065,7 @@ spec:
       serviceAccountName: "gitlab-runner-kick"
       containers:
         - name: gitlab-runner-kick
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.5.3@sha256:c293204b8fe475d83a29baf6cae0cb5169a67979b39dbea01f0aaef6c71e46c6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false

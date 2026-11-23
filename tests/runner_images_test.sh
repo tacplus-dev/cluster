@@ -67,4 +67,40 @@ refused "a helper by tag only" '.helper |= sub("@sha256:.*", "")' "pin.yaml's he
 refused "a helper of another release" '.helper |= sub(":v[0-9.]+@", ":v19.5.2@")' "pin.yaml's helper .* is not an image of"
 refused "a short commit" '.build.commit = "33227fd4"' "is not a full commit"
 
+# The fixed modules are floors (#52): a module the release requires below one is raised to it, one it requires at or
+# above it (v19.6.0's klauspost/compress v1.20.3) stays, and one it does not require is not added. A git whose fetch
+# gives the commit asked for, and a go whose module list is the table below and whose version stops the build after
+# its go get.
+git -C "$r" reset -q --hard "$base"
+mkdir "$work/floors"
+cat > "$work/floors/git" <<EOF
+#!/bin/sh
+case "\$3" in
+  fetch) echo "\$8" > "$work/fetched"; exit 0 ;;
+  checkout) exit 0 ;;
+  rev-parse) cat "$work/fetched"; exit 0 ;;
+  log) echo 0; exit 0 ;;
+esac
+exec $(command -v git) "\$@"
+EOF
+cat > "$work/floors/go" <<EOF
+#!/bin/sh
+case "\$1 \$2" in
+  "list -m") case "\$5" in
+      golang.org/x/net) echo v0.58.0 ;;
+      github.com/klauspost/compress) echo v1.20.3 ;;
+      *) exit 1 ;;
+    esac ;;
+  "get "*) echo "\$*" >> "$work/go-get" ;;
+  "version"*) echo "go version go1.0 linux/arm64" ;;
+  *) exit 1 ;;
+esac
+EOF
+chmod +x "$work/floors"/*
+PATH=$work/floors:$work/stub:$PATH "$r/ci/runner-images.sh" "$work/out" > "$work/log" 2>&1
+if ! grep -q "go is go version go1.0" "$work/log"; then fail "the floors: the build did not reach go: $(cat "$work/log")"
+elif [ "$(cat "$work/go-get" 2>/dev/null)" = "get golang.org/x/net@v0.62.0" ]; then
+  ok "the floors: x/net raised to v0.62.0, compress v1.20.3 kept, go-jose (not required) not added"
+else fail "the floors: go ran [$(cat "$work/go-get" 2>/dev/null)], not [get golang.org/x/net@v0.62.0]"; fi
+
 [ "$failed" = 0 ] && echo "runner_images_test: all passed" || { echo "runner_images_test: failed"; exit 1; }
