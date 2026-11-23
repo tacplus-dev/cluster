@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-22 by the looper (#42).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-23 by the looper (#49).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
@@ -30,8 +30,11 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-22 by th
   runners, `build` (tags `arm64, build`, jobs on the spot pool only), `build-report` (#42, tacplus-dev/looper#209:
   `arm64, build-report`, tacplus-dev/build's report builds, `build`'s jobs at the PriorityClass `build-report`, -1,
   `preemptionPolicy: Never`, so a land's build (0) preempts them when the spot pool is full; the policy keeps the class
-  in -10 to -1, never preempting, `build-report` its runner's tag alone, and every other runner's jobs at no class), `control` (`arm64, control`, #13;
-  no VM runner's tag, the policy refuses one; the normal pool, its overflow on the looper pool, #47) and `infra` (#25, for cloud#11: `cloud, cluster, deploy`,
+  in -10 to -1, never preempting, `build-report` its runner's tag alone, and every other runner's jobs at no class but `control`'s), `control` (`arm64, control`, #13;
+  no VM runner's tag, the policy refuses one; the normal pool, its overflow on the looper pool, #47; its jobs at the
+  PriorityClass `control-job`, -1, `preemptionPolicy: Never`, so `infra`'s and `kick`'s jobs (0) preempt them when the
+  normal pool is full, #49: cloud's pipelines 3100887560 and 3101379440 timed out Pending behind reports; the policy
+  keeps the class as `build-report`'s, `control`'s jobs at it and no other runner's) and `infra` (#25, for cloud#11: `cloud, cluster, deploy`,
   the three infrastructure pipelines', protected refs only (`tacplus.protected`, on every runner's pods as
   `tacplus.dev/runner-protected`), the normal pool as control, no token in the pod; the policy admits those three tags
   to `infra` alone, refuses it any other tag and an `infra` not protected) and `kick` (#36: `arm64, kick`, the looper's
@@ -83,7 +86,9 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   #42's done-when (a land's gates pod starting within minutes on a spot pool full of report builds) is unverified.
   #47 (`control` 33, its overflow on the looper pool) reaches the cluster when the hub re-pins to a commit with it, once
   cloud's `dev` has applied the looper pool (tacplus-dev/cloud#95); its done-when (a looper node up in a busy hour,
-  back to 0 after) is unverified. Whether this project's nightly schedule 4547285 is on is not recorded: the hub's
+  back to 0 after) is unverified. #49 (`control`'s jobs at `control-job`, preempted by `infra`'s and `kick`'s) reaches
+  the cluster when the hub re-pins to a commit with it; its done-when (a cloud pipeline's jobs starting within a minute
+  while `control` runs at its full concurrent) is unverified. Whether this project's nightly schedule 4547285 is on is not recorded: the hub's
   closing comments do not say, and no looper has a GitLab token to see it. The `ci` NetworkPolicy holds only where
   NetworkPolicy is enforced (Dataplane V2: tacplus-dev/cloud's `dev` cluster has it).
   `runner-images` needs tacplus-dev/cloud's `apply:dev` to have created `ci-images` (cloud#45, landed) before it
