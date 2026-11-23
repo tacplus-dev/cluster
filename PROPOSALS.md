@@ -46,6 +46,17 @@ the looper then marks it `promoted` or `declined` here with the date.
   --field-selector reason=Preempted`). Its `concurrent` 6 is `build`'s; #41, which counts `build`'s from the spot
   pool's room, should count the two together, since they share the pool (the looper's report slots,
   `BUILD_POOL_NODES - 1`, already bound the report builds' gates).
+- **infra and kick ahead of control's jobs** (2026-11-23, #49): `control`'s jobs run at the PriorityClass
+  `control-job` (-1, never preempting), so `infra`'s and `kick`'s (0) preempt them when the normal pool is full. #49
+  recommended a class above 0 for `infra` and `kick` instead; that class, preempting, would evict deploymentproxy's or a
+  deployment's pods (0) as readily as a report's, so the change lowers `control`'s instead, the same effect on the
+  scheduler. Its done-when is unverified here: it needs the hub's re-pin and `apply`, then a cloud pipeline while
+  `control` runs at its full concurrent, its jobs starting within a minute (`kubectl -n ci get events
+  --field-selector reason=Preempted`). Two costs to watch: every `control` job is preemptible, the looper's managers and
+  scans as well as its reports (a manager's job evicted mid-land fails `runner_system_failure` and is retried, twice,
+  by `.control`'s `retry:`); if that bites, the managers move to a runner of their own at 0. And `ci-runner-manager`
+  (1000000, preempting) may still evict deploymentproxy's or a deployment's pod for a manager's (#39): a class for
+  deploymentproxy above the jobs would close that.
 - **A runner change proven by a job before main takes it** (2026-11-19, #37): e246907's runners rolled out green
   (`apply` waits for their rollouts) yet failed every job at once, because nothing here starts a job: `ci/policy.sh`
   now refuses a read-only root filesystem without a writable emptyDir where GitLab Runner writes, but only for the
