@@ -26,7 +26,10 @@
 # in them: GO-2026-5932 (x/crypto v0.58.0, openpgp, no fixed release), in its entry.
 #
 # The CI image's gh (ghcr.io/tacplus-dev/tacplus/build:2.6, also gitlab-runner/pin.yaml's job:, #12) is built with
-# x/net v0.62.0 since build 2.6.3 (tacplus-dev/tacplus#350), so #15's CVE-2026-78661 entry is gone (#32).
+# x/net v0.62.0 since build 2.6.3 (tacplus-dev/tacplus#350), so #15's CVE-2026-78661 entry is gone (#32). Build
+# 2.6's rebuild 20261123-ef62327 (#48), on current Debian 13 (trixie-security), has the fix of every HIGH Debian
+# finding of 2.6.13 (krb5, linux-libc-dev, ...) and no containerd finding in docker-buildx, so the CI image's
+# CVE-2026-95839 entry is gone too; its HIGH findings left have no fixed version (Trivy, linux/arm64, 2026-11-23).
 #
 # Trivy's config checks (looper-scan's nightly, on the tree): KSV-0109 is a false positive on GitLab Runner chart
 # 0.94.3's entrypoint ConfigMap, which names the secret files it reads and holds no secret (#30); its two KSV-01010
@@ -141,8 +144,3 @@ exceptions:
     decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17); scoped: #45"
     expires: 2026-12-31
     where: "deploymentproxy/release/config/rbac/cluster_role.yaml"
-  - id: CVE-2026-95839
-    reason: "containerd v2.4.1 in docker-buildx of the CI image (ghcr.io/tacplus-dev/tacplus/build:2.6.12, from docker:29-cli): the CI image only builds images inside CI jobs; nothing is deployed or exposed from it. No fixed docker:29-cli yet; bump and remove when upstream rebuilds (tacplus-dev/tacplus#901). Same exception as tacplus-dev/cloud's."
-    decided_by: "jodydadescott (hub, in chat, 2026-11-20: 14 days, CI image only; tacplus-dev/cloud 3fd806e5); scoped: #45"
-    expires: 2026-12-04
-    where: "ghcr.io/tacplus-dev/tacplus/build:**"
