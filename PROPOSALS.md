@@ -221,6 +221,10 @@ the looper then marks it `promoted` or `declined` here with the date.
   findings); v2.6.13 was published the same day and `build:2.6` is already its digest, so the pin is behind again.
   Update 2026-11-17 (nightly scan): still on 2.6.12 with v2.6.13 out. That is the right line (2.6, tacplus' newest), so it
   is no pin-rule finding, and the pinned image has no fixed HIGH or CRITICAL finding (Trivy, linux/arm64).
+  Update 2026-11-23 (#48): 2.6.13, pinned on 2026-11-22 (#44), had 159 fixed HIGH Debian findings by the next
+  night's main pipeline, a day after it was pinned; that `security` failure blocked `apply`, and only a rebuild of
+  `build:2.6` on current Debian (20261123-ef62327, not 2.6.14) had their fixes. The build pipeline's report for 3e140de (build:2.6.13) showed 0 findings, so it
+  did not warn of this. A "behind" notice, or a relock when `build:2.6` moves, would have caught it a day earlier.
 - **A nightly build of this repository in tacplus-dev/build** (2026-11-15, #14): since cloud#26 and looper#113,
   tacplus-dev/build builds a commit of this repository from `build.lock` when a land or a `--build` asks for one, and
   its security checks (osv-scanner, semgrep, trivy, gitleaks …, failing on HIGH/CRITICAL) run with it: main 481c74d
