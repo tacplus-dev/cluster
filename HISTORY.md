@@ -44,3 +44,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-23 looper issue A report-build runner entry whose pods a land's build preempts (PriorityClass): the cluster half of tacplus-dev/looper#209 (#42)
 - 2026-11-23 looper issue The control runner's job pods overflow onto the looper pool (0 → 2) and its concurrent counts that pool's max room (#47)
 - 2026-11-23 looper issue security job fails main's apply: 159 HIGH Debian findings in the CI image build:2.6.13 (krb5 CVE-2026-107364, linux-libc-dev CVE-2026-99785, ...); move to build:2.6.14, except what has no fix (#48)
+- 2026-11-23 looper issue infra's jobs can't schedule: control's job pods fill the normal pool (#47 counts the looper pool's room), so cloud/cluster applies wait Pending and fail; give infra and kick jobs a PriorityClass that preempts report pods (#49)
