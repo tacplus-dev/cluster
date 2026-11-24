@@ -306,6 +306,12 @@ the looper then marks it `promoted` or `declined` here with the date.
   get networkpolicies -A -l` deploymentproxy's owner label, empty), a tacplus-dev/deploymentproxy release could drop
   it, and `deploymentproxy/bump.sh` to it would take out its two entries (the vendored ClusterRole and the render). No
   deploymentproxy issue asks for it yet. Links: #28, #14, tacplus-dev/looper#182 (the entries per file).
+- **osv-scanner and trivy built with otel v1.47.0 instead of GO-2026-6974's exceptions** (2026-11-24, #56): both are
+  built here from source with fixed modules (ci/tools.sh, #10's policy), so `go.opentelemetry.io/otel`,
+  `otel/trace` (and trivy's `otel/sdk` and exporters) at v1.47.0 would fix the finding before upstream does. #56 took
+  the 14-day exceptions the decision (tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md) names
+  instead: one land, now, with no rebuilt scanner in the security job's path. If no release has it by 2026-12-08
+  and tacplus-dev/looper#225 has not made CI-tool findings report-only, raise them here rather than renew.
 
 ## Promoted / declined
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still

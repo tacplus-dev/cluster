@@ -11,13 +11,19 @@
 # built with the pinned toolchain, kubectl and the GKE auth plugin pinned rather than the CI image's). Track and
 # bump: move each pin to the first release with the fix and remove its entries. The binaries, by pin:
 #
-#   kubectl v1.34.13                GO-2026-5158 6603 6610 6611 6612 6617 6629 6860 6866, 6859 (go1.26.10, #21)
+#   kubectl v1.34.13                GO-2026-5158 6603 6610 6611 6612 6617 6629 6860 6866, 6859 (go1.26.10, #21);
+#                                   5026 6974 6975 (#56)
 #   gke-gcloud-auth-plugin 0.5.21   GO-2026-6860 6866, 6859 (go1.27.3, #21)
+#   osv-scanner v2.7.0, trivy v0.76.2   GO-2026-6974 (otel v1.45.0, v1.46.0; #56)
+#
+# CI-only tooling's findings do not block (tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md):
+# until tacplus-dev/looper#225 reports them only, each with no fixed release gets an entry for its binary alone, 14
+# days, naming the release it waits on (#56).
 #
 # The Go tools built here from source are built with the fixed modules instead (ci/tools.sh; #10, the policy of
 # tacplus-dev/cloud#24): gitleaks v8.30.1 with klauspost/compress v1.20.2, andybalholm/brotli v1.2.7 and
 # ulikunitz/xz v0.5.15, osv-scanner v2.7.0, crane v0.22.1 and trivy v0.76.2 (x/net v0.62.0 its own) with compress
-# v1.20.2 (#23), so none of them needs an entry. And all of them, trivy too since #21, with go1.27.4, so that
+# v1.20.2 (#23), so none of them needs an entry but otel's (#56, above). And all of them, trivy too since #21, with go1.27.4, so that
 # GO-2026-6859 (net/http) is not theirs.
 #
 # GitLab Runner's runner and helper images are our build since #21 (ci/runner-images.sh: go1.27.4, x/net v0.62.0,
@@ -107,14 +113,39 @@ exceptions:
     where: "gke-gcloud-auth-plugin"
   - id: CVE-2026-97054
     reason: "GO-2026-6859, an HTTP/1 server crash in net/http (gke-gcloud-auth-plugin 0.5.21, go1.27.3; kubectl v1.34.13, go1.26.10; fixed in go1.26.11 and go1.27.4): kubectl and its auth plugin serve no HTTP, and nothing untrusted reaches them; no kubectl 1.34 or plugin release has the fix yet. The tools built here, and GitLab Runner's runner and helper since #21, are built with go1.27.4 (ci/tools.sh, ci/runner-images.sh); the hub's interim for upstream's runner images ended with them."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12; kubectl and its plugin as #5 decided their other findings: no release of the tool with the fix); scoped: #45"
-    expires: 2026-11-25
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12; kubectl and its plugin as #5 decided their other findings: no release of the tool with the fix); scoped: #45; renewed 14 days, CI tooling (tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md, #56): still no kubectl 1.34 release past v1.34.13, no plugin past 0.5.21 (Cloud SDK 594.0.1)"
+    expires: 2026-12-08
     where: "kubectl"
   - id: CVE-2026-97054
     reason: "GO-2026-6859, an HTTP/1 server crash in net/http (gke-gcloud-auth-plugin 0.5.21, go1.27.3; kubectl v1.34.13, go1.26.10; fixed in go1.26.11 and go1.27.4): kubectl and its auth plugin serve no HTTP, and nothing untrusted reaches them; no kubectl 1.34 or plugin release has the fix yet. The tools built here, and GitLab Runner's runner and helper since #21, are built with go1.27.4 (ci/tools.sh, ci/runner-images.sh); the hub's interim for upstream's runner images ended with them."
-    decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12; kubectl and its plugin as #5 decided their other findings: no release of the tool with the fix); scoped: #45"
-    expires: 2026-11-25
+    decided_by: "jodydadescott (hub, tacplus-dev/cluster#21, 2026-11-12; kubectl and its plugin as #5 decided their other findings: no release of the tool with the fix); scoped: #45; renewed 14 days, CI tooling (tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md, #56): still no kubectl 1.34 release past v1.34.13, no plugin past 0.5.21 (Cloud SDK 594.0.1)"
+    expires: 2026-12-08
     where: "gke-gcloud-auth-plugin"
+  - id: GO-2026-5026
+    reason: "x/net/idna accepts ASCII-only Punycode labels (kubectl v1.34.13, x/net v0.56.0; CI tooling only, never deployed): kubectl resolves no host name but the cluster's API server endpoint, from its kubeconfig. Fixed in x/net v0.57.0; waits on a kubectl 1.34 release past v1.34.13 with it."
+    decided_by: "jodydadescott (tacplus-dev/cluster#56, 2026-11-24: CI-tooling findings do not block, tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md)"
+    expires: 2026-12-08
+    where: "kubectl"
+  - id: GO-2026-6974
+    reason: "otel AttributeValueLengthLimit bypass via U+FFFD runes (kubectl v1.34.13, otel v1.41.0; CI tooling only, never deployed): kubectl takes no baggage header from anyone but the cluster's API server, over TLS, and exports no traces, so no span attribute leaves it. Fixed in otel v1.47.0; waits on a kubectl 1.34 release past v1.34.13 with it."
+    decided_by: "jodydadescott (tacplus-dev/cluster#56, 2026-11-24: CI-tooling findings do not block, tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md)"
+    expires: 2026-12-08
+    where: "kubectl"
+  - id: GO-2026-6974
+    reason: "otel AttributeValueLengthLimit bypass via U+FFFD runes (osv-scanner v2.7.0, otel v1.45.0; CI tooling only, never deployed): osv-scanner exports no traces here and its peers are osv.dev and the Go module proxy, so no span attribute leaves it. Fixed in otel v1.47.0; waits on an osv-scanner release built with it (v2.7.1, the latest, still has v1.45.0)."
+    decided_by: "jodydadescott (tacplus-dev/cluster#56, 2026-11-24: CI-tooling findings do not block, tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md)"
+    expires: 2026-12-08
+    where: "osv-scanner"
+  - id: GO-2026-6974
+    reason: "otel AttributeValueLengthLimit bypass via U+FFFD runes (trivy v0.76.2, otel v1.46.0; CI tooling only, never deployed): trivy exports no traces here and runs no server; its peers are its database's registry and the images it scans, so no span attribute leaves it. Fixed in otel v1.47.0; waits on a trivy release built with it (v0.76.2, the latest, has v1.46.0)."
+    decided_by: "jodydadescott (tacplus-dev/cluster#56, 2026-11-24: CI-tooling findings do not block, tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md)"
+    expires: 2026-12-08
+    where: "trivy"
+  - id: GO-2026-6975
+    reason: "otel W3C baggage parsing, memory amplification (kubectl v1.34.13, otel v1.41.0; CI tooling only, never deployed): kubectl takes no baggage header from anyone but the cluster's API server, over TLS, and exports no traces, so no baggage header from outside reaches it. Fixed in otel v1.47.0; waits on a kubectl 1.34 release past v1.34.13 with it."
+    decided_by: "jodydadescott (tacplus-dev/cluster#56, 2026-11-24: CI-tooling findings do not block, tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md)"
+    expires: 2026-12-08
+    where: "kubectl"
   - id: KSV-0109
     reason: "Trivy's ConfigMap with secrets, a false positive on GitLab Runner chart 0.94.3's entrypoint ConfigMap (gitlab-runner/release/templates/configmap.yaml, rendered in out/20-ci.yaml): its script names the files under /secrets it reads and the variables it exports from them (CI_SERVER_TOKEN, CACHE_S3_SECRET_KEY), and holds no secret; the tokens come from Secret Manager at apply time (ci/runner-tokens.sh) into a Secret projected on /secrets, and gitleaks finds nothing in the tree or its history. Upstream's script, the chart pinned by archive digest: not edited here. Trivy finds it in the render (its fixture, the four runners' ConfigMaps), not in the template: re-check it when the chart is moved. The two KSV-01010 findings on the same script are in security-baseline.json."
     decided_by: "jodydadescott (tacplus-dev/cluster#30, 2026-11-17); scoped: #45"
