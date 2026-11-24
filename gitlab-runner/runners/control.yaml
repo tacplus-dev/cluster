@@ -18,9 +18,10 @@
 #
 # Its concurrent is the normal pool's room and the looper pool's at its max nodes (#36, #47: `pool`,
 # gitlab-runner/pool.yaml), counted by its default requests,
-# which are its largest kind's (a report's, 100m and 512Mi: tacplus-dev/looper#165; a manager, the kicker and the plan
-# ask less): render.sh gives it as many jobs as the pool holds beside infra's and kick's at their full concurrent, and
-# refuses runners the pool cannot hold. A fixed 8 at 250m left the kicker queued behind eight reports (#36).
+# which are a report's (150m and 512Mi: tacplus-dev/looper#165; the recap's p90 139m and ~8% over it, #53; the kicker and
+# the plan ask less; a manager more, held apart as gitlab-runner/pool.yaml's managers): render.sh gives it as many jobs
+# as the pool holds beside infra's and kick's at their full concurrent and the managers' room, and refuses runners
+# the pool cannot hold. A fixed 8 at 250m left the kicker queued behind eight reports (#36).
 #
 #   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
 #   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
@@ -48,7 +49,7 @@ runners:
         priority_class_name = "control-job"
         # A looper node from 0 takes minutes to come up (#47).
         poll_timeout = 900
-        cpu_request = "100m"
+        cpu_request = "150m"
         cpu_limit = "1"
         memory_request = "512Mi"
         memory_limit = "2Gi"

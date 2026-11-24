@@ -1347,7 +1347,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 30, the normal pool's room and the looper pool's at its max nodes (gitlab-runner/pool.yaml): GitLab Runner's chart 0.95.0.
+# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 17, the normal pool's room and the looper pool's at its max nodes (gitlab-runner/pool.yaml): GitLab Runner's chart 0.95.0.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -1423,7 +1423,7 @@ data:
       --working-directory=/home/gitlab-runner
   config.toml: |
     shutdown_timeout = 0
-    concurrent = 30
+    concurrent = 17
     check_interval = 3
     log_level = "info"
   config.template.toml: |
@@ -1443,7 +1443,7 @@ data:
         priority_class_name = "control-job"
         # A looper node from 0 takes minutes to come up (#47).
         poll_timeout = 900
-        cpu_request = "100m"
+        cpu_request = "150m"
         cpu_limit = "1"
         memory_request = "512Mi"
         memory_limit = "2Gi"
@@ -1641,7 +1641,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: fd7d7063ea202252155b731650d2447c6a4cda53f5c81c8fe888af83b6d69379
+        checksum/configmap: 54ecb62505e2d98655f0f3ef80acb37bd43878b96ec1cf7e63cbd8de9226afd7
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"

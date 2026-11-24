@@ -36,10 +36,10 @@ the looper then marks it `promoted` or `declined` here with the date.
   reads another repository.
 - **The looper pool's daemonsets, measured** (2026-11-23, #47): `gitlab-runner/pool.yaml`'s `looper.daemonsets`
   (400m and 1Gi a node) is an estimate, the normal pool's whole reserve per node, which also holds kube-system's
-  Deployments; `control`'s `concurrent` (33: 12 on the normal pool, 21 on 2 looper nodes) follows from it. Once a
+  Deployments; `control`'s `concurrent` (17 since #53: 3060m of its 3500m on 2 looper nodes) follows from it. Once a
   looper node is up, `kubectl describe node -l looper=true` (Allocated resources, less the `ci` pods) gives the real
   figure; a smaller one gives `control` more slots. The issue's own estimate was about 18: it counted a report pod at
-  550m, where `control`'s defaults (a report's, tacplus-dev/looper#165) are 150m with the helper. If looper pods ask
+  550m, where `control`'s defaults (a report's, tacplus-dev/looper#165) are 200m with the helper since #53. If looper pods ask
   more than their defaults in practice (`KUBERNETES_CPU_REQUEST`), the jobs beyond the room pend for 15 minutes and
   fail; the remedy is larger defaults in `control.yaml`, which the count follows.
 - **The looper's `.control` on the kick runner** (2026-11-19, #36): `gitlab-runner/runners/kick.yaml` (tags

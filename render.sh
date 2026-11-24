@@ -106,7 +106,7 @@ done
 # The normal pool's room (gitlab-runner/pool.yaml, #36): what its nodes can allocate, less the reserve, every runner
 # manager (all on the normal pool), deploymentproxy and every normal-pool runner's jobs at its fixed concurrent; the
 # runner that says `concurrent: pool` takes as many jobs as fit in the rest, and in the looper pool's room (#47) when
-# its jobs tolerate that pool's taint, CPU and memory both. A job's pod is its
+# its jobs tolerate that pool's taint, less the looper's managers' room (#53), CPU and memory both. A job's pod is its
 # runner's default requests, its job container's and its helper's.
 pool=${POOL:-$here/gitlab-runner/pool.yaml}
 [ -f "$pool" ] || die "no $pool"
@@ -215,10 +215,20 @@ if [ "$(yq 'has("looper")' "$pool")" = true ]; then
     die "gitlab-runner/pool.yaml: the looper pool's daemonsets ask more than a node's allocatable"
   looper_cpu=$((looper_nodes * (looper_node_cpu - looper_ds_cpu))) looper_mem=$((looper_nodes * (looper_node_mem - looper_ds_mem)))
 fi
+# The looper's managers (#53): control's jobs that ask more than its defaults (a report's), each its own requests, held
+# in the pools' room before control's slots. Without it in gitlab-runner/pool.yaml, none.
+managers=0 manager_job_cpu=0 manager_job_mem=0
+if [ "$(yq 'has("managers")' "$pool")" = true ]; then
+  managers=$(yq '.managers.count // ""' "$pool")
+  [[ $managers =~ ^[0-9]+$ ]] || die "gitlab-runner/pool.yaml: managers.count [$managers] is not a number of managers"
+  manager_job_cpu=$(pool_q managers.cpu m)
+  manager_job_mem=$(pool_q managers.memory Mi)
+fi
 if [ -n "$pooled" ]; then
   if [ "$looper_nodes" -gt 0 ] && [ "$pooled_looper" = NoSchedule ]; then
     free_cpu=$((free_cpu + looper_cpu)) free_mem=$((free_mem + looper_mem)) looper_room=true
   fi
+  free_cpu=$((free_cpu - managers * manager_job_cpu)) free_mem=$((free_mem - managers * manager_job_mem))
   c=$((free_cpu / pod_cpu < free_mem / pod_mem ? free_cpu / pod_cpu : free_mem / pod_mem))
   [ "$c" -le 99 ] || c=99
   [ "$c" -ge 1 ] || die "the normal pool has no room for one job of $pooled (${pod_cpu}m, ${pod_mem}Mi): ${free_cpu}m CPU and ${free_mem}Mi memory left (gitlab-runner/pool.yaml)"

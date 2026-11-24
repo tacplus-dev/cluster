@@ -43,3 +43,12 @@ looper:
   daemonsets:
     cpu: 400m
     memory: 1Gi
+#
+#   managers     the looper's managers (#53): control's jobs, but each at its own requests, above control's defaults
+#                (a report's), which count its slots; count of them at once, held in the pools' room before control's
+#                slots (tacplus-dev/looper#229, looper-dispatch: a manager asks 250m and 256Mi, above the recap's p90 of
+#                210m on 2026-11-23, tacplus-dev/roadmap suggestions/recap/2026-11-23.md). Without it, none.
+managers:
+  count: 4
+  cpu: 250m
+  memory: 256Mi

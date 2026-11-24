@@ -266,7 +266,7 @@ The chart is pinned by the SHA-256 of its archive, and the runner, helper and de
 |---|---|---|---|---|
 | `build` | `arm64`, `build` | the spot pool only: node selector `spot=true`, toleration `spot=true:NoSchedule` | CPU 1 / 3, memory 4Gi / 8Gi | CPU 3500m, memory 12Gi (a c4a-standard-4) |
 | `build-report` | `arm64`, `build-report` (tacplus-dev/build's report builds: every build but a manager's land, `BUILD_REPORT_TAGS`; #42) | as `build`, at the PriorityClass `build-report`: a land's build preempts them | as `build` | as `build` |
-| `control` | `arm64`, `control` (the looper's reports, managers, scans) | at the PriorityClass `control-job`: `infra`'s and `kick`'s jobs preempt them (#49); the normal pool, its overflow on the looper pool (#47): a toleration `looper=true:NoSchedule` and a preferred node affinity for nodes without `looper=true`; no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 100m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
+| `control` | `arm64`, `control` (the looper's reports, managers, scans) | at the PriorityClass `control-job`: `infra`'s and `kick`'s jobs preempt them (#49); the normal pool, its overflow on the looper pool (#47): a toleration `looper=true:NoSchedule` and a preferred node affinity for nodes without `looper=true`; no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 150m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
 | `infra` | `cloud`, `cluster`, `deploy` (tacplus-dev/cloud's, this pipeline, fleet-seatrials' deploy), **protected refs only** | the normal pool only: as `control`, without the looper toleration | CPU 500m / 1500m, memory 1Gi / 4Gi | CPU 1500m, memory 4Gi |
 | `kick` | `arm64`, `kick` (the looper's kicker and plan, its `.control` jobs; #36) | the normal pool only, as `infra` | CPU 50m / 1, memory 256Mi / 2Gi (the looper's `.control` requests, #39) | CPU 1500m, memory 4Gi |
 | `build-light` | `arm64`, `build-light` (tacplus-dev/build's `pending`, `plan`, `report-pass` and `report-fail`: `looper-build` in the looper image, seconds to a minute; #51), never `build`, which would bring the gates and security jobs here | the normal pool only, as `infra` | as `kick` | as `kick` |
@@ -283,14 +283,15 @@ and the count with it. `control` as many as the normal pool has
 room for (`concurrent: pool`, #36), which `render.sh` counts from `gitlab-runner/pool.yaml` (its nodes, a node's
 allocatable, a reserve for kube-system and the deployments' pods) less every runner manager, deploymentproxy and
 `infra`'s, `kick`'s and `build-light`'s jobs at their full concurrent, by each job pod's default requests (job and
-helper) in CPU and memory, 9 jobs today (CPU the bound, 90m left: `build-report`'s manager took 50m, #42, and
-`build-light`'s manager and four jobs 450m, #51), plus the looper pool's room at its max nodes less each node's
-daemonsets (#47: 2 x (1930m - 400m), 21 more): 30, CPU the bound. Its jobs fill the
+helper) in CPU and memory (1440m: `build-report`'s manager took 50m, #42, and `build-light`'s manager and four jobs
+450m, #51), plus the looper pool's room at its max nodes less each node's daemonsets (#47: 2 x (1930m - 400m)), less
+the room of the looper's managers, which ask more than a report (#53: `managers`, 4 x 250m): 3500m, 17 jobs of 200m,
+CPU the bound. Its jobs fill the
 normal nodes first; the ones that do not fit pend, which is what makes the cluster autoscaler add a looper node, and
 it removes the node once its jobs end, back to 0; a job waits up to 15 minutes (`poll_timeout`) for its pod to start.
-The render refuses runners the pool cannot hold. `control`'s defaults are its largest
-kind's, a report's (tacplus-dev/looper#165), so the count holds for every looper job; a job that raises its own is
-not counted. A larger pool, or a measured reserve, is a change to `gitlab-runner/pool.yaml`, and the count follows.
+The render refuses runners the pool cannot hold. `control`'s defaults are a report's
+(tacplus-dev/looper#165; 150m, the recap's p90 of 139m and ~8%, #53), the kind most of its jobs are; the managers,
+which ask more, have the room `managers` holds; any other job that raises its own is not counted. A larger pool, or a measured reserve, is a change to `gitlab-runner/pool.yaml`, and the count follows.
 
 A job raises its own with GitLab's variables (`KUBERNETES_CPU_REQUEST`, `KUBERNETES_MEMORY_LIMIT` and the rest) up
 to the ceiling; the helper container has its own small defaults. It may override nothing else: not its node
