@@ -236,6 +236,11 @@ the looper then marks it `promoted` or `declined` here with the date.
   night's main pipeline, a day after it was pinned; that `security` failure blocked `apply`, and only a rebuild of
   `build:2.6` on current Debian (20261123-ef62327, not 2.6.14) had their fixes. The build pipeline's report for 3e140de (build:2.6.13) showed 0 findings, so it
   did not warn of this. A "behind" notice, or a relock when `build:2.6` moves, would have caught it a day earlier.
+  Update 2026-11-23 (#54): `build:2.6` moved again the same day (to 20261123-57a6521), and since the pin named it as
+  `build:2.6@digest`, `fetch.sh --check` turned every full gate red. The pin is now the rebuild's dated tag, which
+  never moves, so a move of `build:2.6` no longer fails the gates; it now goes unseen instead, which is what this
+  notice would answer. The CI file's `default.image` is still the moving `build:2.6`, so its jobs and the security
+  job's scan of `CI_JOB_IMAGE` may run a newer rebuild than `build.lock`'s.
 - **A nightly build of this repository in tacplus-dev/build** (2026-11-15, #14): since cloud#26 and looper#113,
   tacplus-dev/build builds a commit of this repository from `build.lock` when a land or a `--build` asks for one, and
   its security checks (osv-scanner, semgrep, trivy, gitleaks …, failing on HIGH/CRITICAL) run with it: main 481c74d

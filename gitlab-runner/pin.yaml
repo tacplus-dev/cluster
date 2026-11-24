@@ -37,5 +37,6 @@ build:
   packages:
     runner: [bash=5.3.9-r1, ca-certificates=20261020-r0, git=2.54.1-r0, git-lfs=3.7.1-r2, tzdata=2026f-r0, openssh-client-default=10.3_p1-r2, curl=8.23.0-r0, dumb-init=1.2.5-r4, openrc=0.63.2-r0]
     helper: [ca-certificates=20261020-r0, curl=8.23.0-r0, git=2.54.1-r0, git-lfs=3.7.1-r2, busybox=1.37.0-r31, zlib=1.4-r0, pcre2=10.49-r0, bash=5.3.9-r1, miniperl=5.42.3-r0, coreutils=9.11-r0, dumb-init=1.2.5-r4]
-# A job's image when its job names none: the tacplus build image the pipelines already run.
-job: ghcr.io/tacplus-dev/tacplus/build:2.6@sha256:8cf5ff0891c3bd73121eb7f94df97cfb311cfe55e602b0ae7d1e2b22384a5851
+# A job's image when its job names none: the tacplus build image the pipelines already run, build.lock's, by a
+# rebuild's dated tag (or a patch tag): never a line tag like build:2.6, which tacplus moves (#54).
+job: ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121

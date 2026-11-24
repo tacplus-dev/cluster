@@ -1,6 +1,8 @@
 # The build image of tacplus-dev/cluster, by digest (#14; looper#71): tacplus build 2.6 at its rebuild
-# 20261123-ef62327's digest (#48), the image the CI jobs run (ci/gitlab-project.gitlab-ci.yml's default.image, build:2.6,
-# the line this rebuild is of) and gitlab-runner/pin.yaml's job:, in which this repository's gates (gates.yaml) already
-# run. It is no tacplus project, so it has no tacplus.lock; the build pipeline reads this pin the way it reads one. Moved
-# with pin.yaml's job:, never alone (tests/ci_test.sh): a new digest is a change like any other, landed on the full gates.
-build_image: ghcr.io/tacplus-dev/tacplus/build:2.6@sha256:8cf5ff0891c3bd73121eb7f94df97cfb311cfe55e602b0ae7d1e2b22384a5851
+# 20261123-57a6521 (#54), by that rebuild's dated tag, which names only this digest: the image the CI jobs run
+# (ci/gitlab-project.gitlab-ci.yml's default.image, build:2.6, the line this rebuild is of; a line tag tacplus moves
+# on every rebuild, so never the pin: gitlab-runner/fetch.sh --check would refuse it the next time) and
+# gitlab-runner/pin.yaml's job:, in which this repository's gates (gates.yaml) already run. It is no tacplus project,
+# so it has no tacplus.lock; the build pipeline reads this pin the way it reads one. Moved with pin.yaml's job:, never
+# alone (tests/ci_test.sh): a new digest is a change like any other, landed on the full gates.
+build_image: ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121

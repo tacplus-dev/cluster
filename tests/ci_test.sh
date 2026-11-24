@@ -42,15 +42,18 @@ for j in "${jobs[@]}"; do
 done
 [ "$(q '.default.tags | join(",")')" = cluster ] && ok "every job runs on the runner tagged cluster" || fail "default tags: $(q '.default.tags')"
 # build.lock pins tacplus-dev/build's builds to the CI image by digest (#14), read as its plan reads it: the image
-# gitlab-runner/pin.yaml's job: already pins, of the CI file's line (build:2.6, a patch of it or the line's own
-# rebuild, by its digest: #48). And
+# gitlab-runner/pin.yaml's job: already pins, of the CI file's image (build:2.6), by a tag that only ever names one
+# digest: a patch of the line (build:2.6.N) or a rebuild's dated tag (build:YYYYMMDD-<commit>), never the line's own
+# tag, which tacplus moves on every rebuild and gitlab-runner/fetch.sh --check then refuses (#48, #54). And
 # gates.yaml gives those builds the gates to run in it: its full set, the render, validate and the tests, as CI.
 lock=$(sed -n 's/^build_image:[[:space:]]*"\{0,1\}\([^"[:space:]]*\)"\{0,1\}[[:space:]]*$/\1/p' "$here/build.lock" 2>/dev/null | head -1)
-[[ $lock =~ ^[^@]+:[0-9.]+@sha256:[0-9a-f]{64}$ ]] && ok "build.lock pins an image by digest" || fail "build.lock's build_image: [$lock]"
+[[ $lock =~ ^[^@]+:[0-9a-z.-]+@sha256:[0-9a-f]{64}$ ]] && ok "build.lock pins an image by digest" || fail "build.lock's build_image: [$lock]"
 [ "$lock" = "$(yq -r '.job' "$here/gitlab-runner/pin.yaml")" ] && ok "build.lock pins gitlab-runner/pin.yaml's job image" ||
   fail "build.lock's build_image [$lock] is not gitlab-runner/pin.yaml's job: $(yq -r '.job' "$here/gitlab-runner/pin.yaml")"
-[[ ${lock%@*} == "$(q '.default.image')" || ${lock%@*} == "$(q '.default.image')".* ]] && ok "build.lock pins a patch or a rebuild of the CI image's line" ||
-  fail "build.lock's build_image [$lock] is not of the CI image $(q '.default.image')"
+line=$(q '.default.image') tag=${lock%@*} tag=${tag##*:}
+[[ ${lock%%@*} == "${line%:*}:$tag" && ( $tag == "${line##*:}".+([0-9]) || $tag =~ ^20[0-9]{6}-[0-9a-f]{7}$ ) ]] &&
+  ok "build.lock pins a patch or a dated rebuild of the CI image $line, not its moving tag" ||
+  fail "build.lock's build_image [$lock] is not a patch (${line}.N) or a dated rebuild (${line%:*}:YYYYMMDD-<commit>) of the CI image"
 gates='ci/tools.sh && export PATH=$PWD/bin:$PATH && ./render.sh deployments.yaml out && ci/validate.sh out && ci/checks.sh'
 gates+=' && ci/runner-images.sh --if-changed "${LOOPER_GATES_BASE:-}" images'
 [ "$(yq -r '.full.run // ""' "$here/gates.yaml" 2>/dev/null)" = "$gates" ] &&
