@@ -29,7 +29,11 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by th
   compress v1.20.3 stays), the runner binary SHA-256-identical to tacplus-dev/cloud's; on `alpine:3.24`,
   no docker-machine; reproducible, refused unless the pinned digest; the job `runner-images` pushes them on main to
   cloud's `ci-images`, the security job scans its OCI layouts, the gates build them when their recipe changes) as five
-  runners, `build` (tags `arm64, build`, jobs on the spot pool only), `build-report` (#42, tacplus-dev/looper#209:
+  runners, `build` (tags `arm64, build`, jobs on the spot pool only; its `concurrent` the spot pool's room, #41:
+  `concurrent: pool`, `gitlab-runner/spot-pool.yaml`, one job a node at the ceilings 3500m/12Gi a tacplus gate takes,
+  at tacplus-dev/cloud's stacks/dev `max_nodes` 8 c4a-standard-4, so 8, `build-report`'s the same, the whole pool's;
+  `tests/spot_pool_test.sh` holds the machine type and `max_nodes` to cloud's main; the daemonsets a node, 300m/1Gi, an
+  estimate, PROPOSALS.md), `build-report` (#42, tacplus-dev/looper#209:
   `arm64, build-report`, tacplus-dev/build's report builds, `build`'s jobs at the PriorityClass `build-report`, -1,
   `preemptionPolicy: Never`, so a land's build (0) preempts them when the spot pool is full; the policy keeps the class
   in -10 to -1, never preempting, `build-report` its runner's tag alone, and every other runner's jobs at no class but `control`'s), `control` (`arm64, control`, #13;
