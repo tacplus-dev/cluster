@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by the looper (#54, #52).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by the looper (#56).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line); `build.lock` and `gitlab-runner/pin.yaml`'s
@@ -116,8 +116,12 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   and GO-2026-6888 (brotli v1.2.7), and gitleaks' xz (v0.5.15), none accepted.
   Our runner and helper images (#21): only GO-2026-5932 (x/crypto/openpgp, no fixed release), in its
   entry; #9's, #11's, #15's and #21's 17 entries for upstream's images are gone. GO-2026-6859
-  (net/http, Trivy's CVE-2026-97054) accepted until 2026-11-25 in kubectl v1.34.13 and gke-gcloud-auth-plugin 0.5.21
-  only, no release of either with the fix (PROPOSALS.md). Every Go tool `ci/tools.sh` builds, Trivy too since #21,
+  (net/http, Trivy's CVE-2026-97054) accepted until 2026-12-08 in kubectl v1.34.13 and gke-gcloud-auth-plugin 0.5.21
+  only, no release of either with the fix (PROPOSALS.md; renewed 14 days, #56). CI-tool findings with no fixed
+  release get 14-day entries for their binary alone (tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md,
+  until tacplus-dev/looper#225 reports them only; #56, until 2026-12-08): GO-2026-6974 (otel/trace, fixed in v1.47.0)
+  in osv-scanner v2.7.0 and trivy v0.76.2, the latest releases still on v1.45.0 and v1.46.0, and in kubectl; GO-2026-5026
+  (x/net idna) and GO-2026-6975 (otel baggage) in kubectl (main's pipeline 3106261843 failed at `security` on them). Every Go tool `ci/tools.sh` builds, Trivy too since #21,
   is built with go1.27.4. deploymentproxy
   0.2.2's image (#22): only GO-2026-6859 (Trivy's CVE-2026-97054, its go1.27.3), with no severity, so not failing the
   policy (2026-11-15). The CI image `build:2.6` (its rebuild 20261123-57a6521 since #54, by its dated tag, also `gitlab-runner/pin.yaml`'s `job:`, #12): only
