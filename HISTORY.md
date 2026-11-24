@@ -49,3 +49,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-24 looper issue Full gates fail on main: build:2.6 moved to sha256:72fcd044... (gitlab-runner/fetch.sh --check); relock build.lock and pin.yaml's job: together (#54)
 - 2026-11-24 looper issue GitLab Runner v19.6.0 (OpenTelemetry v1.47.0, GHSA-q7gw-24fr-5p69): the cluster half of tacplus-dev/cloud#99 (#52)
 - 2026-11-24 looper issue A light runner entry on the normal pool (arm64, build-light) for tacplus-dev/build's pending, plan and report jobs: the cluster half of tacplus-dev/cloud#100 (#51)
+- 2026-11-24 looper issue security fails main's apply on CI-tool advisories: GO-2026-6974 (otel in osv-scanner, trivy) and GO-2026-5026 (x/net in kubectl); bump or 14-day exceptions (#56)
