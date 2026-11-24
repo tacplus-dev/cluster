@@ -35,8 +35,10 @@
 #                               kick (the looper's kicker and plan, #36) on the runner kick alone, which takes no
 #                               other but arm64; build-report (the report builds, #42) on the runner build-report
 #                               alone, which takes no other but arm64 and places its jobs as build's (ci_runner
-#                               below). A runner manager on a read-only root filesystem has a writable
-#                               emptyDir wherever GitLab Runner writes (RUNNER_WRITES below; #37).
+#                               below); build-light (tacplus-dev/build's pending, plan and reports, #51) on the
+#                               runner build-light alone, which takes no other but arm64, never build. A runner
+#                               manager on a read-only root filesystem has a writable emptyDir wherever GitLab Runner
+#                               writes (RUNNER_WRITES below; #37).
 #
 #   ci/policy.sh OUT     # exit 0: every file keeps them; else each breach, one per line. Needs bash, yq.
 set -uo pipefail
@@ -115,7 +117,10 @@ ci_runner_writes() {
 # tacplus-dev/looper#209), which takes no other but arm64, places its jobs as a build runner's (the spot pool, non-root,
 # its build container alone Unconfined), and runs them at the PriorityClass build-report, below a land's build's, which
 # preempt them. control's jobs run at the PriorityClass control-job (#49), below infra's and kick's, which preempt them
-# when the normal pool is full of control's; no other runner's jobs set a priority class.
+# when the normal pool is full of control's; no other runner's jobs set a priority class. The tag build-light is the
+# runner build-light's alone (#51; tacplus-dev/cloud#100), and build-light takes no other but arm64: above all not build,
+# which would bring the gates and security jobs onto the normal pool; its slots are the light builds' (pending, plan,
+# the reports), never behind a gates or security job.
 ci_runner() {
   local b=$1 d=$2 render=$3 tags protected token secret toml json m
   tags=$(D=$d yq 'select(.kind == "Deployment" and .metadata.name == strenv(D)) | .spec.template.metadata.annotations."tacplus.dev/runner-tags" // ""' "$render")
@@ -133,7 +138,7 @@ ci_runner() {
   while IFS= read -r m; do breach "$b: the runner $d: $m"; done < <(jq -r --arg tags "$tags" --arg runner "$d" --arg protected "$protected" '
     ($tags | split(",")) as $tags | ($tags | index("build") != null) as $build | ($runner == "gitlab-runner-infra") as $infra |
     ($runner == "gitlab-runner-kick") as $kick | ($runner == "gitlab-runner-build-report") as $report |
-    ($runner == "gitlab-runner-control") as $control |
+    ($runner == "gitlab-runner-control") as $control | ($runner == "gitlab-runner-build-light") as $light |
     ["cloud", "cluster", "deploy"] as $infra_tags |
     if (.runners | length) != 1 then "has \(.runners | length) [[runners]], not one" else
     .runners[0] as $r | ($r.kubernetes // {}) as $k |
@@ -167,6 +172,12 @@ ci_runner() {
       (select($tags | index("kick") == null) | "does not take kick: the kicker and the plan would have no runner of their own")
     else
       ($tags[] | select(. == "kick") | "takes kick, the kick runner\u0027s tag: the kicker and the plan would queue behind its jobs")
+    end),
+    (if $light then
+      (($tags - ["arm64", "build-light"])[] | "takes a tag that is not arm64 or build-light (\(.)): build holds the gates and security jobs, which need a spot node; its jobs would run on the normal pool"),
+      (select($tags | index("build-light") == null) | "does not take build-light: the light builds (pending, plan, reports) would have no runner of their own")
+    else
+      ($tags[] | select(. == "build-light") | "takes build-light, the light builds\u0027 runner\u0027s tag: pending, plan and the reports would queue behind its jobs")
     end),
     (if $report then
       (($tags - ["arm64", "build-report"])[] | "takes a tag that is not arm64 or build-report (\(.)): its jobs would run at the report builds\u0027 priority, preempted"),

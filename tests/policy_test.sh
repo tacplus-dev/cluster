@@ -15,7 +15,9 @@
 # placement, a job's token, no resource ceiling; build taking other tags; a VM runner's tag (autoscale,
 # autoscale-16, gce) on any runner; an infra pipeline's tag (cloud, cluster, deploy) on build or control, infra
 # taking any other tag, or not protected refs only (#25); kick taking a tag but arm64 and kick, or not kick, and kick
-# on any other runner (#36); a runner manager on a read-only root filesystem without a
+# on any other runner (#36); build-light taking a tag but arm64 and build-light (build above all), or not build-light,
+# build-light on any other runner, and its jobs tolerating spot or landing on a spot node (#51); a runner manager
+# on a read-only root filesystem without a
 # writable emptyDir where GitLab Runner writes (/tmp or its TMPDIR, its home; #37); a runner manager not at the
 # PriorityClass ci-runner-manager, none, another, or one that is the default, never preempts, or is not above the jobs
 # and below the system's, and a job at a priority class but build-report's (#39); build-report's jobs not at the
@@ -140,6 +142,12 @@ breach_ci "infra taking arm64" "$(deployment infra '.metadata.annotations."tacpl
 breach_ci "kick taking control's tag" "$(deployment kick '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,kick,control\"" "gitlab-runner-kick: takes a tag that is not arm64 or kick (control)"
 breach_ci "kick without its tag" "$(deployment kick '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64\"" "gitlab-runner-kick: does not take kick"
 breach_ci "control taking kick's tag" "$(deployment control '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,control,kick\"" "gitlab-runner-control: takes kick, the kick runner's tag"
+breach_ci "build-light taking build's tag" "$(deployment build-light '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,build-light,build\"" "gitlab-runner-build-light: takes a tag that is not arm64 or build-light (build)"
+breach_ci "build-light without its tag" "$(deployment build-light '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64\"" "gitlab-runner-build-light: does not take build-light"
+breach_ci "build taking build-light's tag" "$(deployment build '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,build,build-light\"" "gitlab-runner-build: takes build-light, the light builds' runner's tag"
+breach_ci "kick taking build-light's tag" "$(deployment kick '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,kick,build-light\"" "gitlab-runner-kick: takes build-light, the light builds' runner's tag"
+breach_ci "build-light jobs tolerating spot" "$(toml build-light '\\[runners.kubernetes.node_tolerations\\]' '[runners.kubernetes.node_tolerations]\n      \"spot=true\" = \"NoSchedule\"')" "gitlab-runner-build-light: its jobs tolerate the spot taint (spot=true)"
+breach_ci "build-light jobs that may land on spot" "$(toml build-light 'key = \"spot\"' 'key = \"pool\"')" "gitlab-runner-build-light: its jobs may land on a spot node"
 breach_ci "infra not protected" "$(deployment infra '.metadata.annotations."tacplus.dev/runner-protected"') = \"false\"" "gitlab-runner-infra: is not protected refs only"
 breach_ci "infra without the protected annotation" "del($(deployment infra '.metadata.annotations."tacplus.dev/runner-protected"'))" "gitlab-runner-infra: is not protected refs only"
 breach_ci "infra jobs with a token" "$(toml infra 'automount_service_account_token = false' 'automount_service_account_token = true')" "gitlab-runner-infra: its jobs get a service account token"

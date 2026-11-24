@@ -88,7 +88,7 @@ fi
 # Without the runners' tokens in Secret Manager (the hub's step), the apply fails, saying so.
 mv "$SMSTUB" "$work/sm.away"
 run apply "$here/ci/apply.sh" "$work/out" && fail "apply without the runners' tokens succeeded" ||
-  { grep -q 'runner-tokens: Secret Manager refused projects/tacplus-dev/secrets/gitlab-runner-build-report/versions/1 to cluster-admin-pipeline@.*PERMISSION_DENIED.*(README, What the hub does)' "$work/apply" &&
+  { grep -q 'runner-tokens: Secret Manager refused projects/tacplus-dev/secrets/gitlab-runner-build-light/versions/1 to cluster-admin-pipeline@.*PERMISSION_DENIED.*(README, What the hub does)' "$work/apply" &&
     ok "apply without a runner's token fails, naming its version" || fail "apply without tokens: $(cat "$work/apply")"; }
 mv "$work/sm.away" "$SMSTUB"
 : > "$KSTUB/log"

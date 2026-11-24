@@ -1,0 +1,78 @@
+# The light builds' runner (#51; tacplus-dev/cloud#100): the tacplus-dev group's jobs tagged `arm64, build-light`,
+# tacplus-dev/build's pending, plan and report jobs (report-pass, report-fail), each a pod on the normal pool, as kick's
+# are. They run looper-build in the looper image for seconds to a minute and need no spot node, no build image and no
+# whole node, so they get slots of their own: at 10:3xZ on 2026-11-23 build had 88 jobs pending, 42 pending and 42
+# plan, behind build's concurrent 6 held by four security-tacplus jobs and two gates, and the fleet-seatrials land
+# candidate (pipeline 3102111285) waited 77 minutes at its first job. Its tags are arm64 and build-light, never build:
+# GitLab gives a runner every job whose tags it holds, so holding build it would take the gates and security jobs onto
+# the normal pool; and no other runner holds build-light (ci/policy.sh). It tolerates no spot taint and refuses a spot
+# node by its label or GKE's. No privilege, no privilege escalation, no host path, no Docker socket. Its defaults are
+# kick's (50m, 256Mi; a plan fetches a commit and reads its pin, well within 2Gi), its ceilings control's.
+#
+# Its concurrent is fixed and small, a build's pending and plan side by side for two builds at once, each seconds
+# long; render.sh counts it out of the normal pool's room before control's (gitlab-runner/pool.yaml).
+#
+#   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
+#   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
+#                   writes it into the Secret gitlab-runner-build-light at apply time (tacplus-dev/cloud#100 registers
+#                   it and writes version 1)
+tacplus:
+  tags: [arm64, build-light]
+  token: projects/tacplus-dev/secrets/gitlab-runner-build-light/versions/1
+concurrent: 4
+runners:
+  name: tacplus-dev build-light (cluster, ci, normal pool)
+  config: |
+    [[runners]]
+      executor = "kubernetes"
+      # uid 1000 has no home in the job image, so HOME would be / (#20): HOME is the emptyDir below instead.
+      environment = ["HOME=/tmp/home"]
+      [runners.kubernetes]
+        namespace = "ci"
+        image = "{{ .Values.pinned.job }}"
+        helper_image = "{{ .Values.pinned.helper }}"
+        service_account = "ci-job"
+        automount_service_account_token = false
+        privileged = false
+        allow_privilege_escalation = false
+        poll_timeout = 600
+        cpu_request = "50m"
+        cpu_limit = "1"
+        memory_request = "256Mi"
+        memory_limit = "2Gi"
+        cpu_request_overwrite_max_allowed = "1500m"
+        cpu_limit_overwrite_max_allowed = "1500m"
+        memory_request_overwrite_max_allowed = "4Gi"
+        memory_limit_overwrite_max_allowed = "4Gi"
+        helper_cpu_request = "50m"
+        helper_cpu_limit = "500m"
+        helper_memory_request = "64Mi"
+        helper_memory_limit = "256Mi"
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "home"
+          mount_path = "/tmp/home"
+        [runners.kubernetes.pod_labels]
+          "tacplus.dev/ci-runner" = "build-light"
+        [runners.kubernetes.node_selector]
+          "kubernetes.io/arch" = "arm64"
+        [runners.kubernetes.node_tolerations]
+          "kubernetes.io/arch=arm64" = "NoSchedule"
+        [runners.kubernetes.affinity]
+          [runners.kubernetes.affinity.node_affinity]
+            [runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution]
+              [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms]]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "spot"
+                  operator = "NotIn"
+                  values = ["true"]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "cloud.google.com/gke-spot"
+                  operator = "NotIn"
+                  values = ["true"]
+        [runners.kubernetes.pod_security_context]
+          [runners.kubernetes.pod_security_context.seccomp_profile]
+            type = "RuntimeDefault"
+        [runners.kubernetes.helper_container_security_context]
+          allow_privilege_escalation = false
+          [runners.kubernetes.helper_container_security_context.capabilities]
+            drop = ["ALL"]
