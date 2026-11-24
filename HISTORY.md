@@ -54,3 +54,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-24 looper issue ci/security.sh: fail only on findings in what ships; report CI tooling (bin/ binaries, the CI image), never blocking (looper#225) (#55)
 - 2026-11-24 looper issue STATE.md's Blocked on line is stale: it names closed #51 and looper#224 (landed; build-light now waits on cloud#100's apply and the re-pin) (#57)
 - 2026-11-24 looper issue pool.yaml counts a report job at 550m CPU, but report pods request 100m and use p90 139m: control's concurrent is undercounted while the scheduler over-commits; derive both from measured use (#53)
+- 2026-11-24 looper issue apply: rollout status fails on a deployment stuck at ProgressDeadlineExceeded from an earlier apply (build-light) (#58)
