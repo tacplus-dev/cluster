@@ -1,0 +1,27 @@
+# The spot pool, as the build runners' concurrency counts it (#41; tacplus-dev/looper#204): render.sh gives each
+# runner whose jobs are on the spot pool and whose file says `concurrent: pool` (build, build-report) as many jobs as
+# the pool holds at its max nodes, counted per node: a node's allocatable less its daemonsets, divided by the
+# runner's largest job's pod, its ceilings (*_overwrite_max_allowed: the job raising its requests to them, as
+# tacplus's gates do, 3500m / 12Gi) and its helper's requests. These pods are large beside a node, so the count is a
+# node's whole jobs times the nodes, never the pool's sum divided; and the largest kind's, so no pod waits past
+# poll_timeout for room that does not exist (the hub's decision on #41, 2026-11-23: one a node, max_nodes of them).
+# Each such runner counts the whole pool: a land's build preempts a report build (#42), so build-report's jobs never
+# hold build's room. A fixed concurrent beyond the room is refused.
+#
+#   machine_type  the pool's nodes: tacplus-dev/cloud's stacks/dev, cluster.spot (spot, autoscaling 0 to max_nodes,
+#   max_nodes     label spot=true, taint spot=true:NoSchedule); tests/spot_pool_test.sh holds both to cloud's main, so
+#                 a larger pool there turns this repository's gates red until it is here too
+#   allocatable   a node's, by GKE's reservations for a c4a-standard-4 (4 vCPU, 16 GiB): CPU 4000m - 6% of the first
+#                 core - 1% of the second - 0.5% of the third and fourth = 3920m; memory 16Gi - 25% of the first 4Gi
+#                 - 20% of the next 4Gi - 10% of the next 8Gi - 100Mi eviction = 13622Mi, taken as 13600Mi
+#   daemonsets    what each node runs before any job (GKE's kube-system DaemonSets), an estimate, unmeasured: bounded
+#                 from above by a gate's pod (3600m, 12416Mi) scheduling alone on a node (cloud e897810: "take a
+#                 whole c4a-standard-4 each"), which leaves at most 320m and 1184Mi (PROPOSALS.md)
+machine_type: c4a-standard-4
+max_nodes: 8
+allocatable:
+  cpu: 3920m
+  memory: 13600Mi
+daemonsets:
+  cpu: 300m
+  memory: 1Gi

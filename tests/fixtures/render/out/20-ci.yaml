@@ -529,7 +529,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner build-report (gitlab-runner/runners/build-report.yaml), tags arm64, build-report, concurrent 6: GitLab Runner's chart 0.95.0.
+# The runner build-report (gitlab-runner/runners/build-report.yaml), tags arm64, build-report, concurrent 8, the spot pool's room at its max nodes (gitlab-runner/spot-pool.yaml): GitLab Runner's chart 0.95.0.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -605,7 +605,7 @@ data:
       --working-directory=/home/gitlab-runner
   config.toml: |
     shutdown_timeout = 0
-    concurrent = 6
+    concurrent = 8
     check_interval = 3
     log_level = "info"
   config.template.toml: |
@@ -814,7 +814,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build-report
       annotations:
-        checksum/configmap: 233d8d61e9fa96657ae56ae8d92064faf9b00cb675fa82c63a552f380a0dc768
+        checksum/configmap: ee764904bbbdb358108ec42b6df9c03a8c3b013d55034039d824df43e818ba54
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build-report"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build-report/versions/1"
@@ -939,7 +939,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner build (gitlab-runner/runners/build.yaml), tags arm64, build, concurrent 6: GitLab Runner's chart 0.95.0.
+# The runner build (gitlab-runner/runners/build.yaml), tags arm64, build, concurrent 8, the spot pool's room at its max nodes (gitlab-runner/spot-pool.yaml): GitLab Runner's chart 0.95.0.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -1015,7 +1015,7 @@ data:
       --working-directory=/home/gitlab-runner
   config.toml: |
     shutdown_timeout = 0
-    concurrent = 6
+    concurrent = 8
     check_interval = 3
     log_level = "info"
   config.template.toml: |
@@ -1222,7 +1222,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build
       annotations:
-        checksum/configmap: 37bb30d35384ede0da8960d21382955f445befa1814c5c2bd2f4f3db05a2df57
+        checksum/configmap: 98668684566f1f50544b849985300800b05a8f677bd01b168acc41c7261eb726
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build/versions/1"

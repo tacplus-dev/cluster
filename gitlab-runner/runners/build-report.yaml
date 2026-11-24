@@ -7,7 +7,9 @@
 # a report build to end (~55 minutes for tacplus's: the hub's evidence of 2026-11-21, pipeline 3096869974). The
 # evicted job fails runner_system_failure, which tacplus-dev/build's CI file retries. Its tags are arm64 and
 # build-report, never build: GitLab gives a runner every job whose tags it holds, so holding build it would take a
-# land's jobs too, at the report builds' priority; and no other runner holds build-report (ci/policy.sh).
+# land's jobs too, at the report builds' priority; and no other runner holds build-report (ci/policy.sh). Its
+# concurrent is build's, the spot pool's room (gitlab-runner/spot-pool.yaml, #41), the whole pool's: a land's build
+# preempts its jobs, so they never hold build's room.
 #
 #   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
 #   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
@@ -15,7 +17,7 @@
 tacplus:
   tags: [arm64, build-report]
   token: projects/tacplus-dev/secrets/gitlab-runner-build-report/versions/1
-concurrent: 6
+concurrent: pool
 runners:
   name: tacplus-dev build-report (cluster, ci, spot pool, preemptible)
   config: |

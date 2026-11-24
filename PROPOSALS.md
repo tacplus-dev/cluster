@@ -23,6 +23,17 @@ the looper then marks it `promoted` or `declined` here with the date.
   less the `ci` and `deploymentproxy` pods), or tacplus-dev/cloud's hub audit reading the containers' requests
   (`kubernetes.io/container/cpu/request_cores`, `memory/request_bytes`), would replace both with what the nodes
   hold; a change of the pool (cloud's `dev` stack) is a change of `nodes` or `allocatable` there too.
+- **The spot pool's daemonsets, measured** (2026-11-23, #41): `gitlab-runner/spot-pool.yaml`'s `daemonsets` (300m,
+  1Gi a node) is an estimate, bounded from above only by a gate's pod (3600m, 12416Mi with its helper) scheduling
+  alone on a c4a-standard-4; `build`'s and `build-report`'s `concurrent` (8, one a node) holds while it stays under
+  320m and 1184Mi. The hub's `kubectl describe node -l spot=true` (Allocated resources, with no job on the node)
+  replaces it; a larger one leaves no room for a gate, and the render refuses it.
+- **The spot pool's max_nodes from one place** (2026-11-23, #41): `tests/spot_pool_test.sh` holds
+  `gitlab-runner/spot-pool.yaml`'s `machine_type` and `max_nodes` to tacplus-dev/cloud's stacks/dev on cloud's main,
+  so a change there turns this repository's gates red (every land's) until it is made here too. A change to the pool
+  in cloud is then best followed at once by this repository's issue for it; reading the value from a file both
+  repositories share (the hub's decision allowed either) would make it one change, at the price of a render that
+  reads another repository.
 - **The looper pool's daemonsets, measured** (2026-11-23, #47): `gitlab-runner/pool.yaml`'s `looper.daemonsets`
   (400m and 1Gi a node) is an estimate, the normal pool's whole reserve per node, which also holds kube-system's
   Deployments; `control`'s `concurrent` (33: 12 on the normal pool, 21 on 2 looper nodes) follows from it. Once a
@@ -37,15 +48,15 @@ the looper then marks it `promoted` or `declined` here with the date.
   after the hub re-pins the cluster to a commit with it. Until then `control` holds the 2 slots' room it no longer
   uses. Ordered: the re-pin first, or `.control` jobs find no runner.
 - **The report builds on the build-report runner** (2026-11-22, #42; tacplus-dev/looper#209):
-  `gitlab-runner/runners/build-report.yaml` (tags `arm64, build-report`, `concurrent` 6, the spot pool, its jobs at
+  `gitlab-runner/runners/build-report.yaml` (tags `arm64, build-report`, `concurrent` 8, the spot pool, its jobs at
   the PriorityClass `build-report`, which a land's build preempts) takes no job until tacplus-dev/cloud#93 registers
   it and writes `gitlab-runner-build-report` version 1, the hub re-pins the cluster to a commit with it (its `apply`
   fails at `runner-tokens` before cloud#93), and the hub sets tacplus-dev/build's `BUILD_REPORT_TAGS` to
   `arm64, build-report`, in that order, or report builds find no runner. Then #42's done-when, unverified here: with
   the spot pool full of report builds, a land's gates pod starts within minutes (`kubectl -n ci get events
-  --field-selector reason=Preempted`). Its `concurrent` 6 is `build`'s; #41, which counts `build`'s from the spot
-  pool's room, should count the two together, since they share the pool (the looper's report slots,
-  `BUILD_POOL_NODES - 1`, already bound the report builds' gates).
+  --field-selector reason=Preempted`). Its `concurrent` is `build`'s, the spot pool's room (#41: 8, one a node): each
+  counts the whole pool, by the hub's decision on #41, since a land's build preempts a report build (the looper's
+  report slots, `BUILD_POOL_NODES - 1`, already bound the report builds' gates).
 - **build's light jobs on the build-light runner** (2026-11-23, #51; tacplus-dev/cloud#100):
   `gitlab-runner/runners/build-light.yaml` (tags `arm64, build-light`, `concurrent` 4, the normal pool, kick's 50m /
   256Mi) takes no job until cloud#100 registers it and writes `gitlab-runner-build-light` version 1 (its `apply` fails

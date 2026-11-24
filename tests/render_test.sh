@@ -20,7 +20,9 @@
 # pool's taint, preferring the normal pool (#47); kick's and build-light's
 # concurrent their own (2, 4), control's the normal pool's room and the looper pool's at its max nodes
 # (gitlab-runner/pool.yaml), CPU or memory the bound, and runners the pool cannot hold, a second runner on its room,
-# one off the normal pool on it, or a quantity it cannot read, are refused;
+# or a quantity it cannot read, are refused; build's and build-report's each the spot pool's room at its max nodes by
+# their largest job, its ceilings (gitlab-runner/spot-pool.yaml, #41: one a node, 8), counted per node, and a spot
+# pool without room for one, a fixed concurrent beyond its room, or a quantity it cannot read, refused;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
 # is; deployments.yaml itself renders and passes ci/policy.sh, test-idp with its namespace and deploy Role only; a
 # deployment without an operator has no deploymentproxy Role and no operator binding; a removed entry renders
@@ -300,9 +302,9 @@ concurrent() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitla
 # (#47), counted at its max nodes less their daemonsets: 2 x (1930m - 400m) = 3060m and 2 x (6144Mi - 1024Mi) = 10240Mi
 # more, 4500m for 30 pods, 18496Mi for 32.
 [ "$(concurrent control "$ci")" = 30 ] && [ "$(concurrent infra "$ci")" = 4 ] && [ "$(concurrent kick "$ci")" = 2 ] &&
-  [ "$(concurrent build-light "$ci")" = 4 ] && [ "$(concurrent build "$ci") $(concurrent build-report "$ci")" = "6 6" ] &&
+  [ "$(concurrent build-light "$ci")" = 4 ] && [ "$(concurrent build "$ci") $(concurrent build-report "$ci")" = "8 8" ] &&
   grep -q '^# The runner control .*concurrent 30, the normal pool.s room and the looper pool.s' "$ci" &&
-  ok "control's concurrent is the normal and looper pools' room for its jobs (30), infra's, kick's, build-light's, build's and build-report's their own (4, 2, 4, 6, 6)" ||
+  ok "control's concurrent is the normal and looper pools' room for its jobs (30), infra's, kick's, build-light's, build's and build-report's their own (4, 2, 4, 8, 8)" ||
   fail "concurrent: control [$(concurrent control "$ci")], infra [$(concurrent infra "$ci")], kick [$(concurrent kick "$ci")], build-light [$(concurrent build-light "$ci")], build [$(concurrent build "$ci")], build-report [$(concurrent build-report "$ci")]"
 # pooled NAME YQ WANT: control's concurrent with gitlab-runner/pool.yaml changed by YQ is WANT, or render.sh refuses it
 # saying WANT.
@@ -349,7 +351,44 @@ pool_runner() {
 }
 pool_runner "two runners on the pool's room" '.' '.concurrent = "pool"' "runner infra: concurrent pool, as control: one runner only"
 pool_runner "fixed runners overfilling the pool" '.concurrent = 8' '.concurrent = 9' "the normal pool has no room for its runners' jobs"
-refused_runner "the pool's room off the normal pool" '.concurrent = "pool"' "runner build: concurrent pool, but its jobs are not on the normal pool"
+
+# The spot pool's room (#41): build's and build-report's concurrent, each, is gitlab-runner/spot-pool.yaml's max nodes
+# times the jobs of its largest kind a node holds once its daemonsets are counted: their ceilings (3500m, 12Gi) and
+# the helper's requests (100m, 128Mi), 3600m and 12416Mi, in (3920m - 300m) and (13600Mi - 1Gi) = 1 a node, 8 on 8. Per
+# node, not the pool's sum: these pods are large beside a node. Each counts the whole pool: a land's build preempts a
+# report build (#42), so the two never wait on each other's room.
+[ "$(concurrent build "$ci") $(concurrent build-report "$ci")" = "8 8" ] &&
+  grep -q '^# The runner build .*concurrent 8, the spot pool.s room at its max nodes (gitlab-runner/spot-pool.yaml)' "$ci" &&
+  grep -q '^# The runner build-report .*concurrent 8, the spot pool.s room at its max nodes' "$ci" &&
+  ok "build's and build-report's concurrent is the spot pool's room for their largest jobs, one a node (8, 8)" ||
+  fail "concurrent: build [$(concurrent build "$ci")], build-report [$(concurrent build-report "$ci")]"
+# spotted NAME YQ WANT: build's concurrent with gitlab-runner/spot-pool.yaml changed by YQ is WANT, or render.sh
+# refuses it saying WANT.
+spotted() {
+  rm -rf "$work/bad" && yq "$2" "$here/gitlab-runner/spot-pool.yaml" > "$work/spot-pool.yaml"
+  if SPOT_POOL=$work/spot-pool.yaml "$here/render.sh" "$fixtures/deployments.yaml" "$work/bad" > "$work/log" 2>&1; then
+    [ "$(concurrent build "$work/bad/20-ci.yaml")" = "$3" ] && ok "spot pool: $1: build's concurrent is $3" ||
+      fail "spot pool: $1: build's concurrent is [$(concurrent build "$work/bad/20-ci.yaml")], not $3"
+  else
+    grep -q -- "$3" "$work/log" && ok "spot pool: refused: $1" || fail "spot pool: $1: $(cat "$work/log")"
+  fi
+}
+spotted "five nodes" '.max_nodes = 5' 5
+spotted "larger nodes, CPU the bound: 11700m for 3, 63Gi for 5" '.allocatable.cpu = "12" | .allocatable.memory = "64Gi"' 24
+spotted "larger nodes, memory the bound: 11700m for 3, 25Gi for 2" '.allocatable.cpu = "12" | .allocatable.memory = "26Gi"' 16
+spotted "more nodes than GitLab's count" '.max_nodes = 120' 99
+spotted "daemonsets leaving no room for one job" '.daemonsets.cpu = "400m"' "the spot pool's nodes have no room for one job of build-report (3600m, 12416Mi)"
+spotted "no nodes" '.max_nodes = 0' "gitlab-runner/spot-pool.yaml: max_nodes \[0\] is not a number of nodes"
+spotted "a quantity it cannot read" '.daemonsets.cpu = "0.3"' "gitlab-runner/spot-pool.yaml: daemonsets.cpu \[0.3\] is not"
+# A runner without ceilings counts its default requests (1100m, 4224Mi): 3 a node by CPU, 2 by memory, 16; one with a
+# fixed concurrent is held to the room.
+rm -rf "$work/runners" "$work/bad" && cp -R "$here/gitlab-runner/runners" "$work/runners"
+yq -i '.runners.config |= sub("\\n *(cpu|memory)_request_overwrite_max_allowed = \"[^\"]*\""; "")' "$work/runners/build.yaml"
+RUNNERS=$work/runners "$here/render.sh" "$fixtures/deployments.yaml" "$work/bad" > "$work/log" 2>&1 &&
+  [ "$(concurrent build "$work/bad/20-ci.yaml") $(concurrent build-report "$work/bad/20-ci.yaml")" = "16 8" ] &&
+  ok "spot pool: build without ceilings: its defaults count, 16" ||
+  fail "spot pool: build without ceilings: [$(concurrent build "$work/bad/20-ci.yaml" 2>/dev/null)] $(cat "$work/log")"
+refused_runner "a fixed concurrent beyond the spot pool's room" '.concurrent = 9' "runner build: concurrent 9, but the spot pool has room for 8 of its jobs"
 refused_runner "concurrent neither a number nor pool" '.concurrent = "many"' "concurrent is not 1 to 99, nor pool"
 
 # refused NAME YAML WANT: render.sh refuses deployments.yaml YAML, saying WANT, and writes nothing.

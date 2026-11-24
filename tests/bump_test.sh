@@ -23,6 +23,10 @@ line=$(yq '.line' "$here/deploymentproxy/pin.yaml")
 image_name=$(yq '.image | sub(":.*", "")' "$here/deploymentproxy/pin.yaml")
 registry=${image_name%%/*} path=${image_name#*/}
 sha() { sha256sum "$1" | cut -d' ' -f1; }
+# tacplus-dev/cloud's stacks/dev, for the tree's tests/spot_pool_test.sh: its spot pool, gitlab-runner/spot-pool.yaml's.
+mkdir -p "$RSTUB/raw.githubusercontent.com/tacplus-dev/cloud/main/stacks/dev"
+printf '    spot   = { machine_type = "%s", max_nodes = %s }\n' "$(yq '.machine_type' "$here/gitlab-runner/spot-pool.yaml")" \
+  "$(yq '.max_nodes' "$here/gitlab-runner/spot-pool.yaml")" > "$RSTUB/raw.githubusercontent.com/tacplus-dev/cloud/main/stacks/dev/main.tf"
 
 # The tree: this one, without its render or its tools, and without this test (its ci/checks.sh would run it again).
 tree() {

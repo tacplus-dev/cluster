@@ -271,7 +271,15 @@ The chart is pinned by the SHA-256 of its archive, and the runner, helper and de
 | `kick` | `arm64`, `kick` (the looper's kicker and plan, its `.control` jobs; #36) | the normal pool only, as `infra` | CPU 50m / 1, memory 256Mi / 2Gi (the looper's `.control` requests, #39) | CPU 1500m, memory 4Gi |
 | `build-light` | `arm64`, `build-light` (tacplus-dev/build's `pending`, `plan`, `report-pass` and `report-fail`: `looper-build` in the looper image, seconds to a minute; #51), never `build`, which would bring the gates and security jobs here | the normal pool only, as `infra` | as `kick` | as `kick` |
 
-**How many jobs at once** (`concurrent`): `build` 6, `build-report` 6, `infra` 4, `kick` 2 and `build-light` 4, fixed; `control` as many as the normal pool has
+**How many jobs at once** (`concurrent`): `infra` 4, `kick` 2 and `build-light` 4, fixed; `build` and `build-report` each as many as
+the spot pool holds of its largest job (`concurrent: pool`, #41), which `render.sh` counts from
+`gitlab-runner/spot-pool.yaml` (its machine type and max nodes, a node's allocatable less its daemonsets) per node, by
+the job's ceilings (a tacplus gate raises its requests to them, 3500m / 12Gi) and the helper's requests: one a node,
+8 today, so no pod waits past `poll_timeout` for room that does not exist (the hub's decision on #41, 2026-11-23;
+counting the defaults, 3 a node, would over-commit whole-node gates). Each counts the whole pool, since a land's build
+preempts a report build (#42). `tests/spot_pool_test.sh` holds the machine type and `max_nodes` to tacplus-dev/cloud's
+stacks/dev on cloud's main, so a larger pool there turns this repository's gates red until `spot-pool.yaml` follows,
+and the count with it. `control` as many as the normal pool has
 room for (`concurrent: pool`, #36), which `render.sh` counts from `gitlab-runner/pool.yaml` (its nodes, a node's
 allocatable, a reserve for kube-system and the deployments' pods) less every runner manager, deploymentproxy and
 `infra`'s, `kick`'s and `build-light`'s jobs at their full concurrent, by each job pod's default requests (job and

@@ -5,6 +5,8 @@
 # docs/executors/kubernetes, Set seccomp and AppArmor profiles), and every container of the pod runs as uid 1000.
 # A job may raise its requests and limits (KUBERNETES_CPU_REQUEST and the rest) up to the *_overwrite_max_allowed
 # ceilings, which fit a c4a-standard-4 (4 CPUs, 16 GB); it may not move its pod, its namespace or its account.
+# Its concurrent is the spot pool's room for jobs at those ceilings, one a node at its max nodes (render.sh,
+# gitlab-runner/spot-pool.yaml; #41).
 #
 #   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
 #   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
@@ -12,7 +14,7 @@
 tacplus:
   tags: [arm64, build]
   token: projects/tacplus-dev/secrets/gitlab-runner-build/versions/1
-concurrent: 6
+concurrent: pool
 runners:
   name: tacplus-dev build (cluster, ci, spot pool)
   config: |
