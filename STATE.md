@@ -41,12 +41,15 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by th
   `tacplus.dev/runner-protected`), the normal pool as control, no token in the pod; the policy admits those three tags
   to `infra` alone, refuses it any other tag and an `infra` not protected) and `kick` (#36: `arm64, kick`, the looper's
   kicker and plan on slots of their own, `concurrent` 2, the normal pool, its jobs at the looper's `.control` 50m/256Mi,
-  #39; the policy keeps `kick` its tag alone and it on `arm64, kick` only); every runner manager at the PriorityClass
+  #39; the policy keeps `kick` its tag alone and it on `arm64, kick` only) and `build-light` (#51, tacplus-dev/cloud#100:
+  `arm64, build-light`, tacplus-dev/build's `pending`, `plan` and reports on the normal pool, `concurrent` 4, kick's
+  50m/256Mi; the policy keeps `build-light` its tag alone and it on `arm64, build-light` only, never `build`); every runner manager at the PriorityClass
   `ci-runner-manager`, above the jobs and preempting them (#39: `kick`'s manager stayed Pending while `control`'s old
   manager's jobs ran beside the new one's after an apply), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
-  `gitlab-runner/pool.yaml`, 12 beside `kick`'s 2, CPU the bound, 90m left since `build-report`'s manager (#42)) plus
+  `gitlab-runner/pool.yaml`, 9 beside `kick`'s 2 and `build-light`'s 4, CPU the bound, 90m left since `build-light`'s
+  manager and jobs (#51)) plus
   the looper pool's at its max nodes (#47, tacplus-dev/cloud#95: 2 c4a-standard-2 from 0, less an estimated 400m/1Gi
-  of daemonsets a node, PROPOSALS.md): 33; `control`'s jobs alone tolerate `looper=true:NoSchedule`, preferring the
+  of daemonsets a node, PROPOSALS.md): 30; `control`'s jobs alone tolerate `looper=true:NoSchedule`, preferring the
   normal pool, and the policy refuses the taint's toleration anywhere else; its default CPU request a report's 100m, looper#165; the pool's reserve, kube-system and the
   deployments' pods, CPU from looper#165's evidence and memory an estimate, not measured on the nodes, PROPOSALS.md), the
   render refusing runners the pool cannot hold; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
@@ -86,7 +89,11 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   a commit with it fails at `runner-tokens`), the hub re-pins to a commit with it, and the hub sets tacplus-dev/build's
   `BUILD_REPORT_TAGS` to `arm64, build-report`;
   #42's done-when (a land's gates pod starting within minutes on a spot pool full of report builds) is unverified.
-  #47 (`control` 33, its overflow on the looper pool) reaches the cluster when the hub re-pins to a commit with it, once
+  `build-light` (#51) takes no job until cloud's `dev` and `gitlab` stacks apply tacplus-dev/cloud#100 (until
+  `gitlab-runner-build-light` version 1 is readable, `apply` of a commit with it fails at `runner-tokens`), the hub
+  re-pins to a commit with it, and tacplus-dev/looper#224 tags build's light jobs `arm64, build-light` (and cloud
+  bumps its copy); #51's done-when (`gitlab-runner-build-light` running in `ci`, its runner online) is unverified.
+  #47 (`control` 33, 30 since #51, its overflow on the looper pool) reaches the cluster when the hub re-pins to a commit with it, once
   cloud's `dev` has applied the looper pool (tacplus-dev/cloud#95); its done-when (a looper node up in a busy hour,
   back to 0 after) is unverified. #49 (`control`'s jobs at `control-job`, preempted by `infra`'s and `kick`'s) reaches
   the cluster when the hub re-pins to a commit with it; its done-when (a cloud pipeline's jobs starting within a minute
@@ -140,6 +147,9 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   the apply of cloud's stacks (the `build-report` runner's registration and its token secret, landed in cloud), then
   the hub's re-pin to 8ee7a8e or later and `BUILD_REPORT_TAGS` set to `arm64, build-report`, for report builds a
   land's build preempts (landed as 8ee7a8e);
+  the apply of cloud's stacks with tacplus-dev/cloud#100 (the `build-light` runner's registration and token), then the
+  hub's re-pin to a commit with #51, then tacplus-dev/looper#224 (build's `pending`, `plan` and reports tagged
+  `arm64, build-light`), for those jobs off the build runner's slots (#51);
   tacplus-dev/tacplus#315 (rootless BuildKit in the build image), for unpausing the in-cluster `build`
   runner 58541760 only; tacplus-dev/looper#190 (looper-scan leaving vendored paths out of Trivy's config scan), for
   a green nightly (#33). Nothing else in this repository waits.
