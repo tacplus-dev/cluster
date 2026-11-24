@@ -1,9 +1,10 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-23 by the looper (#50).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by the looper (#54, #52).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
-  `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line).
+  `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line); `build.lock` and `gitlab-runner/pin.yaml`'s
+  `job:` pin its rebuild 20261123-57a6521 by that dated tag, never the moving `build:2.6` (#54).
 - **Target (#7):** tacplus-dev/cloud's cluster `dev` (us-central1-a) in the project `tacplus-dev` (seabeam.net), as
   `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`; seatrials' deploy account and the runners' token
   secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1; `gitlab-runner-infra`, #25, made and
@@ -21,10 +22,11 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-23 by th
   deletion job (#2: only in a deletion pipeline, run on main from the web form or the API with `DELETE_DEPLOYMENT` and `DELETE_CONFIRM` both the deployment's name; manual, protected,
   named for what it destroys), `drift` (nightly, files an issue, never applies; #19: mints its tacplus-reader token every
   night through tacplus-ci's KMS key `tacplus-reader`, saying so, and nothing here names jody1-328023's key). CI in the cluster (#6):
-  `out/20-ci.yaml`, the namespace `ci` with GitLab Runner's chart 0.94.3 (runner 19.5.3, #11; chart by archive digest,
+  `out/20-ci.yaml`, the namespace `ci` with GitLab Runner's chart 0.95.0 (runner 19.6.0, #52; chart by archive digest,
   images by digest, `gitlab-runner/`, rendered by `helm template`, helm v4.3.1 pinned in `ci/tools.sh`); the runner
-  and helper images our own build since #21 (`ci/runner-images.sh`: 19.5.3 at `33227fd4` with go1.27.4, x/net v0.62.0,
-  go-jose v4.1.6 and compress v1.20.2, the runner binary SHA-256-identical to tacplus-dev/cloud's; on `alpine:3.24`,
+  and helper images our own build since #21 (`ci/runner-images.sh`: 19.6.0 at `9e4c6b50` with go1.27.4 and otel v1.47.0,
+  each fixed module only raised, to x/net v0.62.0, go-jose v4.1.6 and compress v1.20.2 at least (19.6.0's own
+  compress v1.20.3 stays), the runner binary SHA-256-identical to tacplus-dev/cloud's; on `alpine:3.24`,
   no docker-machine; reproducible, refused unless the pinned digest; the job `runner-images` pushes them on main to
   cloud's `ci-images`, the security job scans its OCI layouts, the gates build them when their recipe changes) as five
   runners, `build` (tags `arm64, build`, jobs on the spot pool only), `build-report` (#42, tacplus-dev/looper#209:
@@ -111,8 +113,8 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   only, no release of either with the fix (PROPOSALS.md). Every Go tool `ci/tools.sh` builds, Trivy too since #21,
   is built with go1.27.4. deploymentproxy
   0.2.2's image (#22): only GO-2026-6859 (Trivy's CVE-2026-97054, its go1.27.3), with no severity, so not failing the
-  policy (2026-11-15). The CI image `build:2.6` (its rebuild 20261123-ef62327 since #48, also `gitlab-runner/pin.yaml`'s `job:`, #12): only
-  GO-2026-5932 in its gh and docker-buildx, in its entry; 2.6.13's 159 HIGH Debian findings with a fix (krb5,
+  policy (2026-11-15). The CI image `build:2.6` (its rebuild 20261123-57a6521 since #54, by its dated tag, also `gitlab-runner/pin.yaml`'s `job:`, #12): only
+  GO-2026-5932 in its gh and docker-buildx, in its entry, and no HIGH or CRITICAL with a fixed version (Trivy, linux/arm64, 2026-11-23); 2.6.13's 159 HIGH Debian findings with a fix (krb5,
   linux-libc-dev, ...) and docker-buildx's containerd CVE-2026-95839 (its entry gone) went with the move to that rebuild (#48); #15's CVE-2026-78661 entry went when its gh got x/net v0.62.0 (tacplus-dev/tacplus#350, #32); 2.6.10's six linux-libc-dev CVEs went with the move to 2.6.12 (#24), and #16's zlib1g
   exceptions with 2.6.10, which had the fix. #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
   Trivy's config checks (looper-scan's nightly, on the tree): KSV-0109 accepted until 2026-12-31 on GitLab Runner chart
