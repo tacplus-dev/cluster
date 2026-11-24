@@ -9,7 +9,8 @@
 #                                   deployment's own quota merged into its config
 #   OUT/10-deployment-<name>.yaml   per entry of DEPLOYMENTS: the namespace tac-<name> labelled
 #                                   tacplus.dev/deployment=<name>, deploymentproxy's per-deployment Role for its
-#                                   operator account (config/deployment-namespace) unless it has none, and the
+#                                   operator account (config/deployment-namespace) and the operator's own Role
+#                                   and RoleBinding (deployment-operator, #59) unless it has none, and the
 #                                   deploy account's Role and RoleBinding (fleet-deploy), in tac-<name> only
 #   OUT/20-ci.yaml                  CI in the cluster (README, CI in the cluster): the namespace ci, the jobs' service
 #                                   account ci-job (no token), the runner managers' PriorityClass ci-runner-manager
@@ -276,7 +277,7 @@ for ((i = 0; i < n; i++)); do
   ns=tac-$name
   {
     if [ -n "$operator" ]; then
-      echo "# The deployment $name (deployments.yaml): its namespace, deploymentproxy's Role for its operator, and its"
+      echo "# The deployment $name (deployments.yaml): its namespace, its operator's Roles (deploymentproxy's, its own) and its"
     else
       echo "# The deployment $name (deployments.yaml), without an operator: its namespace and its"
     fi
@@ -296,6 +297,60 @@ EOF
       # As config/deployment-namespace/operator.yaml says: NAMESPACE=tac-<deployment> envsubst '\$NAMESPACE'.
       sed 's/\${NAMESPACE}/'"$ns"'/g' "$release/config/deployment-namespace/operator.yaml" |
         OPERATOR=$operator yq '(select(.kind == "RoleBinding") | .subjects[0].name) = strenv(OPERATOR)'
+      cat <<EOF
+---
+# The operator's own rights in $ns (#59): with \`deployment\` set, the operator's chart renders no Role and leaves
+# them to this pipeline. Its chart's Role (operator helm/templates/role.yaml): the fleet's chart's objects and helm's
+# release state, the Roles that chart ships, pods read and deleted (an old StatefulSet revision's), leader election
+# and events. Each grant is within fleet-deploy (ci/policy.sh). In the tenant namespaces deploymentproxy binds it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployment-operator
+  namespace: $ns
+rules:
+  - apiGroups: [""]
+    resources: [services, serviceaccounts, configmaps, secrets, persistentvolumeclaims]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [batch]
+    resources: [cronjobs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch, delete]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployment-operator
+  namespace: $ns
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deployment-operator
+subjects:
+  - kind: ServiceAccount
+    name: $operator
+    namespace: $ns
+EOF
     fi
     cat <<EOF
 ---
@@ -345,6 +400,11 @@ rules:
   - apiGroups: [coordination.k8s.io]
     resources: [leases]
     verbs: [get, list, watch, create, update, patch, delete]
+  # Its operator's TenantNamespaces, read only (#59): which one deploymentproxy has not made Ready. Only the
+  # operator's account creates them (deploymentproxy's Role).
+  - apiGroups: [deploymentproxy.tacplus.dev]
+    resources: [tenantnamespaces]
+    verbs: [get, list, watch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

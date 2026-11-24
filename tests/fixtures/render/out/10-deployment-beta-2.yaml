@@ -1,4 +1,4 @@
-# The deployment beta-2 (deployments.yaml): its namespace, deploymentproxy's Role for its operator, and its
+# The deployment beta-2 (deployments.yaml): its namespace, its operator's Roles (deploymentproxy's, its own) and its
 # deploy account's Role, in tac-beta-2 only. Rendered by render.sh; never edited.
 apiVersion: v1
 kind: Namespace
@@ -31,6 +31,58 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: deploymentproxy-tenantnamespaces
+subjects:
+  - kind: ServiceAccount
+    name: beta-operator
+    namespace: tac-beta-2
+---
+# The operator's own rights in tac-beta-2 (#59): with `deployment` set, the operator's chart renders no Role and leaves
+# them to this pipeline. Its chart's Role (operator helm/templates/role.yaml): the fleet's chart's objects and helm's
+# release state, the Roles that chart ships, pods read and deleted (an old StatefulSet revision's), leader election
+# and events. Each grant is within fleet-deploy (ci/policy.sh). In the tenant namespaces deploymentproxy binds it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployment-operator
+  namespace: tac-beta-2
+rules:
+  - apiGroups: [""]
+    resources: [services, serviceaccounts, configmaps, secrets, persistentvolumeclaims]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [batch]
+    resources: [cronjobs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch, delete]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployment-operator
+  namespace: tac-beta-2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deployment-operator
 subjects:
   - kind: ServiceAccount
     name: beta-operator
@@ -82,6 +134,11 @@ rules:
   - apiGroups: [coordination.k8s.io]
     resources: [leases]
     verbs: [get, list, watch, create, update, patch, delete]
+  # Its operator's TenantNamespaces, read only (#59): which one deploymentproxy has not made Ready. Only the
+  # operator's account creates them (deploymentproxy's Role).
+  - apiGroups: [deploymentproxy.tacplus.dev]
+    resources: [tenantnamespaces]
+    verbs: [get, list, watch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

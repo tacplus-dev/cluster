@@ -7,7 +7,9 @@
 # clusterroles, CRDs) in a Role; escalate, bind, impersonate; non-resource URLs; a ClusterRole or
 # ClusterRoleBinding; a RoleBinding to a ClusterRole or to another namespace's service account; a Role in another
 # namespace; an unlabelled namespace; no deploy Role or binding; deploymentproxy's Role without its operator binding
-# or the binding without the Role (a deployment without an operator has neither, and keeps the rules). In ci's file: privileged jobs or runners, a host path, the Docker socket, an
+# or the binding without the Role; the operator's Role deployment-operator without its binding, the binding without
+# it, either without deploymentproxy's Role, or granting what fleet-deploy does not; fleet-deploy granting more than
+# get, list and watch on TenantNamespaces (#59) (a deployment without an operator has none of them, and keeps the rules). In ci's file: privileged jobs or runners, a host path, the Docker socket, an
 # added capability, host networking, an image by tag only; build jobs off the spot pool or as root, control jobs
 # tolerating spot, landing on a spot node, Unconfined or escalating privilege; any other runner's jobs tolerating the
 # looper taint, control's selecting a looper node or not preferring the normal pool, a runner manager or deploymentproxy
@@ -74,12 +76,19 @@ breach "another namespace" '(select(.kind == "Namespace") | .metadata.name) = "k
 dp='.metadata.name == "deploymentproxy-tenantnamespaces"'
 breach "deploymentproxy's Role without its binding" "del(select(.kind == \"RoleBinding\" and $dp))" "the Role deploymentproxy-tenantnamespaces without its RoleBinding"
 breach "the operator's binding without deploymentproxy's Role" "del(select(.kind == \"Role\" and $dp))" "the RoleBinding deploymentproxy-tenantnamespaces without its Role"
+op='.metadata.name == "deployment-operator"'
+breach "the operator's Role without its binding" "del(select(.kind == \"RoleBinding\" and $op))" "the Role deployment-operator without its RoleBinding"
+breach "the operator's Role binding without its Role" "del(select(.kind == \"Role\" and $op))" "the RoleBinding deployment-operator without its Role"
+breach "the operator's Role without deploymentproxy's" "del(select($dp))" "the Role deployment-operator, but no deploymentproxy Role"
+breach "the operator's Role beyond fleet-deploy" "(select(.kind == \"Role\" and $op) | .rules) += [{\"apiGroups\": [\"\"], \"resources\": [\"podtemplates\"], \"verbs\": [\"get\"]}]" "the Role deployment-operator grants /podtemplates get, which fleet-deploy does not"
+breach "the deploy account writing TenantNamespaces" "$role += [{\"apiGroups\": [\"deploymentproxy.tacplus.dev\"], \"resources\": [\"tenantnamespaces\"], \"verbs\": [\"create\"]}]" "the Role fleet-deploy grants create on deploymentproxy.tacplus.dev/tenantnamespaces"
 breach "no deploy Role" 'del(select(.kind == "Role" and .metadata.name == "fleet-deploy"))' "no Role fleet-deploy"
 breach "no deploy binding" 'del(select(.kind == "RoleBinding" and .metadata.name == "fleet-deploy"))' "no RoleBinding fleet-deploy"
 
-# A deployment without an operator: neither deploymentproxy's Role nor its binding keeps the rules.
+# A deployment without an operator: neither deploymentproxy's Role nor the operator's, nor their bindings, keeps the
+# rules.
 rm -rf "$work/bad" && cp -R "$work/good" "$work/bad"
-yq -i "del(select($dp))" "$work/bad/10-deployment-alpha.yaml"
+yq -i "del(select($dp or $op))" "$work/bad/10-deployment-alpha.yaml"
 "$here/ci/policy.sh" "$work/bad" > "$work/log" 2>&1 && ok "a deployment without an operator keeps the rules" ||
   fail "a deployment without an operator: $(cat "$work/log")"
 

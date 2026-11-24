@@ -25,6 +25,8 @@
 # pool without room for one, a fixed concurrent beyond its room, or a quantity it cannot read, refused;
 # a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
 # is; deployments.yaml itself renders and passes ci/policy.sh, test-idp with its namespace and deploy Role only; a
+# deployment with an operator has the operator's Role in its namespace, bound to its operator account, each grant
+# within fleet-deploy, and the deploy account reads (only reads) its TenantNamespaces (#59); a
 # deployment without an operator has no deploymentproxy Role and no operator binding; a removed entry renders
 # nothing for it; a release
 # file or chart file that does not match its checksum, every malformed entry, and a runner file that names its token
@@ -245,6 +247,32 @@ fi
 ns=$(yq 'select(.kind == "Namespace") | .metadata.labels."tacplus.dev/deployment"' "$work/real/10-deployment-seatrials.yaml" 2>/dev/null)
 [ "$ns" = seatrials ] && ok "seatrials: tac-seatrials labelled tacplus.dev/deployment=seatrials" || fail "seatrials' namespace label is [$ns]"
 objects() { yq -N '.kind + " " + (.metadata.namespace // "") + " " + .metadata.name' "$1" 2>/dev/null | tr '\n' ','; }
+# #59: a deployment with an operator has the operator's own Role in tac-<name> (the operator's chart renders none
+# with `deployment` set), bound to its operator account there only; the deploy account reads its TenantNamespaces.
+[ "$(objects "$work/real/10-deployment-seatrials.yaml")" = "Namespace  tac-seatrials,Role tac-seatrials deploymentproxy-tenantnamespaces,RoleBinding tac-seatrials deploymentproxy-tenantnamespaces,Role tac-seatrials deployment-operator,RoleBinding tac-seatrials deployment-operator,Role tac-seatrials fleet-deploy,RoleBinding tac-seatrials fleet-deploy," ] &&
+  [ "$(yq -o=json -I=0 'select(.kind == "RoleBinding" and .metadata.name == "deployment-operator") | .subjects' "$work/real/10-deployment-seatrials.yaml")" = '[{"kind":"ServiceAccount","name":"operator","namespace":"tac-seatrials"}]' ] &&
+  ok "seatrials: the operator's Role, bound to tac-seatrials/operator" ||
+  fail "seatrials renders: $(objects "$work/real/10-deployment-seatrials.yaml")"
+# grants FILE ROLE: each group/resource/verb the Role ROLE grants in FILE, one per line, sorted.
+grants() { R=$2 yq -N 'select(.kind == "Role" and .metadata.name == strenv(R)) | .rules[] | .apiGroups[] as $g | .resources[] as $r | .verbs[] as $v | $g + "/" + $r + " " + $v' "$1" | sort -u; }
+for d in alpha beta-2; do
+  f=$work/out/10-deployment-$d.yaml
+  op=$(yq ".deployments[] | select(.name == \"$d\") | .operator" "$fixtures/deployments.yaml")
+  [ "$(yq ea -o=json -I=0 '[select(.kind == "RoleBinding" and .metadata.name == "deployment-operator")] | .[] | [.roleRef.kind, .roleRef.name, .subjects]' "$f")" = "[\"Role\",\"deployment-operator\",[{\"kind\":\"ServiceAccount\",\"name\":\"$op\",\"namespace\":\"tac-$d\"}]]" ] &&
+    ok "$d: the operator's Role bound to tac-$d/$op" || fail "$d: the operator's binding: $(yq 'select(.metadata.name == "deployment-operator")' "$f")"
+  # The chart's Role (operator helm/templates/role.yaml): the fleet's chart's objects, helm's Secrets, its Roles,
+  # pods read and deleted, leases, events written; nothing the deploy account does not hold itself.
+  [ "$(grants "$f" deployment-operator | wc -l)" -gt 0 ] &&
+    [ -z "$(comm -23 <(grants "$f" deployment-operator) <(grants "$f" fleet-deploy))" ] &&
+    grants "$f" deployment-operator | grep -qx 'rbac.authorization.k8s.io/roles create' &&
+    grants "$f" deployment-operator | grep -qx '/secrets update' &&
+    ! grants "$f" deployment-operator | grep -q tenantnamespaces &&
+    ok "$d: the operator's Role is within fleet-deploy" ||
+    fail "$d: the operator's Role grants beyond fleet-deploy: $(comm -23 <(grants "$f" deployment-operator) <(grants "$f" fleet-deploy) | tr '\n' ',')"
+  [ "$(grants "$f" fleet-deploy | grep tenantnamespaces | tr '\n' ',')" = "deploymentproxy.tacplus.dev/tenantnamespaces get,deploymentproxy.tacplus.dev/tenantnamespaces list,deploymentproxy.tacplus.dev/tenantnamespaces watch," ] &&
+    ok "$d: the deploy account reads its TenantNamespaces, and only reads them" ||
+    fail "$d: fleet-deploy on tenantnamespaces: $(grants "$f" fleet-deploy | grep tenantnamespaces | tr '\n' ',')"
+done
 [ "$(objects "$work/real/10-deployment-test-idp.yaml")" = "Namespace  tac-test-idp,Role tac-test-idp fleet-deploy,RoleBinding tac-test-idp fleet-deploy," ] &&
   [ "$(yq 'select(.kind == "RoleBinding") | .subjects[0].name' "$work/real/10-deployment-test-idp.yaml")" = test-idp-deploy@tacplus-dev.iam.gserviceaccount.com ] &&
   ok "test-idp: its namespace and the deploy Role only, bound to test-idp-deploy" ||
@@ -255,7 +283,7 @@ objects() { yq -N '.kind + " " + (.metadata.namespace // "") + " " + .metadata.n
 if "$here/render.sh" "$fixtures/no-operator.yaml" "$work/no-operator" > "$work/log" 2>&1; then
   g=$work/no-operator/10-deployment-gamma.yaml
   [ "$(objects "$g")" = "Namespace  tac-gamma,Role tac-gamma fleet-deploy,RoleBinding tac-gamma fleet-deploy," ] &&
-    ! grep -q -e tenantnamespaces -e ServiceAccount "$g" &&
+    ! grep -q -e ServiceAccount -e deployment-operator "$g" &&
     diff <(yq 'select(.kind != "Namespace")' "$g") \
          <(yq 'select(.metadata.name == "fleet-deploy")' "$fixtures/out/10-deployment-alpha.yaml" | sed 's/tac-alpha/tac-gamma/; s/alpha-deploy/gamma-deploy/') >/dev/null &&
     ok "no operator: the namespace and the deploy Role only" || fail "no operator renders: $(objects "$g")"

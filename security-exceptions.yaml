@@ -162,7 +162,7 @@ exceptions:
     expires: 2026-12-31
     where: "tests/fixtures/render/out/20-ci.yaml"
   - id: KSV-0056
-    reason: "Trivy's manage Kubernetes networking, by design on each deployment's Role fleet-deploy in its own tac-<name> namespace (render.sh, out/10-deployment-<name>.yaml): services, networkpolicies; endpoints read only: what the fleet's helm release ships there. In the render (its fixture) only."
+    reason: "Trivy's manage Kubernetes networking, by design on each deployment's Role fleet-deploy in its own tac-<name> namespace (render.sh, out/10-deployment-<name>.yaml): services, networkpolicies; endpoints read only: what the fleet's helm release ships there; and on its operator's Role deployment-operator there (#59), services and networkpolicies, the operator's chart's own, within fleet-deploy. In the render (its fixture) only."
     decided_by: "jodydadescott (tacplus-dev/cluster#28, 2026-11-17); scoped: #45"
     expires: 2026-12-31
     where: "tests/fixtures/render/out/10-deployment-*.yaml"

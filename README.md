@@ -17,7 +17,10 @@ by Jody 2026-11-02).
   - the namespace `tac-<deployment>`, labelled `tacplus.dev/deployment=<deployment>`;
   - deploymentproxy's per-deployment Role, if the deployment has an operator;
   - the fleet deploy account's namespace-scoped Role and RoleBinding;
-  - the fleet `operator` service account's binding, if it has one (`operator` is optional: test-idp has none).
+  - the fleet `operator` service account's binding, if it has one (`operator` is optional: test-idp has none);
+  - the operator's own Role and RoleBinding (`deployment-operator`, #59), if it has one: with `deployment` set the
+    operator's chart renders none and leaves them to this pipeline. Its chart's Role (`helm/templates/role.yaml`),
+    each grant within `fleet-deploy`, in `tac-<deployment>` only (deploymentproxy binds it in the tenant namespaces).
 - **CI in the cluster** (the namespace `ci`): GitLab Runner with the Kubernetes executor, one runner for builds
   (spot pool), one, `build-report`, for report builds a land's build preempts (spot pool, #42), one for control work (normal pool, its overflow on the looper pool, #47), one, `kick`, for the looper's kicker and plan alone (normal pool,
   #36), one, `build-light`, for tacplus-dev/build's pending, plan and report jobs (normal pool, #51) and one, `infra`, for the cloud, cluster and deploy pipelines (normal pool, protected refs only), registered to the tacplus-dev group ([CI in the cluster](#ci-in-the-cluster)).
@@ -27,7 +30,8 @@ by Jody 2026-11-02).
 The fleet deploy account's Role (`fleet-deploy`) is what a fleet's helm release needs inside `tac-<deployment>`:
 its ConfigMaps, Secrets (helm's release state), Services, ServiceAccounts, PVCs, Deployments, StatefulSets, Jobs,
 CronJobs, NetworkPolicies, PodDisruptionBudgets, Roles, RoleBindings and Leases; pods read and deleted, events, logs
-and quotas read. Nothing cluster-scoped, no `*`, no quota or limit changes, no exec, attach or port-forward
+and quotas read; its `TenantNamespace`s read, never written (#59: a fleet's apply names one deploymentproxy has not
+made Ready; only the operator's account creates them). Nothing cluster-scoped, no `*`, no quota or limit changes, no exec, attach or port-forward
 (`ci/policy.sh` refuses any render that breaks that). GKE names the Google account by its email, so the binding's
 subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 
@@ -494,7 +498,7 @@ looper-scan matches it; an entry without one accepts its id in every file, and t
 here has one, #45; an empty one fails). The summary lists the entries no finding needs any more, to
 remove (but not those of Trivy's config checks, `KSV-`: looper-scan's nightly runs them on the tree, this job does not; #30). Trivy's KSV-0053 (exec into pods) and KSV-0056 (manage networking) are
 accepted for the RBAC this repository grants by design (#28): the runners' `gitlab-runner-*` (`pods/exec`,
-`pods/attach`, `services`), each deployment's `fleet-deploy` (`services`, `endpoints`, `networkpolicies`) and
+`pods/attach`, `services`), each deployment's `fleet-deploy` and `deployment-operator` (`services`, `endpoints`, `networkpolicies`) and
 deploymentproxy's ClusterRole (`networkpolicies`, delete only), each entry in its own file only: the render's
 fixture and the vendored ClusterRole (#45). A grant of them in any other file fails the nightly. **The report:** the job's artifact `src/security/`, kept 30 days, pass or fail: `findings.json` (every
 finding: tool, scope, id, aliases, severity, fix, where, and whether an exception accepts it or it fails the job),

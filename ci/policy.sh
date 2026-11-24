@@ -9,8 +9,11 @@
 #                               namespaced resources it knows (NAMESPACED below), no escalate, bind or impersonate,
 #                               no non-resource URLs. A RoleBinding binds a Role, never a ClusterRole, and a
 #                               service account only of tac-<name>. The deploy account's Role fleet-deploy and its
-#                               RoleBinding always; deploymentproxy's Role deploymentproxy-tenantnamespaces and its
-#                               operator's RoleBinding both, or neither (a deployment without an operator).
+#                               RoleBinding always, fleet-deploy granting only get, list and watch on
+#                               TenantNamespaces; deploymentproxy's Role deploymentproxy-tenantnamespaces and its
+#                               operator's RoleBinding both, or neither (a deployment without an operator); the
+#                               operator's own Role deployment-operator and its RoleBinding both, only with
+#                               deploymentproxy's, each grant within fleet-deploy (#59).
 #   00-deploymentproxy.yaml     namespaced objects only in deploymentproxy; cluster-scoped, only the Namespace
 #                               deploymentproxy, CRDs, ClusterRoles and ClusterRoleBindings.
 #   20-ci.yaml                  namespaced objects only in ci, and only service accounts, ConfigMaps, NetworkPolicies,
@@ -55,6 +58,8 @@ NAMESPACED=" $(echo $NAMESPACED) "
 CI_RESOURCES=" /pods /pods/attach /pods/exec /pods/log /secrets /serviceaccounts /services /events "
 breaches=0
 breach() { echo "policy: $*"; breaches=$((breaches + 1)); }
+# grants FILE ROLE: each "group/resource verb" the Role ROLE in FILE grants, one a line, sorted.
+grants() { R=$2 yq ea -N 'select(.kind == "Role" and .metadata.name == strenv(R)) | .rules[] | .apiGroups[] as $g | .resources[] as $r | .verbs[] as $v | $g + "/" + $r + " " + $v' "$1" | sort -u; }
 # has FILE KIND NAME: FILE holds the object KIND NAME.
 has() { [ "$(K=$2 N=$3 yq ea '[select(.kind == strenv(K) and .metadata.name == strenv(N))] | length' "$1")" != 0 ]; }
 
@@ -283,6 +288,22 @@ for b in "${files[@]##*/}"; do
       else
         ! has "$f" RoleBinding deploymentproxy-tenantnamespaces || breach "$b: the RoleBinding deploymentproxy-tenantnamespaces without its Role"
       fi
+      # The operator's own Role (#59): with its binding, only beside deploymentproxy's (a deployment with an
+      # operator), and nothing the deploy account does not hold itself.
+      if has "$f" Role deployment-operator; then
+        has "$f" RoleBinding deployment-operator || breach "$b: the Role deployment-operator without its RoleBinding"
+        has "$f" Role deploymentproxy-tenantnamespaces || breach "$b: the Role deployment-operator, but no deploymentproxy Role"
+        while read -r grant; do
+          breach "$b: the Role deployment-operator grants $grant, which fleet-deploy does not"
+        done < <(comm -23 <(grants "$f" deployment-operator) <(grants "$f" fleet-deploy))
+      else
+        ! has "$f" RoleBinding deployment-operator || breach "$b: the RoleBinding deployment-operator without its Role"
+      fi
+      # The deploy account reads its TenantNamespaces; only the operator's account writes them.
+      while read -r grant; do
+        [[ $grant =~ ^deploymentproxy\.tacplus\.dev/tenantnamespaces\ (get|list|watch)$ ]] ||
+          breach "$b: the Role fleet-deploy grants ${grant#* } on ${grant% *}"
+      done < <(grants "$f" fleet-deploy | grep '^deploymentproxy\.tacplus\.dev/')
       ;;
     20-ci.yaml)
       runners=()
