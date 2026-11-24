@@ -46,6 +46,15 @@ the looper then marks it `promoted` or `declined` here with the date.
   --field-selector reason=Preempted`). Its `concurrent` 6 is `build`'s; #41, which counts `build`'s from the spot
   pool's room, should count the two together, since they share the pool (the looper's report slots,
   `BUILD_POOL_NODES - 1`, already bound the report builds' gates).
+- **build's light jobs on the build-light runner** (2026-11-23, #51; tacplus-dev/cloud#100):
+  `gitlab-runner/runners/build-light.yaml` (tags `arm64, build-light`, `concurrent` 4, the normal pool, kick's 50m /
+  256Mi) takes no job until cloud#100 registers it and writes `gitlab-runner-build-light` version 1 (its `apply` fails
+  at `runner-tokens` before then), the hub re-pins the cluster to a commit with it, and tacplus-dev/looper's
+  `ci/build.gitlab-ci.yml` tags `pending`, `plan`, `report-pass` and `report-fail` `arm64, build-light` and cloud bumps
+  its copy, in that order, or those jobs find no runner. Until then `control` holds 3 fewer slots on the normal pool
+  (9, from 12; 30 in all with the looper pool's, from 33) for room build-light does not use yet. Its 4 is a burst's
+  pending and plan for two builds at once; if a busy hour still queues them (`build-light` jobs pending over a
+  minute), raise it, and control's room follows. Its jobs (0) preempt `control`'s (`control-job`, #49), as kick's do.
 - **infra and kick ahead of control's jobs** (2026-11-23, #49): `control`'s jobs run at the PriorityClass
   `control-job` (-1, never preempting), so `infra`'s and `kick`'s (0) preempt them when the normal pool is full. #49
   recommended a class above 0 for `infra` and `kick` instead; that class, preempting, would evict deploymentproxy's or a
