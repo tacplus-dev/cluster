@@ -5,7 +5,7 @@
 # looper-scan reads (tacplus-dev/looper#49: exactly id, reason, decided_by and expires, YYYY-MM-DD; and where,
 # tacplus-dev/looper#182: a path or a path glob, matched against the finding's where without its line, or the place in
 # its parentheses: a binary's name, an image). The security job (ci/security.sh) enforces it: an expired entry fails
-# the pipeline. Every entry has a where (#45): one per binary, image or file its reason names, never rule-wide. Found by `govulncheck -mode=binary` (symbols
+# the pipeline, even one that accepts only CI tooling's findings, which never fail it themselves (#55). Every entry has a where (#45): one per binary, image or file its reason names, never rule-wide. Found by `govulncheck -mode=binary` (symbols
 # present) in the pinned tools of ci/tools.sh, each at its latest upstream release (kubectl: the latest of the
 # cluster's minor), none with the fixed version; everything else the first run found is fixed there (the Go tools
 # built with the pinned toolchain, kubectl and the GKE auth plugin pinned rather than the CI image's). Track and
@@ -17,8 +17,8 @@
 #   osv-scanner v2.7.0, trivy v0.76.2   GO-2026-6974 (otel v1.45.0, v1.46.0; #56)
 #
 # CI-only tooling's findings do not block (tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md):
-# until tacplus-dev/looper#225 reports them only, each with no fixed release gets an entry for its binary alone, 14
-# days, naming the release it waits on (#56).
+# since #55 (tacplus-dev/looper#225) the security job reports them only; before it, each with no fixed release got
+# an entry for its binary alone, 14 days, naming the release it waits on (#56).
 #
 # The Go tools built here from source are built with the fixed modules instead (ci/tools.sh; #10, the policy of
 # tacplus-dev/cloud#24): gitleaks v8.30.1 with klauspost/compress v1.20.2, andybalholm/brotli v1.2.7 and

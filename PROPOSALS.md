@@ -77,6 +77,14 @@ the looper then marks it `promoted` or `declined` here with the date.
   by `.control`'s `retry:`); if that bites, the managers move to a runner of their own at 0. And `ci-runner-manager`
   (1000000, preempting) may still evict deploymentproxy's or a deployment's pod for a manager's (#39): a class for
   deploymentproxy above the jobs would close that.
+- **The exceptions that accept only CI tooling's findings, gone** (2026-11-24, #55): since #55 a finding in `bin/`
+  or the CI image never fails the security job, but `security-exceptions.yaml`'s entries for kubectl,
+  gke-gcloud-auth-plugin, osv-scanner and trivy (GO-2026-5158, 5026, 6603, 6610-6612, 6617, 6629, 6860, 6866, 6974,
+  6975, CVE-2026-97054) still fail it the day after they expire (2026-12-04 and 2026-12-08), as every expired entry
+  does. Removing them lists those findings under "CI tooling (reported, never failing)" instead; `GO-2026-5932` on
+  `ghcr.io/tacplus-dev/tacplus/build:**` stays (it matches the `job:` pin, which ships). Kept in #55, whose issue
+  asks that exceptions keep working for both scopes; the decision's nightly (item 3) may rather renew them. Links:
+  #55, tacplus-dev/roadmap `decisions/security-gates-ship-only-2026-11-23.md`.
 - **A runner change proven by a job before main takes it** (2026-11-19, #37): e246907's runners rolled out green
   (`apply` waits for their rollouts) yet failed every job at once, because nothing here starts a job: `ci/policy.sh`
   now refuses a read-only root filesystem without a writable emptyDir where GitLab Runner writes, but only for the
@@ -325,6 +333,18 @@ the looper then marks it `promoted` or `declined` here with the date.
   and tacplus-dev/looper#225 has not made CI-tool findings report-only, raise them here rather than renew.
 
 ## Promoted / declined
+- **The security job fails only on what ships** (2026-11-23, #55; tacplus-dev/looper#225): `ci/security.sh` fails
+  on an advisory in CI tooling as on one in what the cluster runs, so a new kubectl or scanner advisory stops every
+  land. Each finding gets a `scope` from the scan that made it: `tooling` for govulncheck on `bin/` and Trivy on IMAGE,
+  reported (a "CI tooling (reported, never failing)" section and count in the summary) and never `blocking`; `shipped`
+  for OSV-Scanner, gitleaks and Trivy on each image the pins deploy, failing as today. Exceptions match both, and a
+  problem (a tool that cannot run, an expired exception) still fails (`decisions/security-gates-ship-only-2026-11-23.md`).
+  Small: the script, its test, README. Open for Jody: `gitlab-runner/pin.yaml`'s `job:` is the CI image, so as shipped
+  a Debian advisory in it still fails cluster's lands; and whether the exceptions that accept only tooling findings
+  (kubectl's, gke-gcloud-auth-plugin's) go, since one that expires still fails the job.
+  **Promoted** 2026-11-24: Jody's decision (on #55; the org ROADMAP links it); built in #55: `scope` on every finding,
+  only a shipped one blocking. The `job:` pin stays shipped (question 1), and the tooling section lists the findings
+  that would fail if shipped (question 3); the tooling-only exceptions (question 2) are kept (Open, above).
 - **The drift job signs with tacplus-ci's `tacplus-reader`** (2026-11-11, #19): `TACPLUS_READER_KMS_KEY` still
   names jody1-328023's key, and cloud#30 cannot revoke the App's old key or drain jody1-328023 until no signer uses
   it. The new key's version 1 is imported (tacplus-dev/cloud#38, closed). One variable in the pinned file, README's

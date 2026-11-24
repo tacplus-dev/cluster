@@ -70,7 +70,7 @@ that commit (it is public: no credential).
 | `render` | every push and merge request | Builds or fetches the pinned tools (`ci/tools.sh`: yq, kubeconform, helm, crane, kubectl, gke-gcloud-auth-plugin, gitleaks), checks the project's `.gitlab-ci.yml` is this repository's with only `CLUSTER_COMMIT` set (`ci/pin.sh --check`), renders into `out/`. |
 | `runner-images` | every push and merge request, and the nightly schedule | Our GitLab Runner runner and helper images ([below](#our-gitlab-runner-images), `ci/runner-images.sh`), refused unless each is `gitlab-runner/pin.yaml`'s digest. On main, as `cluster-admin-pipeline`: an image `ci-images` has is pulled, any other built and pushed. Its images are the artifact `src/images/` the `security` job scans; `plan` waits for it. |
 | `validate` | every push and merge request | kubeconform and `ci/policy.sh` on `out/`, `deploymentproxy/release` against its release and `gitlab-runner/release` against its chart and images (each `fetch.sh --check`), the tests. |
-| `security` | every pipeline: every push and merge request, and the nightly schedule | The security checks (below). Fails the pipeline on a secret or an unaccepted HIGH or CRITICAL finding with a fix; `plan`, so `apply`, waits for it. Its report is the artifact `src/security/`. |
+| `security` | every pipeline: every push and merge request, and the nightly schedule | The security checks (below). Fails the pipeline on a secret or an unaccepted HIGH or CRITICAL finding with a fix in what ships (CI tooling's are reported, never failing); `plan`, so `apply`, waits for it. Its report is the artifact `src/security/`. |
 | `plan` | main (push, web, API) | `kubectl diff` against `dev`, then per unit (deploymentproxy, each deployment, `ci`) what is added, changed or removed; a deployment whose entry is gone is listed as kept. Saves the render it diffed and its summary (`plan.txt`). |
 | `apply` | main, **automatically** once `plan` succeeds, protected environment `cluster`; not in a deletion pipeline | Applies the render `plan` saved: plans again, then applies server-side, then writes the runners' tokens from Secret Manager (`ci/runner-tokens.sh`), then waits for deploymentproxy and the runners. Never deletes or prunes. A failed apply fails the pipeline. |
 | `DELETE deployment: removes tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)` | a deletion pipeline only (below), **manual**, protected environment `cluster` (Jody only) | Deletes the deployment `DELETE_DEPLOYMENT`: `tac-<name>` and its tenant namespaces (`ci/delete-deployment.sh`). |
@@ -466,10 +466,17 @@ database, and with the fixed release of any dependency an advisory names that th
 yet (gitleaks and OSV-Scanner, #10: instead of an exception); kubectl, gke-gcloud-auth-plugin and Trivy downloaded from their releases and checked against the
 SHA-256 of the file for linux/amd64 or linux/arm64. The vulnerability databases are each tool's of the day.
 
-**The policy**, looper-scan's: the job fails on any secret, and on any HIGH or CRITICAL finding with a fixed version,
-unless an unexpired entry of `security-exceptions.yaml` accepts it (by its id or an alias, a CVE or GHSA); a
-govulncheck finding (a vulnerable symbol in the binary) counts HIGH, govulncheck giving no severity. A tool that
-cannot run fails it, and so does an exception that has expired or says less than its four fields:
+**The policy**, looper-scan's: it fails only on what ships (tacplus-dev/looper#225; tacplus-dev/roadmap
+`decisions/security-gates-ship-only-2026-11-23.md`; #55). Every finding has a `scope`, from the scan that made it:
+`shipped`, OSV-Scanner's, gitleaks' and Trivy's on each image the commit deploys (those run in the cluster, so they
+ship: `job:` too, though it is the CI image); `tooling`, govulncheck's on `bin/` and Trivy's on the CI image, which
+only the pipeline runs. A finding in CI tooling is **reported, never failing**: the summary counts and lists those the
+policy would fail if they shipped, under "CI tooling (reported, never failing)". In what ships, the job fails on any
+secret, and on any HIGH or CRITICAL finding with a fixed version, unless an unexpired entry of
+`security-exceptions.yaml` accepts it (by its id or an alias, a CVE or GHSA); a govulncheck finding (a vulnerable
+symbol in the binary) counts HIGH, govulncheck giving no severity. An exception accepts a finding of either scope. A
+tool that cannot run fails it, and so does an exception that has expired or says less than its four fields, whatever
+it accepts:
 
 ```yaml
 exceptions:
@@ -489,9 +496,11 @@ accepted for the RBAC this repository grants by design (#28): the runners' `gitl
 `pods/attach`, `services`), each deployment's `fleet-deploy` (`services`, `endpoints`, `networkpolicies`) and
 deploymentproxy's ClusterRole (`networkpolicies`, delete only), each entry in its own file only: the render's
 fixture and the vendored ClusterRole (#45). A grant of them in any other file fails the nightly. **The report:** the job's artifact `src/security/`, kept 30 days, pass or fail: `findings.json` (every
-finding: tool, id, aliases, severity, fix, where, and whether an exception accepts it or it fails the job),
+finding: tool, scope, id, aliases, severity, fix, where, and whether an exception accepts it or it fails the job),
 `summary.md` (also in the job's log), `verdict`, and `raw/`, each tool's own JSON. `tests/security_test.sh` tests the
-job: a planted secret, in the tree or the history only, fails it; an expired exception fails it; a clean tree passes.
+job: a planted secret, in the tree or the history only, fails it, and so does a planted vulnerable lockfile pin or
+deployed image; the same finding in a tool binary or the CI image passes, listed as CI tooling; an expired exception
+fails it; a clean tree passes.
 
 ## Never
 

@@ -18,14 +18,18 @@
 #                             (pin.yaml's build.registry, private) from SECURITY_IMAGES/<runner|helper>, the
 #                             runner-images job's OCI layouts (ci/runner-images.sh), each the digest its pin names
 #
-# The policy (looper-scan's): a secret fails, and so does a HIGH or CRITICAL finding with a fixed version, unless
-# an unexpired entry of the commit's security-exceptions.yaml names it (its id or an alias: a CVE, a GHSA) and, if
-# it has a where, the finding is there (tacplus-dev/looper#182: a path or a path glob, matched as looper-scan
-# matches it). An entry has exactly id, reason, decided_by and expires (YYYY-MM-DD), and an optional where, the file
-# a strict subset of YAML that looper-scan reads too; an entry that has expired, or says less, or has an empty where,
-# fails, and so does a tool that cannot run; an entry without a where is warned about (it accepts its id in every
-# file). The
-# reports go to SECURITY_OUT (default ./security): findings.json (every finding, with excepted and blocking),
+# The policy (looper-scan's, tacplus-dev/looper#225): every finding has a scope, from the scan that made it:
+# shipped (OSV-Scanner, gitleaks, Trivy on each image the commit deploys: those run in the cluster, so they ship, even
+# where its runners then run CI jobs in them) or tooling (govulncheck on each BINARY, Trivy on IMAGE: CI tooling, what
+# only the pipeline runs). A finding in CI tooling is reported, never failing (the summary's "CI tooling (reported,
+# never failing)", its count beside those failing). In what ships, a secret fails, and so does a HIGH or CRITICAL
+# finding with a fixed version, unless an unexpired entry of the commit's security-exceptions.yaml names it (its id
+# or an alias: a CVE, a GHSA) and, if it has a where, the finding is there (tacplus-dev/looper#182: a path or a path
+# glob, matched as looper-scan matches it); an entry accepts a tooling finding too. An entry has exactly id, reason,
+# decided_by and expires (YYYY-MM-DD), and an optional where, the file a strict subset of YAML that looper-scan reads
+# too; an entry that has expired, or says less, or has an empty where, fails, whatever the scope of what it accepts,
+# and so does a tool that cannot run; an entry without a where is warned about (it accepts its id in every file). The
+# reports go to SECURITY_OUT (default ./security): findings.json (every finding, with scope, excepted and blocking),
 # summary.md, verdict, raw/ (each tool's own JSON). Exits 1 on a fail.
 #
 #   [SECURITY_IMAGES=DIR] ci/security.sh REPO IMAGE BINARY...
@@ -45,14 +49,17 @@ JQ_LIB='
 def bucket: if . == null then "UNKNOWN" elif . >= 9 then "CRITICAL" elif . >= 7 then "HIGH"
   elif . >= 4 then "MEDIUM" elif . > 0 then "LOW" else "UNKNOWN" end;
 def finding($tool; $kind; $id; $aliases; $sev; $fix; $where; $title):
-  {tool: $tool, kind: $kind, id: $id, aliases: ($aliases // [] | map(select(. != $id)) | unique),
+  {tool: $tool, kind: $kind, scope: $scope, id: $id, aliases: ($aliases // [] | map(select(. != $id)) | unique),
    severity: $sev, fix: $fix, where: $where, title: ($title // "" | tostring | .[0:300])};
 '
-# norm NAME PROGRAM RAW [jq args...]: RAW's findings, normalized, as norm/NAME.json.
+# norm NAME SCOPE PROGRAM RAW [jq args...]: RAW's findings, normalized, as norm/NAME.json, each of SCOPE: shipped
+# (what the commit ships: its tree, its history, the images it deploys) or tooling (CI tooling, what only the
+# pipeline runs: the tool binaries, the CI image), set by the scan that made it, never read from its where.
 norm() {
-  local name=$1 prog=$2 raw=$3
-  shift 3
-  jq -s "$@" "$JQ_LIB $prog" "$raw" > "$out/norm/$name.json" || problems+=("$name: its report could not be read")
+  local name=$1 scope=$2 prog=$3 raw=$4
+  shift 4
+  case $scope in shipped|tooling) ;; *) problems+=("$name: no scope ($scope)"); return ;; esac
+  jq -s --arg scope "$scope" "$@" "$JQ_LIB $prog" "$raw" > "$out/norm/$name.json" || problems+=("$name: its report could not be read")
 }
 
 # The commit's tree, as committed (no bin/, out/ or other untracked file).
@@ -65,7 +72,7 @@ log "osv-scanner: the tree"
 rc=0
 osv-scanner scan source -r --format json --output "$out/raw/osv-scanner.json" "$t/tree" >/dev/null 2>"$out/raw/osv-scanner.log" || rc=$?
 case $rc in
-  0|1) norm osv-scanner '
+  0|1) norm osv-scanner shipped '
     [.[0].results[]? | (.source.path | ltrimstr($root + "/")) as $where | .packages[]? | .package as $p | (.vulnerabilities // []) as $vs
      | .groups[]? | . as $g
      | ([$vs[] | select(.id as $i | $g.ids | index($i)) | .affected[]?.ranges[]?.events[]? | .fixed // empty] | length > 0) as $fix
@@ -85,7 +92,7 @@ for b in "$@"; do
   if ! govulncheck -mode=binary -format json "$b" > "$raw" 2>"$raw.log"; then
     problems+=("govulncheck $b: $(grep -m1 . "$raw.log")"); continue
   fi
-  norm "govulncheck-$i-$name" '
+  norm "govulncheck-$i-$name" tooling '
     ([.[] | .osv // empty | {(.id): .}] | add // {}) as $osv
     | [.[] | .finding // empty | select(.trace[0].function != null)]
     | unique_by(.osv) | map(.trace[0] as $t
@@ -97,7 +104,7 @@ done
 # gitleaks: the tree, then each commit of the history (which a shallow clone does not have).
 log "gitleaks: the tree"
 if gitleaks dir --no-banner --redact --exit-code 0 -f json -r "$out/raw/gitleaks-tree.json" "$t/tree" >/dev/null 2>"$out/raw/gitleaks-tree.log"; then
-  norm gitleaks-tree '[.[0][]? | (.File | ltrimstr($root + "/")) as $f
+  norm gitleaks-tree shipped '[.[0][]? | (.File | ltrimstr($root + "/")) as $f
     | finding("gitleaks"; "secret"; ($f + ":" + .RuleID + ":" + (.StartLine | tostring)); [.RuleID]; "CRITICAL"; true; ($f + ":" + (.StartLine | tostring)); .Description)]' \
     "$out/raw/gitleaks-tree.json" --arg root "$t/tree"
 else problems+=("gitleaks on the tree: $(tail -1 "$out/raw/gitleaks-tree.log")"); fi
@@ -105,26 +112,27 @@ log "gitleaks: the history"
 if [ "$(git -C "$repo" rev-parse --is-shallow-repository)" = true ]; then
   problems+=("gitleaks: $repo is a shallow clone: its history cannot be scanned (git fetch --unshallow)")
 elif gitleaks git --no-banner --redact --exit-code 0 -f json -r "$out/raw/gitleaks-history.json" "$repo" >/dev/null 2>"$out/raw/gitleaks-history.log"; then
-  norm gitleaks-history '[.[0][]? | finding("gitleaks"; "secret"; (.Commit[0:12] + ":" + .File + ":" + .RuleID + ":" + (.StartLine | tostring)); [.RuleID];
+  norm gitleaks-history shipped '[.[0][]? | finding("gitleaks"; "secret"; (.Commit[0:12] + ":" + .File + ":" + .RuleID + ":" + (.StartLine | tostring)); [.RuleID];
     "CRITICAL"; true; ("commit " + .Commit[0:12] + " " + .File + ":" + (.StartLine | tostring)); .Description)]' "$out/raw/gitleaks-history.json"
 else problems+=("gitleaks on the history: $(tail -1 "$out/raw/gitleaks-history.log")"); fi
 
-# trivy_image NAME IMAGE PLATFORM [LAYOUT]: Trivy on IMAGE for PLATFORM (or on LAYOUT, IMAGE's OCI layout), its
-# report raw/NAME.json.
+# trivy_image NAME SCOPE IMAGE PLATFORM [LAYOUT]: Trivy on IMAGE for PLATFORM (or on LAYOUT, IMAGE's OCI layout),
+# its report raw/NAME.json, its findings of SCOPE.
 trivy_image() {
-  local name=$1 img=$2 platform=$3 args
-  if [ -n "${4:-}" ]; then args=(--format json -o "$out/raw/$name.json" --input "$4"); log "trivy: $img (its layout $4)"
+  local name=$1 scope=$2 img=$3 platform=$4 args
+  if [ -n "${5:-}" ]; then args=(--format json -o "$out/raw/$name.json" --input "$5"); log "trivy: $img (its layout $5)"
   else args=(--platform "$platform" --format json -o "$out/raw/$name.json" "$img"); log "trivy: $img ($platform)"; fi
   if trivy image -q --scanners vuln "${args[@]}" 2>"$out/raw/$name.log"; then
-    norm "$name" '[.[0].Results[]? | .Target as $t | (.Vulnerabilities // [])[]
+    norm "$name" "$scope" '[.[0].Results[]? | .Target as $t | (.Vulnerabilities // [])[]
       | finding("trivy"; "sca"; .VulnerabilityID; []; (.Severity // "UNKNOWN"); ((.FixedVersion // "") != "");
                 (.PkgName + "@" + (.InstalledVersion // "") + " (" + $image + ": " + $t + ")"); .Title)]' \
       "$out/raw/$name.json" --arg image "$img"
   else problems+=("trivy on $img: $(tail -1 "$out/raw/$name.log")"); fi
 }
-# Trivy on the image, for this machine's platform: the one the jobs run.
+# Trivy on the image, for this machine's platform: the one the jobs run. Its findings are CI tooling's: an image the
+# commit deploys is scanned as its pin (below), shipped, even where it is this one.
 case $(uname -m) in x86_64|amd64) platform=linux/amd64 ;; aarch64|arm64) platform=linux/arm64 ;; *) platform=linux/$(uname -m) ;; esac
-trivy_image trivy-image "$image" "$platform"
+trivy_image trivy-image tooling "$image" "$platform"
 # Trivy on each image the commit deploys, by the digest its pin names, for the cluster's platform (arm64): GitLab
 # Runner's runner, helper and job (gitlab-runner/pin.yaml) and deploymentproxy's (deploymentproxy/pin.yaml). A pin
 # file the tree has must name each, by digest. Our images (in pin.yaml's build.registry: #21) are scanned from their
@@ -145,10 +153,10 @@ for pin in gitlab-runner/pin.yaml:runner gitlab-runner/pin.yaml:helper gitlab-ru
       problems+=("$f: its $key image $img is not in SECURITY_IMAGES (${SECURITY_IMAGES:-not set}/$key is [${got}]): ci/runner-images.sh builds it")
       continue
     fi
-    trivy_image "trivy-deployed-$i-$key" "$img" linux/arm64 "$layout"
+    trivy_image "trivy-deployed-$i-$key" shipped "$img" linux/arm64 "$layout"
     continue
   fi
-  trivy_image "trivy-deployed-$i-$key" "$img" linux/arm64
+  trivy_image "trivy-deployed-$i-$key" shipped "$img" linux/arm64
 done
 
 # security-exceptions.yaml, read as looper-scan reads it: a list "exceptions:" of entries with exactly id, reason,
@@ -200,7 +208,7 @@ def accepts($f): (.id as $x | $f.id == $x or any($f.aliases[]; . == $x))
   and ((has("where") | not) or (.where != "" and (.where as $w | $f | in_where($w))));
 '
 
-# The policy.
+# The policy: only a shipped finding can be blocking; a tooling one that would be is reported (tooling: below).
 mapfile -t norms < <(find "$out/norm" -name '*.json' | LC_ALL=C sort)
 [ ${#norms[@]} -gt 0 ] || norms=(/dev/null)
 jq -s --argjson exc "$exceptions" --arg today "$today" "$JQ_GLOB"'
@@ -208,8 +216,8 @@ jq -s --argjson exc "$exceptions" --arg today "$today" "$JQ_GLOB"'
       . as $f
       | ([$exc[] | select(.expires >= $today and accepts($f))][0]) as $e
       | . + {excepted: ($e.id // null),
-             blocking: ($e == null and (.kind == "secret" or ((.severity == "HIGH" or .severity == "CRITICAL") and .fix)))})
-  | sort_by(if .blocking then 0 else 1 end, {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}[.severity] // 4, .tool, .id, .where)' \
+             blocking: ($e == null and .scope == "shipped" and (.kind == "secret" or ((.severity == "HIGH" or .severity == "CRITICAL") and .fix)))})
+  | sort_by(if .blocking then 0 else 1 end, if .scope == "shipped" then 0 else 1 end, {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}[.severity] // 4, .tool, .id, .where)' \
   "${norms[@]}" > "$out/findings.json" || { log "the findings could not be read together"; exit 1; }
 
 # Unused exceptions are listed, so that a fixed finding's entry is removed (a scoped one when no finding of its id
@@ -219,14 +227,20 @@ mapfile -t unused < <(jq -r --slurpfile f "$out/findings.json" "$JQ_GLOB"'.[] | 
   | . as $e | select([$f[0][] | select(. as $x | $e | accepts($x))] | length == 0)
   | .id + (if has("where") then " (where \(.where))" else "" end)' <<<"$exceptions")
 blocking=$(jq '[.[] | select(.blocking)] | length' "$out/findings.json")
+# CI tooling's findings the policy would fail if they shipped: listed and counted, never failing.
+JQ_TOOLING='def tooling: .scope == "tooling" and .excepted == null and (.severity == "HIGH" or .severity == "CRITICAL") and .fix;'
 {
   echo "## Security checks: $(git -C "$repo" rev-parse HEAD)"
   echo
-  jq -r '"\(length) finding(s): \([.[] | select(.blocking)] | length) failing the policy, \([.[] | select(.excepted)] | length) accepted by an exception."' "$out/findings.json"
+  jq -r "$JQ_TOOLING"'"\(length) finding(s): \([.[] | select(.blocking)] | length) failing the policy, \([.[] | select(tooling)] | length) in CI tooling (reported, never failing), \([.[] | select(.excepted)] | length) accepted by an exception."' "$out/findings.json"
   if [ ${#problems[@]} -gt 0 ]; then echo; echo "### Problems (each fails the job)"; printf -- '- %s\n' "${problems[@]}"; fi
   if [ "$blocking" -gt 0 ]; then
     echo; echo "### Failing the policy"
     jq -r '.[] | select(.blocking) | "- \(.severity) \(.tool) \(.id): \(.where)\(if .title != "" then ": " + .title else "" end)"' "$out/findings.json"
+  fi
+  if jq -e "$JQ_TOOLING"'any(.[]; tooling)' "$out/findings.json" >/dev/null; then
+    echo; echo "### CI tooling (reported, never failing)"
+    jq -r "$JQ_TOOLING"'.[] | select(tooling) | "- \(.severity) \(.tool) \(.id): \(.where)\(if .title != "" then ": " + .title else "" end)"' "$out/findings.json"
   fi
   if jq -e 'any(.excepted)' "$out/findings.json" >/dev/null; then
     echo; echo "### Accepted (security-exceptions.yaml)"

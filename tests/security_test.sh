@@ -4,13 +4,16 @@
 #
 # Tests ci/security.sh, the security job, on a repository made here: a clean tree passes, and writes its JSON
 # report; a secret fails the job, planted in the tree or only in the history (gitleaks itself, not a stub), and so
-# does a shallow clone, whose history it cannot read; a HIGH or CRITICAL finding with a fix fails, from
-# govulncheck on a binary, OSV-Scanner on the tree, Trivy on the image or on an image the tree's pins deploy (each
-# by its digest, for linux/arm64; a pin without its image, or not by digest, fails; our GitLab Runner images, in pin.yaml's
-# build.registry, from SECURITY_IMAGES' layouts, refused unless each is its pinned digest), unless an unexpired exception names it
-# (by its id or an alias), and with a where, only there (a path or a path glob: a binary, an image; an empty one
-# fails); an expired exception fails the job, with or without its finding, and so does an entry with a field
-# missing or one it does not have, or a tool that cannot run; a finding without a fix, or below HIGH, passes.
+# does a shallow clone, whose history it cannot read; a HIGH or CRITICAL finding with a fix in what ships fails,
+# from OSV-Scanner on the tree or Trivy on an image the tree's pins deploy (each by its digest, for linux/arm64; a pin
+# without its image, or not by digest, fails; our GitLab Runner images, in pin.yaml's build.registry, from
+# SECURITY_IMAGES' layouts, refused unless each is its pinned digest), unless an unexpired exception names it (by its
+# id or an alias), and with a where, only there (a path or a path glob: a file, a binary, an image; an empty one
+# fails); the same finding in CI tooling (govulncheck on a binary, Trivy on the CI image: #55, tacplus-dev/looper#225)
+# passes, its scope tooling, listed in the summary's "CI tooling (reported, never failing)", and an exception still
+# accepts it; the CI image deployed as a pin's job image too fails there, shipped; an expired exception fails the
+# job, with or without its finding, a tooling one's too, and so does an entry with a field missing or one it does
+# not have, or a tool that cannot run; a finding without a fix, or below HIGH, passes.
 # This repository's own files hold no secret, and its security-exceptions.yaml reads, no KSV- entry in every file. OSV-Scanner, govulncheck
 # and Trivy are stubs (tests/stub/security: they need the network and their databases). Needs bash, git, jq, tar,
 # openssl and gitleaks (ci/tools.sh builds it into bin/).
@@ -50,6 +53,12 @@ govulncheck_finding() {
           {finding: {osv: "GO-2026-6860", fixed_version: $fix, trace: [{module: "golang.org/x/net", version: "v0.60.0", package: "golang.org/x/net/http2", function: "Read"}]}}' \
     --arg fix "$1" > "$SSTUB/govulncheck-kubectl.json"
 }
+# osv_finding: OSV-Scanner's report of the tree, a HIGH in go.sum's golang.org/x/crypto with a fix.
+osv_finding() {
+  jq -nc '{results:[{source: {path: "go.sum"}, packages: [{package: {name: "golang.org/x/crypto", version: "v0.1.0"},
+    vulnerabilities: [{id: "GO-2026-5932", summary: "ssh", affected: [{ranges: [{events: [{introduced: "0"}, {fixed: "0.58.1"}]}]}]}],
+    groups: [{ids: ["GO-2026-5932"], aliases: ["CVE-2026-5555"], max_severity: "7.5"}]}]}]}' > "$SSTUB/osv-scanner.json"
+}
 # run: ci/security.sh on the repository; its exit status.
 run() { "$here/ci/security.sh" "$work/repo" "$image" "$work/bin/kubectl" > "$work/log" 2>&1; }
 # passes WHAT / fails WHAT WANT: the job passes; fails, its verdict or summary saying WANT.
@@ -70,7 +79,7 @@ grep -q -- "image -q --scanners vuln --platform linux/[a-z0-9]* --format json -o
 repo
 printf 'token: %s\n' "$token" > "$work/repo/notes.yaml" && commit "a planted secret"
 fails "a planted secret in the tree" "gitleaks"
-jq -e 'any(.[]; .kind == "secret" and .blocking and (.where | startswith("notes.yaml:1")))' "$work/security/findings.json" >/dev/null &&
+jq -e 'any(.[]; .kind == "secret" and .scope == "shipped" and .blocking and (.where | startswith("notes.yaml:1")))' "$work/security/findings.json" >/dev/null &&
   ok "the report names the secret's file and line" || fail "the secret's finding: $(cat "$work/security/findings.json")"
 grep -q -- "$token" "$work/security/findings.json" "$work/security/summary.md" "$work/log" && fail "the report holds the secret" ||
   ok "the report does not hold the secret (redacted)"
@@ -79,7 +88,7 @@ repo
 printf 'token: %s\n' "$token" > "$work/repo/notes.yaml" && commit "a planted secret"
 rm "$work/repo/notes.yaml" && commit "the secret removed"
 fails "a secret in the history only" "1 finding(s) the policy fails"
-jq -e 'any(.[]; .kind == "secret" and (.where | startswith("commit ")))' "$work/security/findings.json" >/dev/null &&
+jq -e 'any(.[]; .kind == "secret" and .scope == "shipped" and .blocking and (.where | startswith("commit ")))' "$work/security/findings.json" >/dev/null &&
   ok "the history's secret names its commit" || fail "the history's finding: $(cat "$work/security/findings.json")"
 
 repo
@@ -89,33 +98,54 @@ git clone -q --depth 1 "file://$work/repo" "$work/shallow" && mv "$work/repo" "$
 fails "a shallow clone" "shallow clone"
 rm -rf "$work/full"
 
+# CI tooling (#55, tacplus-dev/looper#225): a tool binary's finding is reported, never failing.
 repo
 govulncheck_finding v0.62.0
-fails "a vulnerable symbol in a binary, with a fix" "GO-2026-6860"
-jq -e '.[0] | .tool == "govulncheck" and .severity == "HIGH" and .fix and (.where | startswith("golang.org/x/net@v0.60.0 (kubectl, called: golang.org/x/net/http2.Read"))' \
-  "$work/security/findings.json" >/dev/null && ok "govulncheck's finding names the binary and the module" ||
+passes "a vulnerable symbol in a tool binary, with a fix: CI tooling"
+jq -e '.[0] | .tool == "govulncheck" and .scope == "tooling" and (.blocking | not) and .severity == "HIGH" and .fix
+  and (.where | startswith("golang.org/x/net@v0.60.0 (kubectl, called: golang.org/x/net/http2.Read"))' \
+  "$work/security/findings.json" >/dev/null && ok "govulncheck's finding names the binary and the module, its scope tooling" ||
   fail "govulncheck's finding: $(cat "$work/security/findings.json")"
-exceptions "$(entry GO-2026-6860 "$later")"
-passes "the same, accepted by an unexpired exception"
-jq -e '.[0].excepted == "GO-2026-6860" and (.[0].blocking | not)' "$work/security/findings.json" >/dev/null &&
-  ok "the report says which exception accepts it" || fail "the excepted finding: $(cat "$work/security/findings.json")"
-exceptions "$(entry CVE-2026-1111 "$today")"
-passes "the same, accepted by its alias, the last day of the exception"
-exceptions "$(entry GO-2026-6860 "$earlier")"
-fails "the same, its exception expired" "exception GO-2026-6860 expired on $earlier"
-# An entry with a where (tacplus-dev/looper#182, as looper-scan matches it): its id there only, a path or a path glob
-# against the finding's where without its line, or the place in its parentheses (a binary, an image).
+grep -q '^1 finding(s): 0 failing the policy, 1 in CI tooling (reported, never failing), 0 accepted' "$work/security/summary.md" &&
+  grep -A1 '^### CI tooling (reported, never failing)$' "$work/security/summary.md" | grep -q '^- HIGH govulncheck GO-2026-6860: golang.org/x/net@v0.60.0 (kubectl' &&
+  ok "the summary lists it under CI tooling, and counts it" || fail "the tooling summary: $(cat "$work/security/summary.md")"
 exceptions "$(entry GO-2026-6860 "$later")" "    where: kubectl"
 passes "the same, accepted by an exception scoped to its binary"
-jq -e '.[0].excepted == "GO-2026-6860"' "$work/security/findings.json" >/dev/null && ok "the scoped exception accepts it" ||
+jq -e '.[0].excepted == "GO-2026-6860" and .[0].scope == "tooling"' "$work/security/findings.json" >/dev/null &&
+  grep -q '^1 finding(s): 0 failing the policy, 0 in CI tooling (reported, never failing), 1 accepted' "$work/security/summary.md" &&
+  ! grep -q 'Exceptions no finding needs\|^### CI tooling' "$work/security/summary.md" &&
+  ok "an exception still accepts a tooling finding" || fail "the excepted tooling finding: $(cat "$work/security/summary.md")"
+exceptions "$(entry GO-2026-6860 "$earlier")" "    where: kubectl"
+fails "the same, its exception expired" "exception GO-2026-6860 expired on $earlier"
+
+# What ships: the tree's dependency, with a fix, fails unless an exception accepts it.
+repo
+osv_finding
+fails "a HIGH dependency of the tree with a fix" "GO-2026-5932"
+jq -e '.[0] | .tool == "osv-scanner" and .scope == "shipped" and .blocking and .where == "golang.org/x/crypto@v0.1.0 (go.sum)"' \
+  "$work/security/findings.json" >/dev/null && ok "OSV-Scanner's finding names the file, its scope shipped" ||
+  fail "OSV-Scanner's finding: $(cat "$work/security/findings.json")"
+exceptions "$(entry GO-2026-5932 "$later")"
+passes "the same, accepted by an unexpired exception"
+jq -e '.[0].excepted == "GO-2026-5932" and (.[0].blocking | not)' "$work/security/findings.json" >/dev/null &&
+  ok "the report says which exception accepts it" || fail "the excepted finding: $(cat "$work/security/findings.json")"
+exceptions "$(entry CVE-2026-5555 "$today")"
+passes "the same, accepted by its alias, the last day of the exception"
+exceptions "$(entry GO-2026-5932 "$earlier")"
+fails "the same, its exception expired" "exception GO-2026-5932 expired on $earlier"
+# An entry with a where (tacplus-dev/looper#182, as looper-scan matches it): its id there only, a path or a path glob
+# against the finding's where without its line, or the place in its parentheses (a file, a binary, an image).
+exceptions "$(entry GO-2026-5932 "$later")" "    where: go.sum"
+passes "the same, accepted by an exception scoped to its file"
+jq -e '.[0].excepted == "GO-2026-5932"' "$work/security/findings.json" >/dev/null && ok "the scoped exception accepts it" ||
   fail "the scoped finding: $(cat "$work/security/findings.json")"
-exceptions "$(entry GO-2026-6860 "$later")" "    where: gke-gcloud-auth-plugin"
-fails "the same, its exception scoped to another binary" "GO-2026-6860"
-grep -q 'GO-2026-6860 (where gke-gcloud-auth-plugin)' "$work/security/summary.md" &&
+exceptions "$(entry GO-2026-5932 "$later")" "    where: other.sum"
+fails "the same, its exception scoped to another file" "GO-2026-5932"
+grep -q 'GO-2026-5932 (where other.sum)' "$work/security/summary.md" &&
   ok "the summary lists the scoped exception its where does not need" || fail "the scoped miss: $(cat "$work/security/summary.md")"
-exceptions "$(entry GO-2026-6860 "$later")" "    where: kube*"
+exceptions "$(entry GO-2026-5932 "$later")" "    where: go.*"
 passes "the same, accepted by an exception scoped by a glob"
-exceptions "$(entry GO-2026-6860 "$later")" "    where: \"\""
+exceptions "$(entry GO-2026-5932 "$later")" "    where: \"\""
 fails "an exception whose where is empty" "its where is empty"
 
 repo
@@ -147,10 +177,12 @@ jq -nc '{Results: [{Target: "debian 13", Vulnerabilities: [
 passes "the image's MEDIUM with a fix and CRITICAL without one"
 jq -nc '{Results: [{Target: "debian 13", Vulnerabilities: [
   {VulnerabilityID: "CVE-2026-4444", PkgName: "openssl", InstalledVersion: "3.0", FixedVersion: "3.1", Severity: "CRITICAL"}]}]}' > "$SSTUB/trivy.json"
-fails "the image's CRITICAL with a fix" "CVE-2026-4444"
-jq -e --arg image "$image" 'any(.[]; .tool == "trivy" and .blocking and .where == "openssl@3.0 (\($image): debian 13)")' \
-  "$work/security/findings.json" >/dev/null && ok "Trivy's finding names the image and the package" ||
-  fail "trivy's finding: $(cat "$work/security/findings.json")"
+passes "the CI image's CRITICAL with a fix: CI tooling"
+jq -e --arg image "$image" 'map(select(.tool == "trivy")) | length == 1 and .[0].scope == "tooling" and (.[0].blocking | not)
+  and .[0].where == "openssl@3.0 (\($image): debian 13)"' "$work/security/findings.json" >/dev/null &&
+  grep -A1 '^### CI tooling (reported, never failing)$' "$work/security/summary.md" | grep -q "^- CRITICAL trivy CVE-2026-4444: openssl@3.0 ($image" &&
+  ok "Trivy's finding names the image and the package, listed under CI tooling" ||
+  fail "trivy's finding: $(cat "$work/security/findings.json") $(cat "$work/security/summary.md")"
 
 # The images this repository deploys, read from its pins: each scanned by its digest, for the cluster's platform.
 deployed=(registry.example/runner:alpine-v1@sha256:1111 registry.example/runner-helper:v1@sha256:2222
@@ -173,7 +205,7 @@ jq -nc '{Results: [{Target: "alpine 3.24.3", Vulnerabilities: [
   {VulnerabilityID: "CVE-2026-42496", PkgName: "miniperl", InstalledVersion: "5.42.2-r1", FixedVersion: "5.42.3-r0", Severity: "CRITICAL"}]}]}' \
   > "$SSTUB/trivy-runner-helper.json"
 fails "a deployed image's CRITICAL with a fix" "CVE-2026-42496"
-jq -e --arg image "${deployed[1]}" '[.[] | select(.blocking)] | length == 1 and .[0].where == "miniperl@5.42.2-r1 (\($image): alpine 3.24.3)"' \
+jq -e --arg image "${deployed[1]}" '[.[] | select(.blocking)] | length == 1 and .[0].scope == "shipped" and .[0].where == "miniperl@5.42.2-r1 (\($image): alpine 3.24.3)"' \
   "$work/security/findings.json" >/dev/null && ok "the finding names the deployed image, and only it" ||
   fail "the deployed image's finding: $(cat "$work/security/findings.json")"
 exceptions "$(entry CVE-2026-42496 "$later")"
@@ -182,6 +214,17 @@ exceptions "$(entry CVE-2026-42496 "$later")" "    where: registry.example/runne
 passes "the same, accepted by an exception scoped to its image by a glob"
 exceptions "$(entry CVE-2026-42496 "$later")" "    where: registry.example/runner:**"
 fails "the same, its exception scoped to another image" "CVE-2026-42496"
+rm "$SSTUB/trivy-runner-helper.json"
+# The CI image deployed as gitlab-runner/pin.yaml's job image (as build:2.6 is): there it ships, and fails.
+jq -nc '{Results: [{Target: "debian 13", Vulnerabilities: [
+  {VulnerabilityID: "CVE-2026-4444", PkgName: "openssl", InstalledVersion: "3.0", FixedVersion: "3.1", Severity: "CRITICAL"}]}]}' > "$SSTUB/trivy-build.json"
+fails "the CI image's CRITICAL with a fix, the image deployed as the job image too" "CVE-2026-4444"
+jq -e --arg image "$image" --arg job "${deployed[2]}" '
+  any(.[]; .scope == "tooling" and (.blocking | not) and (.where | contains($image)))
+  and ([.[] | select(.blocking)] | length == 1 and .[0].scope == "shipped" and (.[0].where | contains($job)))' \
+  "$work/security/findings.json" >/dev/null && ok "the job image's copy ships and fails, the CI image's is tooling" ||
+  fail "the job image's finding: $(cat "$work/security/findings.json")"
+rm "$SSTUB/trivy-build.json"
 printf 'repository: tacplus-dev/deploymentproxy\n' > "$work/repo/deploymentproxy/pin.yaml" && commit "no image"
 fails "a pin without its image" 'deploymentproxy/pin.yaml: no "image:" image to scan'
 pins
@@ -214,12 +257,6 @@ layout helper sha256:7777
 fails "a layout that is not the pinned digest" "helper image ${ours[1]} is not in SECURITY_IMAGES"
 unset SECURITY_IMAGES
 fails "our images without SECURITY_IMAGES" "runner image ${ours[0]} is not in SECURITY_IMAGES"
-
-repo
-jq -nc --arg root "$work/repo" '{results:[{source: {path: "/tmp/x/go.sum"}, packages: [{package: {name: "golang.org/x/crypto", version: "v0.1.0"},
-  vulnerabilities: [{id: "GO-2026-5932", summary: "ssh", affected: [{ranges: [{events: [{introduced: "0"}, {fixed: "0.58.1"}]}]}]}],
-  groups: [{ids: ["GO-2026-5932"], aliases: ["CVE-2026-5555"], max_severity: "7.5"}]}]}]}' > "$SSTUB/osv-scanner.json"
-fails "a HIGH dependency of the tree with a fix" "GO-2026-5932"
 
 repo
 touch "$SSTUB/govulncheck-fails"
