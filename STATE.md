@@ -17,7 +17,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by th
   gke-gcloud-auth-plugin 0.5.21 pinned, no longer the CI image's gcloud components); the GitLab jobs `render`, `validate`,
   `security` (#5: OSV-Scanner, govulncheck on `bin/`, gitleaks on the tree and history, Trivy on the CI image and,
   #9, on each image the pins deploy by digest for linux/arm64 (GitLab Runner's runner, helper and job, deploymentproxy's);
-  `security-exceptions.yaml` enforced; every pipeline, nightly too; `plan` waits for it), `plan`, `apply` (#3: automatic on main once `plan`
+  `security-exceptions.yaml` enforced; #55: only a finding in what ships fails it, CI tooling's (`bin/`, the CI image)
+  reported, never failing; every pipeline, nightly too; `plan` waits for it), `plan`, `apply` (#3: automatic on main once `plan`
   succeeds, applying the render `plan` saved; protected `cluster`, never deletes; not in a deletion pipeline), the
   deletion job (#2: only in a deletion pipeline, run on main from the web form or the API with `DELETE_DEPLOYMENT` and `DELETE_CONFIRM` both the deployment's name; manual, protected,
   named for what it destroys), `drift` (nightly, files an issue, never applies; #19: mints its tacplus-reader token every
@@ -122,8 +123,8 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   entry; #9's, #11's, #15's and #21's 17 entries for upstream's images are gone. GO-2026-6859
   (net/http, Trivy's CVE-2026-97054) accepted until 2026-12-08 in kubectl v1.34.13 and gke-gcloud-auth-plugin 0.5.21
   only, no release of either with the fix (PROPOSALS.md; renewed 14 days, #56). CI-tool findings with no fixed
-  release get 14-day entries for their binary alone (tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md,
-  until tacplus-dev/looper#225 reports them only; #56, until 2026-12-08): GO-2026-6974 (otel/trace, fixed in v1.47.0)
+  release got 14-day entries for their binary alone (tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md;
+  #56, until 2026-12-08), kept since #55 made them report-only, though each still fails the job once expired (PROPOSALS.md): GO-2026-6974 (otel/trace, fixed in v1.47.0)
   in osv-scanner v2.7.0 and trivy v0.76.2, the latest releases still on v1.45.0 and v1.46.0, and in kubectl; GO-2026-5026
   (x/net idna) and GO-2026-6975 (otel baggage) in kubectl (main's pipeline 3106261843 failed at `security` on them). Every Go tool `ci/tools.sh` builds, Trivy too since #21,
   is built with go1.27.4. deploymentproxy
