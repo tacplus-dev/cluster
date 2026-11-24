@@ -51,11 +51,13 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by th
   50m/256Mi; the policy keeps `build-light` its tag alone and it on `arm64, build-light` only, never `build`); every runner manager at the PriorityClass
   `ci-runner-manager`, above the jobs and preempting them (#39: `kick`'s manager stayed Pending while `control`'s old
   manager's jobs ran beside the new one's after an apply), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
-  `gitlab-runner/pool.yaml`, 9 beside `kick`'s 2 and `build-light`'s 4, CPU the bound, 90m left since `build-light`'s
-  manager and jobs (#51)) plus
+  `gitlab-runner/pool.yaml`, 1440m beside `kick`'s 2 and `build-light`'s 4 (#51)) plus
   the looper pool's at its max nodes (#47, tacplus-dev/cloud#95: 2 c4a-standard-2 from 0, less an estimated 400m/1Gi
-  of daemonsets a node, PROPOSALS.md): 30; `control`'s jobs alone tolerate `looper=true:NoSchedule`, preferring the
-  normal pool, and the policy refuses the taint's toleration anywhere else; its default CPU request a report's 100m, looper#165; the pool's reserve, kube-system and the
+  of daemonsets a node, PROPOSALS.md), less the looper's managers' room (#53: `managers`, 4 x 250m/256Mi): 17 at 200m,
+  CPU the bound; `control`'s jobs alone tolerate `looper=true:NoSchedule`, preferring the
+  normal pool, and the policy refuses the taint's toleration anywhere else; its default CPU request a report's 150m
+  (#53: the recap's p90 139m; looper-dispatch asks it, and a manager 250m, once tacplus-dev/looper#229 lands; until
+  then a manager asks 50m); the pool's reserve, kube-system and the
   deployments' pods, CPU from looper#165's evidence and memory an estimate, not measured on the nodes, PROPOSALS.md), the
   render refusing runners the pool cannot hold; each job's HOME `/tmp/home`, an emptyDir (#20: uid 1000 has no home in
   the job image, and `git config --global` failed on `//.gitconfig`); each runner's own container CPU-limited to 500m (#34) and on a
