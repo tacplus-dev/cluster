@@ -52,3 +52,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-24 looper issue security fails main's apply on CI-tool advisories: GO-2026-6974 (otel in osv-scanner, trivy) and GO-2026-5026 (x/net in kubectl); bump or 14-day exceptions (#56)
 - 2026-11-24 looper issue The build runner's concurrent from the spot pool's room, as control's is (#36): the cluster half of tacplus-dev/looper#204 (#41)
 - 2026-11-24 looper issue ci/security.sh: fail only on findings in what ships; report CI tooling (bin/ binaries, the CI image), never blocking (looper#225) (#55)
+- 2026-11-24 looper issue STATE.md's Blocked on line is stale: it names closed #51 and looper#224 (landed; build-light now waits on cloud#100's apply and the re-pin) (#57)
