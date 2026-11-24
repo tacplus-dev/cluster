@@ -10,9 +10,12 @@
 #   KSTUB/live/<object>  an object as applied, named as kubectl diff names it (group.version.Kind.namespace.name)
 #   KSTUB/keep-tenants   when present, deleting a deployment namespace leaves its tenant namespaces (deploymentproxy
 #                        deletes them otherwise)
+#   KSTUB/stuck/<ns>.<deployment>  a deployment whose last rollout exceeded its progress deadline: rollout status fails
+#                        on it at once, as kubectl's does, until a rollout restart
 #
 # It answers what the pipeline's scripts ask: config current-context, auth can-i/whoami, get namespace(s) -o json
-# [-l KEY[=VALUE]], diff -f (through KUBECTL_EXTERNAL_DIFF), apply -f, delete namespace, rollout status.
+# [-l KEY[=VALUE]], diff -f (through KUBECTL_EXTERNAL_DIFF), apply -f, delete namespace, and with -n NAMESPACE, get
+# deployment NAME -o jsonpath (its Progressing condition's reason), rollout restart and rollout status.
 set -uo pipefail
 k=${KSTUB:?KSTUB is not set}
 echo "kubectl $*" >> "$k/log"
@@ -31,6 +34,23 @@ objects() {
     i=$((i + 1))
   done < <(yq -N '(.apiVersion | sub("/", ".")) + "." + .kind + "." + (.metadata.namespace // "") + "." + .metadata.name' "$1")
 }
+
+if [ "$1" = -n ]; then
+  ns=$2; shift 2
+  d=${3#deployment/}
+  case "$1 ${2:-}" in
+    "get deployment")
+      d=$3
+      [[ ${5:-} == *Progressing* ]] || { echo "stub kubectl: not stubbed: -n $ns $*" >&2; exit 2; }
+      if [ -e "$k/stuck/$ns.$d" ]; then echo ProgressDeadlineExceeded; else echo NewReplicaSetAvailable; fi ;;
+    "rollout restart") rm -f "$k/stuck/$ns.$d"; echo "deployment.apps/$d restarted" ;;
+    "rollout status")
+      [ ! -e "$k/stuck/$ns.$d" ] || { echo "error: deployment \"$d\" exceeded its progress deadline" >&2; exit 1; }
+      echo "deployment \"$d\" successfully rolled out" ;;
+    *) echo "stub kubectl: not stubbed: -n $ns $*" >&2; exit 2 ;;
+  esac
+  exit
+fi
 
 case "$1 ${2:-}" in
   "config current-context") cat "$k/context" ;;
@@ -73,6 +93,5 @@ case "$1 ${2:-}" in
       fi
       echo "namespace \"$n\" deleted"
     done ;;
-  "rollout status"|"-n deploymentproxy"|"-n ci") echo "${4#deployment/} successfully rolled out" ;;
   *) echo "stub kubectl: not stubbed: $*" >&2; exit 2 ;;
 esac

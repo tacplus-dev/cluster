@@ -10,6 +10,7 @@
 #   - on an empty cluster, plan lists every unit as added (ci too); apply applies it; the plan after is empty;
 #   - the runners' tokens: apply fails without them in Secret Manager, saying so; it writes each, by its version, into
 #     its runner's Secret in ci; it refuses a version that holds no runner token; it prints none;
+#   - a runner an earlier rollout left past its progress deadline: apply restarts it, and it alone (#58);
 #   - a changed render is a change, by object, with its diff;
 #   - a removed entry: plan lists it as removed and kept; apply runs no delete and no prune, and the namespace stays;
 #   - delete-deployment refuses no name, no DELETE_CONFIRM or one that differs, a bad name, a listed deployment, an
@@ -113,6 +114,16 @@ run apply "$here/ci/apply.sh" "$work/out" && fail "apply with a token that is no
 cp "$work/sm.good" "$SMSTUB/tacplus-dev/gitlab-runner-build/1"
 run plan env PLAN_SUMMARY="$work/summary" "$here/ci/plan.sh" "$work/out" && [ ! -s "$work/summary" ] &&
   grep -q 'plan: no difference' "$work/plan" && ok "after the apply, plan finds no difference" || fail "the plan after the apply: $(cat "$work/plan")"
+# A runner whose first rollout exceeded its progress deadline (#58: build-light applied before its token was in Secret
+# Manager) stays so while its pod template is unchanged: the apply restarts it, a fresh rollout, and no other.
+mkdir -p "$KSTUB/stuck" && : > "$KSTUB/stuck/ci.gitlab-runner-build-light" && : > "$KSTUB/log"
+run apply "$here/ci/apply.sh" "$work/out" && grep -q 'apply: done' "$work/apply" &&
+  grep -q 'apply: ci/gitlab-runner-build-light exceeded its progress deadline in an earlier rollout: restarting it' "$work/apply" &&
+  [ "$(grep '^kubectl .*rollout restart' "$KSTUB/log")" = 'kubectl -n ci rollout restart deployment/gitlab-runner-build-light' ] &&
+  grep -qx 'kubectl -n ci rollout status deployment/gitlab-runner-build-light --timeout=5m' "$KSTUB/log" &&
+  ok "a runner stuck at ProgressDeadlineExceeded from an earlier apply is restarted, and the apply passes" ||
+  fail "a stuck runner: $(cat "$work/apply" "$KSTUB/log")"
+rm -rf "$KSTUB/stuck"
 
 # A changed render: one change, with its diff.
 cp -R "$work/out" "$work/changed"

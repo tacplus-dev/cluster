@@ -8,7 +8,7 @@
 # named, and with a CPU limit, the rest of its Deployment the release's; ci's RBAC is in ci only; build jobs select and
 # tolerate the spot pool and control and infra jobs never; each runner's jobs have HOME on an emptyDir;
 # each runner has a CPU limit and a read-only root filesystem, /tmp, its home and config on emptyDirs (#37); each runner's
-# pods name its token's version, and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
+# pods name its token's version, a new version a new pod template, that runner's alone (#58), and no token is in it; infra's pods name its tags (cloud, cluster, deploy) and that it
 # is protected refs only, and no other runner is; kick's pods name arm64, kick (#36), control's arm64, control; kick's
 # jobs default to 50m and 256Mi (#39); build-light's pods name arm64, build-light, its jobs on the normal pool at 50m
 # and 256Mi (#51); every runner manager runs at the PriorityClass ci-runner-manager, above its
@@ -145,6 +145,21 @@ done
 [ "$(yq ea '[select(.kind == "Deployment") | .spec.template.metadata.annotations."tacplus.dev/runner-token"] | join(" ")' "$ci")" = \
   "$(for r in build-light build-report build control infra kick; do yq '.tacplus.token' "$here/gitlab-runner/runners/$r.yaml"; done | paste -sd ' ')" ] &&
   ok "each runner's pods name its token's Secret Manager version" || fail "the runners' token versions"
+# A new token version is a new pod template, so the apply rolls that runner's pods onto it, and no other's (#58).
+rm -rf "$work/runners" "$work/rotated" && cp -R "$here/gitlab-runner/runners" "$work/runners" &&
+  yq -i '.tacplus.token = "projects/tacplus-dev/secrets/gitlab-runner-build-light/versions/2"' "$work/runners/build-light.yaml"
+if RUNNERS=$work/runners "$here/render.sh" "$fixtures/deployments.yaml" "$work/rotated" > "$work/log" 2>&1; then
+  template() { R=$2 yq 'select(.kind == "Deployment" and .metadata.name == "gitlab-runner-" + strenv(R)) | .spec.template' "$1/20-ci.yaml"; }
+  [ "$(template "$work/rotated" build-light | yq '.metadata.annotations."tacplus.dev/runner-token"')" = \
+    projects/tacplus-dev/secrets/gitlab-runner-build-light/versions/2 ] &&
+    [ "$(template "$work/rotated" build-light | yq 'del(.metadata.annotations."tacplus.dev/runner-token")')" = \
+      "$(template "$work/out" build-light | yq 'del(.metadata.annotations."tacplus.dev/runner-token")')" ] &&
+    [ "$(template "$work/rotated" control)" = "$(template "$work/out" control)" ] &&
+    ok "a new token version is a new pod template annotation, that runner's alone" ||
+    fail "a new token version: build-light's pods name [$(template "$work/rotated" build-light | yq '.metadata.annotations."tacplus.dev/runner-token"')]"
+else
+  fail "render.sh failed on a new token version: $(cat "$work/log")"
+fi
 # The infra runner (#25): the cloud, cluster and deploy pipelines' tags, nothing else, protected refs only; the other
 # two neither protected nor holding one of its tags. Its pods say so (the hub registers it as its file says).
 annotation() { R=$1 A=$2 yq 'select(.kind == "Deployment" and .metadata.name == "gitlab-runner-" + strenv(R)) | .spec.template.metadata.annotations[("tacplus.dev/" + strenv(A))] // ""' "$ci"; }
