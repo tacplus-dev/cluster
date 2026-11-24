@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by the looper (#56).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by the looper (#58).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line); `build.lock` and `gitlab-runner/pin.yaml`'s
@@ -67,7 +67,8 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
 `ci/rollback.sh <commit>`, from Cloud Shell as someone cluster-admin on `dev`; README, Rolling back); Roles in `ci` only; jobs as `ci-job`
   with no token, kept off the metadata server (NetworkPolicy); the admission policy `ci-pods` refusing privileged,
   host path, host namespaces, host ports and added capabilities in `ci` (checked against a real kube-apiserver
-  1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`); all of it in
+  1.35, envtest, by hand); the tokens from Secret Manager by version at apply (`ci/runner-tokens.sh`), a new version a new pod template; the
+  apply restarting a Deployment an earlier rollout left at `ProgressDeadlineExceeded` before waiting for it (#58); all of it in
   `ci/policy.sh`. Tests green (`ci/checks.sh`), here and in the CI image.
 - **Pinned for the build pipeline (#14; looper#71, #84):** `build.lock` names the CI image by digest (build 2.6's rebuild 20261123-ef62327's since 2026-11-23, #48; 2.6.13's from 2026-11-22, #44; 2.6.12's from 2026-11-15, #24; 2.6.10's, OpenEXR-free (tacplus#554), from 2026-11-12; 2.6.2's since #16 before that,
   `gitlab-runner/pin.yaml`'s `job:`) and `gates.yaml` its one set, full (`ci/tools.sh`, the render, `ci/validate.sh
@@ -96,9 +97,9 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   a commit with it fails at `runner-tokens`), the hub re-pins to a commit with it, and the hub sets tacplus-dev/build's
   `BUILD_REPORT_TAGS` to `arm64, build-report`;
   #42's done-when (a land's gates pod starting within minutes on a spot pool full of report builds) is unverified.
-  `build-light` (#51) takes no job until cloud's `dev` and `gitlab` stacks apply tacplus-dev/cloud#100 (until
-  `gitlab-runner-build-light` version 1 is readable, `apply` of a commit with it fails at `runner-tokens`), the hub
-  re-pins to a commit with it, and tacplus-dev/looper#224 tags build's light jobs `arm64, build-light` (and cloud
+  `build-light` (#51): cloud's stacks applied tacplus-dev/cloud#100 (dc67c17, 2026-11-24) and its runner 59984739 is
+  online, but every cluster apply since b1fca16 failed on its first rollout's stale `ProgressDeadlineExceeded` (#58,
+  pipeline 3108203363) until #58's restart; it takes build's light jobs once tacplus-dev/looper#224 tags them `arm64, build-light` (and cloud
   bumps its copy); #51's done-when (`gitlab-runner-build-light` running in `ci`, its runner online) is unverified.
   #47 (`control` 33, 30 since #51, its overflow on the looper pool) reaches the cluster when the hub re-pins to a commit with it, once
   cloud's `dev` has applied the looper pool (tacplus-dev/cloud#95); its done-when (a looper node up in a busy hour,
