@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by the looper (#58).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by the looper (#59).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line); `build.lock` and `gitlab-runner/pin.yaml`'s
@@ -10,7 +10,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by th
   secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1; `gitlab-runner-infra`, #25, made and
   written by tacplus-dev/cloud's stacks, cloud#64; `gitlab-runner-kick`, #36, the same, cloud#81; `gitlab-runner-build-report`, #42, the same once tacplus-dev/cloud#93 makes it) in `tacplus-dev` too. The old `tacplus` in
   `jody1-328023` is no longer the target; Jody deletes it once the pipeline applies to `dev`.
-- **Works:** the cluster pipeline (#1): `deployments.yaml` (`seatrials`; `test-idp`, #17, without an operator: `operator` optional, no deploymentproxy Role or operator binding then, the policy requiring both or neither); deploymentproxy v0.2.2 (#22) fetched
+- **Works:** the cluster pipeline (#1): `deployments.yaml` (`seatrials`; `test-idp`, #17, without an operator: `operator` optional, no deploymentproxy Role or operator binding then, the policy requiring both or neither; #59: with one, the operator's own Role `deployment-operator`, its chart's, bound to it in `tac-<name>` only, each grant within `fleet-deploy`, the policy holding it so, and `fleet-deploy` reading the deployment's `TenantNamespace`s, never writing them); deploymentproxy v0.2.2 (#22) fetched
   and pinned by commit, checksum and image digest, rendered as its image's user 65532:65532 with a 500m CPU limit (#31), bumped by one command (`deploymentproxy/bump.sh <tag>`, #4: the
   pin, the release and the render fixture); `render.sh`; `ci/policy.sh` (no cluster-scoped resource or `*`
   in a deployment's Roles); `ci/tools.sh` pinning every tool by version and SHA-256 (#5: kubectl v1.34.13 and
