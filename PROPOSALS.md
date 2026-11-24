@@ -331,6 +331,13 @@ the looper then marks it `promoted` or `declined` here with the date.
   the 14-day exceptions the decision (tacplus-dev/roadmap decisions/security-gates-ship-only-2026-11-23.md) names
   instead: one land, now, with no rebuilt scanner in the security job's path. If no release has it by 2026-12-08
   and tacplus-dev/looper#225 has not made CI-tool findings report-only, raise them here rather than renew.
+- **The operator's Role checked against its chart** (2026-11-24, #59): `deployment-operator` in `render.sh` is the
+  operator chart's `helm/templates/role.yaml` copied by hand (tacplus-dev/operator, its main of 2026-11-24, the fleet stopgap's rules), so a
+  new rule there (a kind the generated chart starts shipping) reaches no deployment until someone copies it, and the
+  operator's helm apply in `tac-<name>` is Forbidden on it. A pin of the operator's chart here (commit and checksum, as
+  deploymentproxy's release) and a render or test comparing the two would say so. The fleet pins the operator by
+  commit (fleet-seatrials `images/pins.yaml`), and two deployments may run different ones: which commit the cluster
+  follows is a decision. Links: #59, tacplus-dev/fleet-seatrials#76, tacplus-dev/fleet-seatrials#78.
 
 ## Promoted / declined
 - **The security job fails only on what ships** (2026-11-23, #55; tacplus-dev/looper#225): `ci/security.sh` fails
