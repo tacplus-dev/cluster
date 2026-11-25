@@ -18,8 +18,9 @@
 # build-report; control's jobs at the PriorityClass control-job, below infra's and kick's (0, none set), which preempt
 # them, never preempting, not the cluster's default and not expendable (#49); control's jobs alone tolerate the looper
 # pool's taint, preferring the normal pool (#47); kick's and build-light's
-# concurrent their own (2, 4), control's the normal pool's room and the looper pool's at its max nodes, less the
-# looper's managers' room (gitlab-runner/pool.yaml, #53), CPU or memory the bound, and runners the pool cannot hold, a second runner on its room,
+# concurrent their own (2, 4), manager's its own (8, #60), counted before control's in the normal pool's room and the
+# rest in the looper pool's, and refused beyond both, control's the rest of the normal pool's room and the looper
+# pool's at its max nodes (gitlab-runner/pool.yaml), CPU or memory the bound, and runners the pool cannot hold, a second runner on its room,
 # or a quantity it cannot read, are refused; build's and build-report's each the spot pool's room at its max nodes by
 # their largest job, its ceilings (gitlab-runner/spot-pool.yaml, #41: one a node, 8), counted per node, and a spot
 # pool without room for one, a fixed concurrent beyond its room, or a quantity it cannot read, refused;
@@ -82,7 +83,7 @@ images=$(yq ea '[select(.kind == "Deployment") | .spec.template.spec | (.contain
 runner_cfg() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.template.toml"' "$ci" |
   yq -p toml ".runners[0] | $2"; }
 runner_toml() { runner_cfg "$1" ".kubernetes | $2"; }
-jobs=$(for r in build build-light build-report control infra kick; do runner_toml $r '.image + " " + .helper_image'; done | sort -u)
+jobs=$(for r in build build-light build-report control infra kick manager; do runner_toml $r '.image + " " + .helper_image'; done | sort -u)
 [ "$jobs" = "$(yq '.job + " " + .helper' "$runner_pin")" ] &&
   ok "every runner's jobs default to the pinned job image, with the pinned helper, by digest" || fail "the jobs' images are [$jobs]"
 ! grep -qiE 'image.*:latest|latest@' "$ci" && ok "nothing in ci's render names latest" || fail "ci's render names latest"
@@ -101,17 +102,19 @@ done
   [ "$(runner_cfg build-report 'del(.kubernetes) | to_json(0)')" = "$(runner_cfg build 'del(.kubernetes) | to_json(0)')" ] &&
   ok "build-report's jobs are build's, at the PriorityClass build-report" ||
   fail "build-report's jobs differ from build's: $(diff <(runner_cfg build-report '.') <(runner_cfg build '.'))"
-for r in build-light control infra kick; do
+for r in build-light control infra kick manager; do
   [ "$(runner_toml $r '[(.node_selector // {}) | keys[], (.node_tolerations // {}) | keys[]] | map(select(test("spot"))) | length')" = 0 ] &&
     [ "$(runner_toml $r '.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms[0].match_expressions[] | select(.key == "spot") | .operator + " " + .values[0]')" = "NotIn true" ] &&
     [ "$(runner_toml $r '.automount_service_account_token')" = false ] &&
     ok "$r jobs never tolerate the spot taint, refuse a spot node, and get no service account token" || fail "$r jobs' placement or token"
 done
-# The looper pool (#47; tacplus-dev/cloud#95): control's jobs alone tolerate its taint, and prefer the normal pool, so
+# The looper pool (#47; tacplus-dev/cloud#95): control's and manager's (#60) jobs alone tolerate its taint, and prefer the normal pool, so
 # they fill the normal nodes first and only their overflow scales it up from 0.
-[ "$(runner_toml control '.node_tolerations."looper=true"')" = NoSchedule ] &&
-  [ "$(runner_toml control '.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution[] | select(.preference.match_expressions | any_c(.key == "looper" and .operator == "NotIn" and .values[0] == "true")) | .weight')" = 100 ] &&
-  ok "control jobs tolerate the looper taint and prefer the normal pool" || fail "control jobs' placement on the looper pool"
+for r in control manager; do
+  [ "$(runner_toml $r '.node_tolerations."looper=true"')" = NoSchedule ] &&
+    [ "$(runner_toml $r '.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution[] | select(.preference.match_expressions | any_c(.key == "looper" and .operator == "NotIn" and .values[0] == "true")) | .weight')" = 100 ] &&
+    ok "$r jobs tolerate the looper taint and prefer the normal pool" || fail "$r jobs' placement on the looper pool"
+done
 for r in build build-light build-report infra kick; do
   [ "$(runner_toml $r '[(.node_selector // {}) | keys[], (.node_tolerations // {}) | keys[]] | map(select(test("looper"))) | length')" = 0 ] &&
     ok "$r jobs never tolerate the looper taint" || fail "$r jobs tolerate the looper taint"
@@ -120,14 +123,14 @@ done
   ok "no runner manager tolerates the looper taint" || fail "a runner manager tolerates the looper taint"
 # A job runs as a user with no home in the job image (uid 1000), so each runner gives it HOME on an emptyDir of its
 # own, writable and there before the script runs (#20: git config --global wrote //.gitconfig).
-for r in build build-light build-report control infra kick; do
+for r in build build-light build-report control infra kick manager; do
   home=$(runner_cfg $r '(.environment // [])[] | select(test("^HOME=")) | sub("^HOME="; "")')
   [ -n "$home" ] && [ "$home" != / ] &&
     [ "$(H=$home runner_toml $r '[(.volumes.empty_dir // [])[] | select(.mount_path == strenv(H))] | length')" = 1 ] &&
     ok "$r jobs have HOME=$home, an emptyDir" || fail "$r jobs' HOME is [$home], or no emptyDir is mounted there"
 done
 # Each runner's own container has a CPU limit (#34: KSV-0011), the chart's resources value, gitlab-runner/values.yaml's.
-for r in build build-light build-report control infra kick; do
+for r in build build-light build-report control infra kick manager; do
   cpu=$(R=$r yq 'select(.kind == "Deployment" and .metadata.name == "gitlab-runner-" + strenv(R)) | .spec.template.spec.containers[0].resources.limits.cpu' "$ci")
   [ "$cpu" = 500m ] && ok "$r's runner has its CPU limited to 500m" || fail "$r's runner's CPU limit is [$cpu]"
 done
@@ -137,7 +140,7 @@ done
 pod() { R=$r yq "select(.kind == \"Deployment\" and .metadata.name == \"gitlab-runner-\" + strenv(R)) | .spec.template.spec | $1" "$ci"; }
 emptydir() { local v; v=$(pod ".containers[0].volumeMounts[] | select(.mountPath == \"$1\") | .name")
   [ -n "$v" ] && [ "$(pod ".volumes[] | select(.name == \"$v\" and has(\"emptyDir\")) | .name")" = "$v" ] && echo 1 || echo 0; }
-for r in build build-light build-report control infra kick; do
+for r in build build-light build-report control infra kick manager; do
   [ "$(pod '.containers[0].securityContext.readOnlyRootFilesystem')" = true ] &&
     [ "$(emptydir /tmp)" = 1 ] && [ "$(emptydir /home/gitlab-runner)" = 1 ] &&
     [ "$(emptydir /home/gitlab-runner/.gitlab-runner)" = 1 ] &&
@@ -145,7 +148,7 @@ for r in build build-light build-report control infra kick; do
     fail "$r's runner: readOnlyRootFilesystem [$(pod '.containers[0].securityContext.readOnlyRootFilesystem')], /tmp [$(emptydir /tmp)], home [$(emptydir /home/gitlab-runner)], config [$(emptydir /home/gitlab-runner/.gitlab-runner)]"
 done
 [ "$(yq ea '[select(.kind == "Deployment") | .spec.template.metadata.annotations."tacplus.dev/runner-token"] | join(" ")' "$ci")" = \
-  "$(for r in build-light build-report build control infra kick; do yq '.tacplus.token' "$here/gitlab-runner/runners/$r.yaml"; done | paste -sd ' ')" ] &&
+  "$(for r in build-light build-report build control infra kick manager; do yq '.tacplus.token' "$here/gitlab-runner/runners/$r.yaml"; done | paste -sd ' ')" ] &&
   ok "each runner's pods name its token's Secret Manager version" || fail "the runners' token versions"
 # A new token version is a new pod template, so the apply rolls that runner's pods onto it, and no other's (#58).
 rm -rf "$work/runners" "$work/rotated" && cp -R "$here/gitlab-runner/runners" "$work/runners" &&
@@ -168,10 +171,10 @@ annotation() { R=$1 A=$2 yq 'select(.kind == "Deployment" and .metadata.name == 
 [ "$(annotation infra runner-tags)" = "cloud,cluster,deploy" ] && [ "$(annotation infra runner-protected)" = true ] &&
   ok "infra's pods name its tags cloud, cluster, deploy, and that it is protected refs only" ||
   fail "infra's pods: tags [$(annotation infra runner-tags)], protected [$(annotation infra runner-protected)]"
-[ "$(annotation build runner-protected) $(annotation build-light runner-protected) $(annotation build-report runner-protected) $(annotation control runner-protected) $(annotation kick runner-protected)" = "false false false false false" ] &&
-  ! [[ ",$(annotation build runner-tags),$(annotation build-light runner-tags),$(annotation build-report runner-tags),$(annotation control runner-tags),$(annotation kick runner-tags)," =~ ,(cloud|cluster|deploy), ]] &&
-  ok "build, build-light, build-report, control and kick are not protected and hold none of infra's tags" ||
-  fail "build [$(annotation build runner-tags), protected $(annotation build runner-protected)], build-light [$(annotation build-light runner-tags), protected $(annotation build-light runner-protected)], build-report [$(annotation build-report runner-tags), protected $(annotation build-report runner-protected)], control [$(annotation control runner-tags), protected $(annotation control runner-protected)], kick [$(annotation kick runner-tags), protected $(annotation kick runner-protected)]"
+[ "$(annotation build runner-protected) $(annotation build-light runner-protected) $(annotation build-report runner-protected) $(annotation control runner-protected) $(annotation kick runner-protected) $(annotation manager runner-protected)" = "false false false false false false" ] &&
+  ! [[ ",$(annotation build runner-tags),$(annotation build-light runner-tags),$(annotation build-report runner-tags),$(annotation control runner-tags),$(annotation kick runner-tags),$(annotation manager runner-tags)," =~ ,(cloud|cluster|deploy), ]] &&
+  ok "build, build-light, build-report, control, kick and manager are not protected and hold none of infra's tags" ||
+  fail "build [$(annotation build runner-tags), protected $(annotation build runner-protected)], build-light [$(annotation build-light runner-tags), protected $(annotation build-light runner-protected)], build-report [$(annotation build-report runner-tags), protected $(annotation build-report runner-protected)], control [$(annotation control runner-tags), protected $(annotation control runner-protected)], kick [$(annotation kick runner-tags), protected $(annotation kick runner-protected)], manager [$(annotation manager runner-tags), protected $(annotation manager runner-protected)]"
 # The report builds' runner (#42): arm64 and build-report, never build (GitLab would give it a land's build's jobs too),
 # so tacplus-dev/build's report builds (BUILD_REPORT_TAGS) reach it and a land's (arm64, build) never does.
 [ "$(annotation build-report runner-tags)" = "arm64,build-report" ] && [ "$(annotation build runner-tags)" = "arm64,build" ] &&
@@ -187,6 +190,14 @@ annotation() { R=$1 A=$2 yq 'select(.kind == "Deployment" and .metadata.name == 
 [ "$(runner_toml kick '.cpu_request + " " + .memory_request')" = "50m 256Mi" ] &&
   ok "kick's jobs default to 50m and 256Mi, a kicker's or a plan's requests" ||
   fail "kick's jobs default to [$(runner_toml kick '.cpu_request + " " + .memory_request')]"
+# The manager runner (#60): the looper's managers (.manager, tagged arm64, manager: tacplus-dev/looper#236) on a runner
+# of their own, so they never wait behind the reports filling control: arm64 and manager, never control (GitLab would
+# give it the reports too). Its jobs default to a manager's requests (250m and 256Mi: tacplus-dev/looper#229) and set
+# no PriorityClass (0), so infra's and kick's never preempt them.
+[ "$(annotation manager runner-tags)" = "arm64,manager" ] &&
+  [ "$(runner_toml manager '.cpu_request + " " + .memory_request + " " + (.priority_class_name // "none")')" = "250m 256Mi none" ] &&
+  ok "manager's pods name its tags arm64, manager; its jobs default to 250m and 256Mi, at no PriorityClass" ||
+  fail "manager's tags [$(annotation manager runner-tags)], its jobs [$(runner_toml manager '.cpu_request + " " + .memory_request + " " + (.priority_class_name // "none")')]"
 # The light builds' runner (#51; tacplus-dev/cloud#100): tacplus-dev/build's pending, plan and reports (arm64,
 # build-light) on the normal pool, on slots of their own, so they never wait behind the gates and security jobs holding
 # build's; arm64 and build-light, never build (GitLab would give it those jobs too, off the spot pool). Each asks what
@@ -216,7 +227,7 @@ pclass() { N=$1 yq 'select(.kind == "PriorityClass" and .metadata.name == strenv
 [ "$(pclass control-job)" = "-1 Never false" ] &&
   ok "the PriorityClass control-job, below infra's and kick's jobs (0), never preempting, not expendable, not the default" ||
   fail "the PriorityClass control-job: [$(pclass control-job)]"
-for r in build build-light build-report control infra kick; do
+for r in build build-light build-report control infra kick manager; do
   want=; [ "$r" != build-report ] || want=build-report; [ "$r" != control ] || want=control-job
   [ "$(pod '.priorityClassName')" = ci-runner-manager ] && [ "$(runner_toml $r '.priority_class_name // ""')" = "$want" ] &&
     ok "$r's runner runs at ci-runner-manager, its jobs at ${want:-none}" ||
@@ -338,61 +349,79 @@ refused_runner "no config" 'del(.runners.config)' "no runners.config"
 # build-light's (#51), CPU and memory both; never a fixed number.
 concurrent() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitlab-runner-" + strenv(R)) | .data."config.toml"' "$2" |
   sed -n 's/^ *concurrent = //p'; }
-# 3 x 1930m - 1200m - 6 x 50m (managers, build-report's since #42, build-light's since #51) - 50m (deploymentproxy) -
-# 4 x 550m (infra) - 2 x 100m (kick) - 4 x 100m (build-light) = 1440m (#39, #42, #51); memory 3 x 6144Mi - 3Gi -
-# 6 x 128Mi - 64Mi - 4 x 1088Mi - 2 x 320Mi - 4 x 320Mi = 8256Mi. The spot pool's runners (build, build-report) take
-# nothing of it but their managers. Control's jobs overflow onto the looper pool (#47), counted at its max nodes less
-# their daemonsets: 2 x (1930m - 400m) = 3060m and 2 x (6144Mi - 1024Mi) = 10240Mi more; of the 4500m and 18496Mi,
-# the looper's managers' room (#53: 4 x 250m, 4 x 256Mi) leaves 3500m for 17 pods of 200m (a report's 150m and the
-# helper's 50m), 17472Mi for 30 of 576Mi.
-[ "$(concurrent control "$ci")" = 17 ] && [ "$(concurrent infra "$ci")" = 4 ] && [ "$(concurrent kick "$ci")" = 2 ] &&
+# 3 x 1930m - 1200m - 7 x 50m (runner managers, build-report's since #42, build-light's since #51, manager's since #60)
+# - 50m (deploymentproxy) - 4 x 550m (infra) - 2 x 100m (kick) - 4 x 100m (build-light) = 1390m (#39, #42, #51, #60);
+# memory 3 x 6144Mi - 3Gi - 7 x 128Mi - 64Mi - 4 x 1088Mi - 2 x 320Mi - 4 x 320Mi = 8128Mi. The spot pool's runners
+# (build, build-report) take nothing of it but their managers. manager's jobs (#60: 8, at 300m and 320Mi with the
+# helper) come next: 4 in the normal pool's room (1200m, 1280Mi; 190m and 6848Mi left), the other 4 in the looper
+# pool's (#47), counted at its max nodes less their daemonsets: 2 x (1930m - 400m) = 3060m and 2 x (6144Mi - 1024Mi) =
+# 10240Mi, 1860m and 8960Mi left. Control's jobs take the rest: 2050m for 10 pods of 200m (a report's 150m and the
+# helper's 50m), 15808Mi for 27 of 576Mi.
+[ "$(concurrent control "$ci")" = 10 ] && [ "$(concurrent infra "$ci")" = 4 ] && [ "$(concurrent kick "$ci")" = 2 ] &&
   [ "$(concurrent build-light "$ci")" = 4 ] && [ "$(concurrent build "$ci") $(concurrent build-report "$ci")" = "8 8" ] &&
-  grep -q '^# The runner control .*concurrent 17, the normal pool.s room and the looper pool.s' "$ci" &&
-  ok "control's concurrent is the normal and looper pools' room for its jobs beside the managers' (17), infra's, kick's, build-light's, build's and build-report's their own (4, 2, 4, 8, 8)" ||
-  fail "concurrent: control [$(concurrent control "$ci")], infra [$(concurrent infra "$ci")], kick [$(concurrent kick "$ci")], build-light [$(concurrent build-light "$ci")], build [$(concurrent build "$ci")], build-report [$(concurrent build-report "$ci")]"
-# pooled NAME YQ WANT: control's concurrent with gitlab-runner/pool.yaml changed by YQ is WANT, or render.sh refuses it
-# saying WANT.
+  [ "$(concurrent manager "$ci")" = 8 ] &&
+  grep -q '^# The runner control .*concurrent 10, the normal pool.s room and the looper pool.s' "$ci" &&
+  grep -q "^# The runner manager .*concurrent 8, 4 of them in the normal pool's room and 4 in the looper pool's at its max nodes" "$ci" &&
+  ok "manager's concurrent is its own (8), 4 in the normal pool's room and 4 in the looper pool's; control's the rest of both pools' room (10); infra's, kick's, build-light's, build's and build-report's their own (4, 2, 4, 8, 8)" ||
+  fail "concurrent: control [$(concurrent control "$ci")], manager [$(concurrent manager "$ci")], infra [$(concurrent infra "$ci")], kick [$(concurrent kick "$ci")], build-light [$(concurrent build-light "$ci")], build [$(concurrent build "$ci")], build-report [$(concurrent build-report "$ci")]"
+# pooled NAME YQ WANT [MANAGER]: control's concurrent with gitlab-runner/pool.yaml changed by YQ (and
+# gitlab-runner/runners/manager.yaml by MANAGER) is WANT, or render.sh refuses it saying WANT.
 pooled() {
-  rm -rf "$work/bad" && yq "$2" "$here/gitlab-runner/pool.yaml" > "$work/pool.yaml"
-  if POOL=$work/pool.yaml "$here/render.sh" "$fixtures/deployments.yaml" "$work/bad" > "$work/log" 2>&1; then
+  rm -rf "$work/bad" "$work/runners" && yq "$2" "$here/gitlab-runner/pool.yaml" > "$work/pool.yaml"
+  cp -R "$here/gitlab-runner/runners" "$work/runners" && yq -i "${4:-.}" "$work/runners/manager.yaml"
+  if RUNNERS=$work/runners POOL=$work/pool.yaml "$here/render.sh" "$fixtures/deployments.yaml" "$work/bad" > "$work/log" 2>&1; then
     [ "$(concurrent control "$work/bad/20-ci.yaml")" = "$3" ] && ok "pool: $1: control's concurrent is $3" ||
       fail "pool: $1: control's concurrent is [$(concurrent control "$work/bad/20-ci.yaml")], not $3"
   else
     grep -q -- "$3" "$work/log" && ok "pool: refused: $1" || fail "pool: $1: $(cat "$work/log")"
   fi
 }
-# Without the looper pool, 1440m - 1000m = 440m: 2 pods.
-pooled "two nodes, CPU the bound" '.nodes = 2 | .reserved.cpu = "500m" | .managers.count = 0 | del(.looper)' 1
-pooled "4Gi nodes, memory the bound" '.allocatable.memory = "4Gi" | del(.looper)' 1
-pooled "a smaller reserve" '.reserved.cpu = "800m" | del(.looper)' 4
-pooled "no room for one job" '.reserved.cpu = "1500m" | del(.looper)' "the normal pool has no room for one job of control"
+# The normal pool alone (no looper pool), one manager (300m, 320Mi): 1390m - 300m = 1090m, 5 pods; on two nodes with a
+# 100m reserve, 260m, 1; memory 8128Mi - 320Mi = 7808Mi, 13 pods, and on 4Gi nodes 1664Mi, 2; with an 800m reserve,
+# 1490m, 7; with a 2200m reserve, 90m, none.
+pooled "the normal pool alone, one manager" 'del(.looper)' 5 '.concurrent = 1'
+pooled "two nodes, CPU the bound" '.nodes = 2 | .reserved.cpu = "100m" | del(.looper)' 1 '.concurrent = 1'
+pooled "4Gi nodes, memory the bound" '.allocatable.memory = "4Gi" | del(.looper)' 2 '.concurrent = 1'
+pooled "a smaller reserve" '.reserved.cpu = "800m" | del(.looper)' 7 '.concurrent = 1'
+pooled "no room for one job" '.reserved.cpu = "2200m" | del(.looper)' "the normal pool has no room for one job of control" '.concurrent = 1'
 pooled "a quantity it cannot read" '.reserved.cpu = "1.5"' "gitlab-runner/pool.yaml: reserved.cpu \[1.5\] is not"
-# The looper pool's room (#47): (440m + 1530m) / 200m = 9 at one node; memory (7232Mi + 2 x 1024Mi) / 576Mi = 16 with
-# 5Gi of daemonsets; none at 0 nodes or without it; the normal pool full, the looper pool's room (140m + 3060m - 1000m,
-# 11).
-pooled "the looper pool at one node" '.looper.max_nodes = 1' 9
-pooled "the looper pool's daemonsets larger, memory the bound" '.looper.daemonsets.memory = "5Gi"' 16
-pooled "the looper pool at 0 nodes" '.looper.max_nodes = 0' 2
-pooled "no looper pool" 'del(.looper)' 2
-pooled "the normal pool full, the looper pool's room" '.reserved.cpu = "2500m"' 11
-# The looper's managers' room (#53): control's jobs, at their own requests (250m and 256Mi, above the report's its
-# defaults count), taken from the pools' room before its slots; without it, none: 4500m / 200m = 22.
-pooled "no managers' room" 'del(.managers)' 22
-pooled "8 managers" '.managers.count = 8' 12
-pooled "managers' memory the bound" '.managers.memory = "4Gi"' 3
-pooled "managers filling the pools" '.managers.count = 18' "the normal pool has no room for one job of control"
-pooled "the managers' count not a number" '.managers.count = "four"' "gitlab-runner/pool.yaml: managers.count \[four\] is not a number of managers"
-pooled "a managers' quantity it cannot read" '.managers.cpu = "0.25"' "gitlab-runner/pool.yaml: managers.cpu \[0.25\] is not"
+# The looper pool's room (#47): at one node, 1530m - 4 managers' 1200m = 330m and the normal pool's 190m, 2 pods; at
+# four (cluster#61), 6120m - 1200m + 190m = 5110m, 25; the normal pool full, the looper pool's room for all 8 managers
+# (90m + 3060m - 2400m, 3); 4Gi nodes and 5Gi of daemonsets, memory the bound: (704Mi + 2048Mi - 1280Mi) / 576Mi, 2.
+pooled "the looper pool at one node" '.looper.max_nodes = 1' 2
+pooled "the looper pool at four nodes" '.looper.max_nodes = 4' 25
+pooled "the normal pool full, the looper pool's room" '.reserved.cpu = "2500m"' 3
+pooled "the looper pool's daemonsets larger, memory the bound" '.allocatable.memory = "4Gi" | .looper.daemonsets.memory = "5Gi"' 2
+# manager's jobs (#60), before control's: the normal pool holds 4 of the 8, and without the looper pool's room for
+# the other 4 the render is refused, as it is beyond the two pools' room (15: 4 there and 11 x 300m > 3060m); 14 leave
+# control 60m + 190m, 1; one manager leaves it 1090m + 3060m, 20; two at 4Gi each, one in each pool, leave 3968Mi +
+# 6080Mi, memory the bound, 17.
+pooled "the looper pool at 0 nodes" '.looper.max_nodes = 0' "runner manager: concurrent 8, but the normal pool holds 4 of its jobs (300m, 320Mi) and the looper pool at its max nodes not the other 4"
+pooled "no looper pool" 'del(.looper)' "runner manager: concurrent 8, but the normal pool holds 4 of its jobs"
+pooled "managers beyond the pools" '.' "runner manager: concurrent 15, but the normal pool holds 4 of its jobs" '.concurrent = 15'
+pooled "14 managers" '.' 1 '.concurrent = 14'
+pooled "one manager" '.' 20 '.concurrent = 1'
+pooled "managers' memory the bound" '.' 17 '.concurrent = 2 | .runners.config |= sub("memory_request = \"256Mi\""; "memory_request = \"4Gi\"")'
 pooled "the looper pool's nodes not a number" '.looper.max_nodes = "two"' "gitlab-runner/pool.yaml: looper.max_nodes \[two\] is not a number of nodes"
 pooled "a looper quantity it cannot read" '.looper.daemonsets.cpu = "0.4"' "gitlab-runner/pool.yaml: looper.daemonsets.cpu \[0.4\] is not"
 pooled "the looper pool's daemonsets beyond a node" '.looper.daemonsets.cpu = "2"' "gitlab-runner/pool.yaml: the looper pool's daemonsets ask more than a node's allocatable"
-# Control's jobs not tolerating the looper taint never land there: the normal pool's room alone.
+# Control's jobs not tolerating the looper taint never land there: the normal pool's room alone, beside one manager
+# (1090m, 5).
 rm -rf "$work/runners" "$work/bad" && cp -R "$here/gitlab-runner/runners" "$work/runners"
 yq -i '.runners.config |= sub("\"looper=true\" = \"NoSchedule\"\n *", "")' "$work/runners/control.yaml"
+yq -i '.concurrent = 1' "$work/runners/manager.yaml"
 RUNNERS=$work/runners "$here/render.sh" "$fixtures/deployments.yaml" "$work/bad" > "$work/log" 2>&1 &&
-  [ "$(concurrent control "$work/bad/20-ci.yaml")" = 2 ] &&
-  ok "pool: control's jobs not tolerating the looper pool: its concurrent is the normal pool's room (2)" ||
+  [ "$(concurrent control "$work/bad/20-ci.yaml")" = 5 ] &&
+  ok "pool: control's jobs not tolerating the looper pool: its concurrent is the normal pool's room (5)" ||
   fail "pool: control's jobs not tolerating the looper pool: [$(concurrent control "$work/bad/20-ci.yaml" 2>/dev/null)] $(cat "$work/log")"
+# manager's jobs not tolerating the looper taint are a normal-pool runner's, at their full concurrent: 8 x 300m beyond
+# its 1390m.
+rm -rf "$work/runners" "$work/bad" && cp -R "$here/gitlab-runner/runners" "$work/runners"
+yq -i '.runners.config |= sub("\"looper=true\" = \"NoSchedule\"\n *", "")' "$work/runners/manager.yaml"
+! RUNNERS=$work/runners "$here/render.sh" "$fixtures/deployments.yaml" "$work/bad" > "$work/log" 2>&1 &&
+  grep -q "the normal pool has no room for its runners' jobs: -1010m CPU" "$work/log" &&
+  ok "pool: refused: manager's jobs not tolerating the looper pool, beyond the normal pool" ||
+  fail "pool: manager's jobs not tolerating the looper pool: $(cat "$work/log")"
 # pool_runner NAME YQ WANT: render.sh refuses the runner files changed by YQ (on control.yaml, then infra.yaml), saying WANT.
 pool_runner() {
   rm -rf "$work/runners" "$work/bad" && cp -R "$here/gitlab-runner/runners" "$work/runners"

@@ -12,13 +12,15 @@
 # get, list and watch on TenantNamespaces (#59) (a deployment without an operator has none of them, and keeps the rules). In ci's file: privileged jobs or runners, a host path, the Docker socket, an
 # added capability, host networking, an image by tag only; build jobs off the spot pool or as root, control jobs
 # tolerating spot, landing on a spot node, Unconfined or escalating privilege; any other runner's jobs tolerating the
-# looper taint, control's selecting a looper node or not preferring the normal pool, a runner manager or deploymentproxy
+# looper taint, control's (and manager's, #60) selecting a looper node or not preferring the normal pool, a runner manager or deploymentproxy
 # tolerating it (#47); a job allowed to override its
 # placement, a job's token, no resource ceiling; build taking other tags; a VM runner's tag (autoscale,
 # autoscale-16, gce) on any runner; an infra pipeline's tag (cloud, cluster, deploy) on build or control, infra
 # taking any other tag, or not protected refs only (#25); kick taking a tag but arm64 and kick, or not kick, and kick
 # on any other runner (#36); build-light taking a tag but arm64 and build-light (build above all), or not build-light,
-# build-light on any other runner, and its jobs tolerating spot or landing on a spot node (#51); a runner manager
+# build-light on any other runner, and its jobs tolerating spot or landing on a spot node (#51); manager taking a tag
+# but arm64 and manager (control above all), or not manager, manager on any other runner, and its jobs tolerating the
+# looper taint without preferring the normal pool or landing on a spot node (#60); a runner manager
 # on a read-only root filesystem without a
 # writable emptyDir where GitLab Runner writes (/tmp or its TMPDIR, its home; #37); a runner manager not at the
 # PriorityClass ci-runner-manager, none, another, or one that is the default, never preempts, or is not above the jobs
@@ -155,6 +157,11 @@ breach_ci "build-light taking build's tag" "$(deployment build-light '.metadata.
 breach_ci "build-light without its tag" "$(deployment build-light '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64\"" "gitlab-runner-build-light: does not take build-light"
 breach_ci "build taking build-light's tag" "$(deployment build '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,build,build-light\"" "gitlab-runner-build: takes build-light, the light builds' runner's tag"
 breach_ci "kick taking build-light's tag" "$(deployment kick '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,kick,build-light\"" "gitlab-runner-kick: takes build-light, the light builds' runner's tag"
+breach_ci "manager taking control's tag" "$(deployment manager '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,manager,control\"" "gitlab-runner-manager: takes a tag that is not arm64 or manager (control)"
+breach_ci "manager without its tag" "$(deployment manager '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64\"" "gitlab-runner-manager: does not take manager"
+breach_ci "control taking manager's tag" "$(deployment control '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,control,manager\"" "gitlab-runner-control: takes manager, the manager runner's tag"
+breach_ci "manager jobs filling the looper pool first" "$(toml manager 'key = \"looper\"' 'key = \"pool\"')" "gitlab-runner-manager: its jobs tolerate the looper taint but do not prefer the normal pool"
+breach_ci "manager jobs that may land on spot" "$(toml manager 'key = \"spot\"' 'key = \"pool\"')" "gitlab-runner-manager: its jobs may land on a spot node"
 breach_ci "build-light jobs tolerating spot" "$(toml build-light '\\[runners.kubernetes.node_tolerations\\]' '[runners.kubernetes.node_tolerations]\n      \"spot=true\" = \"NoSchedule\"')" "gitlab-runner-build-light: its jobs tolerate the spot taint (spot=true)"
 breach_ci "build-light jobs that may land on spot" "$(toml build-light 'key = \"spot\"' 'key = \"pool\"')" "gitlab-runner-build-light: its jobs may land on a spot node"
 breach_ci "infra not protected" "$(deployment infra '.metadata.annotations."tacplus.dev/runner-protected"') = \"false\"" "gitlab-runner-infra: is not protected refs only"

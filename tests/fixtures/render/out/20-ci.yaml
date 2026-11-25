@@ -1347,7 +1347,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 17, the normal pool's room and the looper pool's at its max nodes (gitlab-runner/pool.yaml): GitLab Runner's chart 0.95.0.
+# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 10, the normal pool's room and the looper pool's at its max nodes (gitlab-runner/pool.yaml): GitLab Runner's chart 0.95.0.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -1423,7 +1423,7 @@ data:
       --working-directory=/home/gitlab-runner
   config.toml: |
     shutdown_timeout = 0
-    concurrent = 17
+    concurrent = 10
     check_interval = 3
     log_level = "info"
   config.template.toml: |
@@ -1462,7 +1462,7 @@ data:
           "tacplus.dev/ci-runner" = "control"
         [runners.kubernetes.node_selector]
           "kubernetes.io/arch" = "arm64"
-        # The looper pool's taint (#47): its jobs alone tolerate it, and prefer the normal pool (below).
+        # The looper pool's taint (#47): its jobs and manager's (#60) alone tolerate it, and prefer the normal pool (below).
         [runners.kubernetes.node_tolerations]
           "kubernetes.io/arch=arm64" = "NoSchedule"
           "looper=true" = "NoSchedule"
@@ -1641,7 +1641,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: 54ecb62505e2d98655f0f3ef80acb37bd43878b96ec1cf7e63cbd8de9226afd7
+        checksum/configmap: 9b90bb7446bc1e7ff6b47be95e1938a262116f094adcf56e2bbc1b185009011b
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
@@ -2555,6 +2555,423 @@ spec:
         - name: configmaps
           configMap:
             name: gitlab-runner-kick
+        - emptyDir: {}
+          name: home
+        - emptyDir: {}
+          name: tmp
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: spot
+                    operator: NotIn
+                    values:
+                      - "true"
+                  - key: cloud.google.com/gke-spot
+                    operator: NotIn
+                    values:
+                      - "true"
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      tolerations:
+        - effect: NoSchedule
+          key: kubernetes.io/arch
+          operator: Equal
+          value: arm64
+---
+# The runner manager (gitlab-runner/runners/manager.yaml), tags arm64, manager, concurrent 8, 4 of them in the normal pool's room and 4 in the looper pool's at its max nodes (gitlab-runner/pool.yaml): GitLab Runner's chart 0.95.0.
+# Source: gitlab-runner/templates/service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: "gitlab-runner-manager"
+  namespace: "ci"
+  labels:
+    app: gitlab-runner-manager
+    chart: gitlab-runner-0.95.0
+    release: "gitlab-runner-manager"
+    heritage: "Helm"
+---
+# Source: gitlab-runner/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gitlab-runner-manager
+  namespace: "ci"
+  labels:
+    app: gitlab-runner-manager
+    chart: gitlab-runner-0.95.0
+    release: "gitlab-runner-manager"
+    heritage: "Helm"
+data:
+  entrypoint: |
+    #!/bin/bash
+    set -e
+
+    export CONFIG_PATH_FOR_INIT="/home/gitlab-runner/.gitlab-runner/"
+    mkdir -p ${CONFIG_PATH_FOR_INIT}
+    cp /configmaps/config.toml ${CONFIG_PATH_FOR_INIT}
+    # Set up environment variables for cache
+    if [[ -f /secrets/accesskey && -f /secrets/secretkey ]]; then
+      export CACHE_S3_ACCESS_KEY=$(cat /secrets/accesskey)
+      export CACHE_S3_SECRET_KEY=$(cat /secrets/secretkey)
+    fi
+
+    if [[ -f /secrets/gcs-applicaton-credentials-file ]]; then
+      export GOOGLE_APPLICATION_CREDENTIALS="/secrets/gcs-applicaton-credentials-file"
+    elif [[ -f /secrets/gcs-application-credentials-file ]]; then
+      export GOOGLE_APPLICATION_CREDENTIALS="/secrets/gcs-application-credentials-file"
+    else
+      if [[ -f /secrets/gcs-access-id && -f /secrets/gcs-private-key ]]; then
+        export CACHE_GCS_ACCESS_ID=$(cat /secrets/gcs-access-id)
+        # echo -e used to make private key multiline (in google json auth key private key is oneline with \n)
+        export CACHE_GCS_PRIVATE_KEY=$(echo -e $(cat /secrets/gcs-private-key))
+      fi
+    fi
+
+    if [[ -f /secrets/azure-account-name && -f /secrets/azure-account-key ]]; then
+      export CACHE_AZURE_ACCOUNT_NAME=$(cat /secrets/azure-account-name)
+      export CACHE_AZURE_ACCOUNT_KEY=$(cat /secrets/azure-account-key)
+    fi
+
+    if [[ -f /secrets/runner-registration-token ]]; then
+      export REGISTRATION_TOKEN=$(cat /secrets/runner-registration-token)
+    fi
+
+    if [[ -f /secrets/runner-token ]]; then
+      export CI_SERVER_TOKEN=$(cat /secrets/runner-token)
+    fi
+    if ! sh /configmaps/register-the-runner; then
+      exit 1
+    fi
+
+    # Run pre-entrypoint-script
+    if ! bash /configmaps/pre-entrypoint-script; then
+      exit 1
+    fi
+
+    # Start the runner
+    exec /entrypoint run \
+      --working-directory=/home/gitlab-runner
+  config.toml: |
+    shutdown_timeout = 0
+    concurrent = 8
+    check_interval = 3
+    log_level = "info"
+  config.template.toml: |
+    [[runners]]
+      executor = "kubernetes"
+      # uid 1000 has no home in the job image, so HOME would be / (#20): HOME is the emptyDir below instead.
+      environment = ["HOME=/tmp/home"]
+      [runners.kubernetes]
+        namespace = "ci"
+        image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
+        service_account = "ci-job"
+        automount_service_account_token = false
+        privileged = false
+        allow_privilege_escalation = false
+        # A looper node from 0 takes minutes to come up (#47).
+        poll_timeout = 900
+        cpu_request = "250m"
+        cpu_limit = "1"
+        memory_request = "256Mi"
+        memory_limit = "2Gi"
+        cpu_request_overwrite_max_allowed = "1500m"
+        cpu_limit_overwrite_max_allowed = "1500m"
+        memory_request_overwrite_max_allowed = "4Gi"
+        memory_limit_overwrite_max_allowed = "4Gi"
+        helper_cpu_request = "50m"
+        helper_cpu_limit = "500m"
+        helper_memory_request = "64Mi"
+        helper_memory_limit = "256Mi"
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "home"
+          mount_path = "/tmp/home"
+        [runners.kubernetes.pod_labels]
+          "tacplus.dev/ci-runner" = "manager"
+        [runners.kubernetes.node_selector]
+          "kubernetes.io/arch" = "arm64"
+        # The looper pool's taint (#47, #60): its jobs and control's alone tolerate it, and prefer the normal pool (below).
+        [runners.kubernetes.node_tolerations]
+          "kubernetes.io/arch=arm64" = "NoSchedule"
+          "looper=true" = "NoSchedule"
+        [runners.kubernetes.affinity]
+          [runners.kubernetes.affinity.node_affinity]
+            [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution]]
+              weight = 100
+              [runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference]
+                [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference.match_expressions]]
+                  key = "looper"
+                  operator = "NotIn"
+                  values = ["true"]
+            [runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution]
+              [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms]]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "spot"
+                  operator = "NotIn"
+                  values = ["true"]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "cloud.google.com/gke-spot"
+                  operator = "NotIn"
+                  values = ["true"]
+        [runners.kubernetes.pod_security_context]
+          [runners.kubernetes.pod_security_context.seccomp_profile]
+            type = "RuntimeDefault"
+        [runners.kubernetes.helper_container_security_context]
+          allow_privilege_escalation = false
+          [runners.kubernetes.helper_container_security_context.capabilities]
+            drop = ["ALL"]
+  register-the-runner: |
+    #!/bin/sh
+    signal_handler() {
+      if [ ! -d "/proc/$register_pid" ]; then
+        wait $register_pid
+      fi
+      exit
+    }
+    trap 'signal_handler' QUIT INT
+
+    MAX_REGISTER_ATTEMPTS=30
+
+    # Reset/unset the not needed flags when an authentication token
+    RUN_UNTAGGED=""
+    ACCESS_LEVEL=""
+
+    if [ -n "$CI_SERVER_TOKEN" ] && [ "${CI_SERVER_TOKEN#glrt-}" != "$CI_SERVER_TOKEN" ]; then
+      RUN_UNTAGGED=""
+      ACCESS_LEVEL=""
+      unset REGISTER_LOCKED
+      unset RUNNER_TAG_LIST
+    fi
+
+    for i in $(seq 1 "${MAX_REGISTER_ATTEMPTS}"); do
+      echo "Registration attempt ${i} of ${MAX_REGISTER_ATTEMPTS}"
+      /entrypoint register \
+        --name="tacplus-dev manager (cluster, ci, normal pool)"\
+        ${RUN_UNTAGGED} \
+        ${ACCESS_LEVEL} \
+        --template-config /configmaps/config.template.toml \
+        --non-interactive &
+
+      register_pid=$!
+      wait $register_pid
+      retval=$?
+
+      if [ ${retval} = 0 ]; then
+        break
+      elif [ ${i} = ${MAX_REGISTER_ATTEMPTS} ]; then
+        exit 1
+      fi
+
+      sleep 5
+    done
+  check-live: |
+    #!/bin/bash
+    set -eou pipefail
+
+    # default timeout is 3 seconds, can be overriden
+    VERIFY_TIMEOUT=${1:-${VERIFY_TIMEOUT:-3}}
+
+    if ! /usr/bin/pgrep -f ".*register-the-runner"  > /dev/null && ! /usr/bin/pgrep -f "gitlab.*runner"  > /dev/null ; then
+      exit 1
+    fi
+
+    status=0
+    # empty --url= helps `gitlab-runner verify` select all configured runners (otherwise filters for $CI_SERVER_URL)
+    verify_output=$(timeout "${VERIFY_TIMEOUT}" gitlab-runner verify --url= 2>&1) || status=$?
+
+    # timeout exit code is 143 with busybox, and 124 with coreutils
+    if (( status == 143 )) || (( status == 124 )) ; then
+      echo "'gitlab-runner verify' terminated by timeout, not a conclusive failure" >&2
+      exit 0
+    elif (( status > 0 )) ; then
+      exit ${status}
+    fi
+
+    grep -qE "is (alive|valid)" <<<"${verify_output}"
+  pre-entrypoint-script: ""
+---
+# Source: gitlab-runner/templates/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: "Role"
+metadata:
+  name: gitlab-runner-manager
+  labels:
+    app: gitlab-runner-manager
+    chart: gitlab-runner-0.95.0
+    release: "gitlab-runner-manager"
+    heritage: "Helm"
+  namespace: "ci"
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/attach", "pods/exec"]
+    verbs: ["create", "delete", "get", "patch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete", "get", "update"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create", "get"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch"]
+---
+# Source: gitlab-runner/templates/role-binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: "RoleBinding"
+metadata:
+  name: gitlab-runner-manager
+  labels:
+    app: gitlab-runner-manager
+    chart: gitlab-runner-0.95.0
+    release: "gitlab-runner-manager"
+    heritage: "Helm"
+  namespace: "ci"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: "Role"
+  name: gitlab-runner-manager
+subjects:
+  - kind: ServiceAccount
+    name: "gitlab-runner-manager"
+    namespace: "ci"
+---
+# Source: gitlab-runner/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitlab-runner-manager
+  namespace: "ci"
+  labels:
+    app: gitlab-runner-manager
+    chart: gitlab-runner-0.95.0
+    release: "gitlab-runner-manager"
+    heritage: "Helm"
+spec:
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: gitlab-runner-manager
+  template:
+    metadata:
+      labels:
+        app: gitlab-runner-manager
+        chart: gitlab-runner-0.95.0
+        release: "gitlab-runner-manager"
+        heritage: "Helm"
+        tacplus.dev/ci-runner: manager
+      annotations:
+        checksum/configmap: a7840125e69d4f6963c88e71762b8f9168bc0610b2110df0a4bd3bcec450fa2f
+        tacplus.dev/runner-protected: "false"
+        tacplus.dev/runner-tags: "arm64,manager"
+        tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-manager/versions/1"
+        tacplus.dev/runner-token-secret: "gitlab-runner-manager"
+    spec:
+      securityContext:
+        fsGroup: 65533
+        runAsNonRoot: true
+        runAsUser: 100
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 3600
+      priorityClassName: "ci-runner-manager"
+      serviceAccountName: "gitlab-runner-manager"
+      containers:
+        - name: gitlab-runner-manager
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
+          imagePullPolicy: "IfNotPresent"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/entrypoint", "unregister", "--all-runners"]
+          command: ["/usr/bin/dumb-init", "--", "/bin/bash", "/configmaps/entrypoint"]
+          env:
+            - name: CI_SERVER_URL
+              value: "https://gitlab.com/"
+            - name: RUNNER_EXECUTOR
+              value: "kubernetes"
+            - name: REGISTER_LOCKED
+              value: "true"
+            - name: RUNNER_TAG_LIST
+              value: ""
+            - name: SESSION_SERVER_ADDRESS
+              value:
+          livenessProbe:
+            exec:
+              command: ["/bin/bash", "/configmaps/check-live", "3"]
+            initialDelaySeconds: 60
+            timeoutSeconds: 4
+            periodSeconds: 60
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: ["/usr/bin/pgrep", "gitlab.*runner"]
+            initialDelaySeconds: 60
+            timeoutSeconds: 4
+            periodSeconds: 60
+            successThreshold: 1
+            failureThreshold: 3
+          ports:
+            - name: "metrics"
+              containerPort: 9252
+          volumeMounts:
+            - name: projected-secrets
+              mountPath: /secrets
+            - name: etc-gitlab-runner
+              mountPath: /home/gitlab-runner/.gitlab-runner
+            - name: configmaps
+              mountPath: /configmaps
+            - mountPath: /home/gitlab-runner
+              name: home
+            - mountPath: /tmp
+              name: tmp
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+      volumes:
+        - name: runner-secrets
+          emptyDir:
+            medium: "Memory"
+        - name: etc-gitlab-runner
+          emptyDir:
+            medium: "Memory"
+        - name: projected-secrets
+          projected:
+            sources:
+              - secret:
+                  name: "gitlab-runner-manager"
+                  items:
+                    - key: runner-registration-token
+                      path: runner-registration-token
+                    - key: runner-token
+                      path: runner-token
+        - name: configmaps
+          configMap:
+            name: gitlab-runner-manager
         - emptyDir: {}
           name: home
         - emptyDir: {}

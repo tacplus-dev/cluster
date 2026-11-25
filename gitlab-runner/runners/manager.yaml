@@ -1,0 +1,92 @@
+# The manager runner (#60): the tacplus-dev group's jobs tagged `arm64, manager`, the looper's managers (its `.manager`
+# jobs, once tacplus-dev/looper#236 tags them so), each a pod on the normal pool, its overflow on the looper pool, as
+# control's are. A manager merges its repository's queue, so it never waits behind a report (the looper's placement,
+# 2026-11-22): on control, at its concurrent of 17 on 2026-11-24 19:59Z, 5 managers pended FIFO behind reports and
+# nothing merged in their repositories. Its tags are arm64 and manager, never control: GitLab gives a runner every job
+# whose tags it holds, so holding control it would fill with reports too; and no other runner holds manager
+# (ci/policy.sh). It tolerates no spot taint and refuses a spot node by its label or GKE's. Its jobs tolerate the
+# looper pool's taint (looper=true:NoSchedule) and prefer nodes without its label, as control's do. No privilege, no
+# privilege escalation, no host path, no Docker socket. Its jobs set no PriorityClass (0): infra's and kick's never
+# preempt them, as they do control's (#49). Its defaults are a manager's (250m and 256Mi: tacplus-dev/looper#229,
+# above the recap's p90 of 210m on 2026-11-23); its ceilings are control's.
+#
+# Its concurrent is fixed: 8, the peak #60 saw (7 managers at once) and a spare, not one a repository with a manager
+# (31): most managers idle out, and one with nothing queued ends. render.sh counts its jobs before control's: in the
+# normal pool's room first, the rest in the looper pool's at its max nodes, and says in the render how many the
+# normal pool holds; it refuses a count the two cannot hold (gitlab-runner/pool.yaml). A higher peak shows in the
+# recap (`managers waited`), and the count rises then, with numbers.
+#
+#   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
+#   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
+#                   writes it into the Secret gitlab-runner-manager at apply time (tacplus-dev/cloud#106 registers it
+#                   and writes version 1)
+tacplus:
+  tags: [arm64, manager]
+  token: projects/tacplus-dev/secrets/gitlab-runner-manager/versions/1
+concurrent: 8
+runners:
+  name: tacplus-dev manager (cluster, ci, normal pool)
+  config: |
+    [[runners]]
+      executor = "kubernetes"
+      # uid 1000 has no home in the job image, so HOME would be / (#20): HOME is the emptyDir below instead.
+      environment = ["HOME=/tmp/home"]
+      [runners.kubernetes]
+        namespace = "ci"
+        image = "{{ .Values.pinned.job }}"
+        helper_image = "{{ .Values.pinned.helper }}"
+        service_account = "ci-job"
+        automount_service_account_token = false
+        privileged = false
+        allow_privilege_escalation = false
+        # A looper node from 0 takes minutes to come up (#47).
+        poll_timeout = 900
+        cpu_request = "250m"
+        cpu_limit = "1"
+        memory_request = "256Mi"
+        memory_limit = "2Gi"
+        cpu_request_overwrite_max_allowed = "1500m"
+        cpu_limit_overwrite_max_allowed = "1500m"
+        memory_request_overwrite_max_allowed = "4Gi"
+        memory_limit_overwrite_max_allowed = "4Gi"
+        helper_cpu_request = "50m"
+        helper_cpu_limit = "500m"
+        helper_memory_request = "64Mi"
+        helper_memory_limit = "256Mi"
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "home"
+          mount_path = "/tmp/home"
+        [runners.kubernetes.pod_labels]
+          "tacplus.dev/ci-runner" = "manager"
+        [runners.kubernetes.node_selector]
+          "kubernetes.io/arch" = "arm64"
+        # The looper pool's taint (#47, #60): its jobs and control's alone tolerate it, and prefer the normal pool (below).
+        [runners.kubernetes.node_tolerations]
+          "kubernetes.io/arch=arm64" = "NoSchedule"
+          "looper=true" = "NoSchedule"
+        [runners.kubernetes.affinity]
+          [runners.kubernetes.affinity.node_affinity]
+            [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution]]
+              weight = 100
+              [runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference]
+                [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference.match_expressions]]
+                  key = "looper"
+                  operator = "NotIn"
+                  values = ["true"]
+            [runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution]
+              [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms]]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "spot"
+                  operator = "NotIn"
+                  values = ["true"]
+                [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
+                  key = "cloud.google.com/gke-spot"
+                  operator = "NotIn"
+                  values = ["true"]
+        [runners.kubernetes.pod_security_context]
+          [runners.kubernetes.pod_security_context.seccomp_profile]
+            type = "RuntimeDefault"
+        [runners.kubernetes.helper_container_security_context]
+          allow_privilege_escalation = false
+          [runners.kubernetes.helper_container_security_context.capabilities]
+            drop = ["ALL"]

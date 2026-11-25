@@ -1,11 +1,11 @@
 # The normal pool, and the looper pool its overflow scales up, as the runners' concurrency counts them (#36, #47):
 # render.sh gives the runner whose file says `concurrent: pool` (control) as many jobs as the pools have room for, by their pods' requests, once it has counted this
 # reserve, every runner manager (gitlab-runner/values.yaml's resources), deploymentproxy (its release's requests)
-# and every other normal-pool runner's jobs at its full concurrent (infra's and kick's); and it refuses runners the pool cannot
-# hold. A job's pod counts as its runner's default requests, the job's container and the helper's: a job raising its
+# and every other normal-pool runner's jobs at its full concurrent (infra's, kick's, build-light's; manager's, which
+# overflow onto the looper pool, #60); and it refuses runners the pools cannot hold. A job's pod counts as its runner's default requests, the job's container and the helper's: a job raising its
 # own (KUBERNETES_CPU_REQUEST) is not counted, so a runner's defaults are its largest kind's (control: a report's,
 # tacplus-dev/looper#165). Bin-packing is not counted: the jobs' pods are small beside a node. Its jobs, which alone
-# tolerate the looper pool's taint and prefer the normal pool, fill the normal nodes first; the rest pend, and the
+# with manager's tolerate the looper pool's taint and prefer the normal pool, fill the normal nodes first; the rest pend, and the
 # cluster autoscaler adds looper nodes for them, up to its max, and removes them once they are empty: so the looper
 # pool counts at its max nodes, less only each node's daemonsets, and only for a runner whose jobs tolerate its taint.
 #
@@ -44,11 +44,7 @@ looper:
     cpu: 400m
     memory: 1Gi
 #
-#   managers     the looper's managers (#53): control's jobs, but each at its own requests, above control's defaults
-#                (a report's), which count its slots; count of them at once, held in the pools' room before control's
-#                slots (tacplus-dev/looper#229, looper-dispatch: a manager asks 250m and 256Mi, above the recap's p90 of
-#                210m on 2026-11-23, tacplus-dev/roadmap suggestions/recap/2026-11-23.md). Without it, none.
-managers:
-  count: 4
-  cpu: 250m
-  memory: 256Mi
+# The looper's managers (#53's reserve here of 4 x 250m, until #60) are the manager runner's jobs
+# (gitlab-runner/runners/manager.yaml): a fixed concurrent whose jobs tolerate the looper pool's taint and prefer the
+# normal pool, so render.sh counts them before control's, in the normal pool's room first and the rest in the looper
+# pool's at its max nodes, says in the render how many the normal pool holds, and refuses a count the two cannot hold.

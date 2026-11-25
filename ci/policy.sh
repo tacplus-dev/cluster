@@ -31,15 +31,18 @@
 #                               bind or impersonate; a RoleBinding binds a Role to service accounts of ci. The
 #                               runners' pods and their jobs' pods (each runner's config.toml): images by digest, no
 #                               privileged container, host path, host namespace or Docker socket; build jobs only on
-#                               the spot pool, every other job never there; control's jobs alone tolerate the looper
-#                               pool, preferring the normal pool, and no workload in any file does (#47); the infra
+#                               the spot pool, every other job never there; control's and manager's jobs alone
+#                               tolerate the looper pool, preferring the normal pool, and no workload in any file
+#                               does (#47, #60); the infra
 #                               pipelines' tags (cloud, cluster,
 #                               deploy) on the runner infra alone, which takes no other and protected refs only;
 #                               kick (the looper's kicker and plan, #36) on the runner kick alone, which takes no
 #                               other but arm64; build-report (the report builds, #42) on the runner build-report
 #                               alone, which takes no other but arm64 and places its jobs as build's (ci_runner
 #                               below); build-light (tacplus-dev/build's pending, plan and reports, #51) on the
-#                               runner build-light alone, which takes no other but arm64, never build. A runner
+#                               runner build-light alone, which takes no other but arm64, never build; manager (the
+#                               looper's managers, #60) on the runner manager alone, which takes no other but arm64,
+#                               never control. A runner
 #                               manager on a read-only root filesystem has a writable emptyDir wherever GitLab Runner
 #                               writes (RUNNER_WRITES below; #37).
 #
@@ -111,7 +114,7 @@ ci_runner_writes() {
 # a default and a ceiling for CPU and memory. A runner tagged build places its jobs on the spot pool only (its node
 # selector and the spot taint's toleration), takes no other tag but arm64, runs them non-root, and is the only one
 # whose build container may be Unconfined; any other runner's jobs never tolerate spot, refuse a spot node, and may
-# not escalate privilege. Only control's jobs tolerate the looper pool's taint (#47), and then prefer the normal pool, so
+# not escalate privilege. Only control's and manager's jobs tolerate the looper pool's taint (#47, #60), and then prefer the normal pool, so
 # they overflow there only when it is full; no runner's jobs select it. No runner takes a VM runner's tag (autoscale,
 # autoscale-16, gce): GitLab gives a job to whichever runner holding its tags asks first. The infra pipelines' tags (cloud, cluster, deploy: tacplus-dev/cloud's,
 # this one's and fleet-seatrials' deploy, which hold WIF to the projects and cluster-admin) are the runner infra's
@@ -125,7 +128,9 @@ ci_runner_writes() {
 # when the normal pool is full of control's; no other runner's jobs set a priority class. The tag build-light is the
 # runner build-light's alone (#51; tacplus-dev/cloud#100), and build-light takes no other but arm64: above all not build,
 # which would bring the gates and security jobs onto the normal pool; its slots are the light builds' (pending, plan,
-# the reports), never behind a gates or security job.
+# the reports), never behind a gates or security job. The tag manager is the runner manager's alone (#60), and manager
+# takes no other but arm64: above all not control, which would fill its slots with reports; its slots are the
+# looper's managers', which merge, never behind a report.
 ci_runner() {
   local b=$1 d=$2 render=$3 tags protected token secret toml json m
   tags=$(D=$d yq 'select(.kind == "Deployment" and .metadata.name == strenv(D)) | .spec.template.metadata.annotations."tacplus.dev/runner-tags" // ""' "$render")
@@ -144,6 +149,7 @@ ci_runner() {
     ($tags | split(",")) as $tags | ($tags | index("build") != null) as $build | ($runner == "gitlab-runner-infra") as $infra |
     ($runner == "gitlab-runner-kick") as $kick | ($runner == "gitlab-runner-build-report") as $report |
     ($runner == "gitlab-runner-control") as $control | ($runner == "gitlab-runner-build-light") as $light |
+    ($runner == "gitlab-runner-manager") as $manager |
     ["cloud", "cluster", "deploy"] as $infra_tags |
     if (.runners | length) != 1 then "has \(.runners | length) [[runners]], not one" else
     .runners[0] as $r | ($r.kubernetes // {}) as $k |
@@ -184,6 +190,12 @@ ci_runner() {
     else
       ($tags[] | select(. == "build-light") | "takes build-light, the light builds\u0027 runner\u0027s tag: pending, plan and the reports would queue behind its jobs")
     end),
+    (if $manager then
+      (($tags - ["arm64", "manager"])[] | "takes a tag that is not arm64 or manager (\(.)): its slots would fill with jobs that are not the managers\u0027, which would wait behind them"),
+      (select($tags | index("manager") == null) | "does not take manager: the managers would have no runner of their own")
+    else
+      ($tags[] | select(. == "manager") | "takes manager, the manager runner\u0027s tag: the managers would queue behind its jobs")
+    end),
     (if $report then
       (($tags - ["arm64", "build-report"])[] | "takes a tag that is not arm64 or build-report (\(.)): its jobs would run at the report builds\u0027 priority, preempted"),
       (select($tags | index("build-report") == null) | "does not take build-report: the report builds would have no runner of their own")
@@ -196,14 +208,14 @@ ci_runner() {
       ($u - (if $build or $report then ["build_container_security_context.seccomp_profile.type", "build_container_security_context.app_armor_profile.type"] else [] end))[] |
       "its jobs are Unconfined (\(.))"),
     (select(($k.node_selector // {}) | has("looper")) | "its jobs select a looper node"),
-    (if $control then
+    (if $control or $manager then
       (select((($k.node_tolerations // {}) | keys | any(startswith("looper"))) and
           ([$k.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution[]? | select(.weight > 0) | .preference |
             any(.match_expressions[]?; .key == "looper" and .operator == "NotIn" and ((.values // []) | index("true") != null))] |
             any | not)) |
         "its jobs tolerate the looper taint but do not prefer the normal pool (a preferred node affinity looper NotIn [true]): they would fill the looper pool first and keep it from 0")
     else
-      (($k.node_tolerations // {}) | keys[] | select(startswith("looper")) | "its jobs tolerate the looper taint (\(.)): only control\u0027s jobs overflow onto the looper pool")
+      (($k.node_tolerations // {}) | keys[] | select(startswith("looper")) | "its jobs tolerate the looper taint (\(.)): only control\u0027s and manager\u0027s jobs overflow onto the looper pool")
     end),
     if $build or $report then
       (select($build and (($tags - ["arm64", "build"]) | length > 0)) | "takes build with other tags (\($tags | join(", "))): their jobs would run on spot"),
@@ -230,10 +242,10 @@ for b in "${files[@]##*/}"; do
   # Without comments, which yq would carry into the answers.
   f=$plain
   yq '... comments=""' "$out/$b" > "$f" || { breach "$b: not YAML"; continue; }
-  # The looper pool (#47; tacplus-dev/cloud#95), tainted looper=true:NoSchedule: only the control runner's jobs land
+  # The looper pool (#47; tacplus-dev/cloud#95), tainted looper=true:NoSchedule: only the control and manager runners' jobs land
   # there (their config.toml: ci_runner), so it scales back to 0 when they end. No workload here tolerates it.
   while IFS= read -r w; do
-    breach "$b: the $w tolerates the looper taint: only the control runner's jobs run on the looper pool"
+    breach "$b: the $w tolerates the looper taint: only the control and manager runners' jobs run on the looper pool"
   done < <(yq -N 'select([.. | select(tag == "!!map" and has("tolerations")) | .tolerations[]? |
     select(.key == "looper" or ((.key // "") == "" and .operator == "Exists"))] | length > 0) | .kind + " " + .metadata.name' "$f")
   case $b in

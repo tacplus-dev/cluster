@@ -74,7 +74,7 @@ the looper then marks it `promoted` or `declined` here with the date.
   `control` runs at its full concurrent, its jobs starting within a minute (`kubectl -n ci get events
   --field-selector reason=Preempted`). Two costs to watch: every `control` job is preemptible, the looper's managers and
   scans as well as its reports (a manager's job evicted mid-land fails `runner_system_failure` and is retried, twice,
-  by `.control`'s `retry:`); if that bites, the managers move to a runner of their own at 0. And `ci-runner-manager`
+  by `.control`'s `retry:`); if that bites, the managers move to a runner of their own at 0 (#60 does: `manager`). And `ci-runner-manager`
   (1000000, preempting) may still evict deploymentproxy's or a deployment's pod for a manager's (#39): a class for
   deploymentproxy above the jobs would close that.
 - **The exceptions that accept only CI tooling's findings, gone** (2026-11-24, #55): since #55 a finding in `bin/`
