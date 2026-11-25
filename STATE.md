@@ -52,8 +52,9 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by th
   `ci-runner-manager`, above the jobs and preempting them (#39: `kick`'s manager stayed Pending while `control`'s old
   manager's jobs ran beside the new one's after an apply), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
   `gitlab-runner/pool.yaml`, 1440m beside `kick`'s 2 and `build-light`'s 4 (#51)) plus
-  the looper pool's at its max nodes (#47, tacplus-dev/cloud#95: 2 c4a-standard-2 from 0, less an estimated 400m/1Gi
-  of daemonsets a node, PROPOSALS.md), less the looper's managers' room (#53: `managers`, 4 x 250m/256Mi): 17 at 200m,
+  the looper pool's at its max nodes (#47, tacplus-dev/cloud#95; 4 c4a-standard-2 from 0 since #61, tacplus-dev/cloud#107,
+  less an estimated 400m/1Gi of daemonsets a node, PROPOSALS.md), less the looper's managers' room (#53: `managers`,
+  4 x 250m/256Mi): 32 at 200m,
   CPU the bound; `control`'s jobs alone tolerate `looper=true:NoSchedule`, preferring the
   normal pool, and the policy refuses the taint's toleration anywhere else; its default CPU request a report's 150m
   (#53: the recap's p90 139m; looper-dispatch asks it, and a manager 250m, once tacplus-dev/looper#229 lands; until
@@ -101,7 +102,7 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   online, but every cluster apply since b1fca16 failed on its first rollout's stale `ProgressDeadlineExceeded` (#58,
   pipeline 3108203363) until #58's restart; it takes build's light jobs once tacplus-dev/looper#224 tags them `arm64, build-light` (and cloud
   bumps its copy); #51's done-when (`gitlab-runner-build-light` running in `ci`, its runner online) is unverified.
-  #47 (`control` 33, 30 since #51, its overflow on the looper pool) reaches the cluster when the hub re-pins to a commit with it, once
+  #47 (`control` 33, 30 since #51, 17 since #53, 32 since #61 at 4 looper nodes, its overflow on the looper pool) reaches the cluster when the hub re-pins to a commit with it, once
   cloud's `dev` has applied the looper pool (tacplus-dev/cloud#95); its done-when (a looper node up in a busy hour,
   back to 0 after) is unverified. #49 (`control`'s jobs at `control-job`, preempted by `infra`'s and `kick`'s) reaches
   the cluster when the hub re-pins to a commit with it; its done-when (a cloud pipeline's jobs starting within a minute
