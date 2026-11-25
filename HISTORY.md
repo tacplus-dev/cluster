@@ -56,3 +56,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-24 looper issue pool.yaml counts a report job at 550m CPU, but report pods request 100m and use p90 139m: control's concurrent is undercounted while the scheduler over-commits; derive both from measured use (#53)
 - 2026-11-24 looper issue apply: rollout status fails on a deployment stuck at ProgressDeadlineExceeded from an earlier apply (build-light) (#58)
 - 2026-11-24 looper issue Per-deployment operatorRole in tac-<name> and read access to TenantNamespaces for the deploy account (fleet-seatrials#76 follow-up) (#59)
+- 2026-11-25 looper issue STATE.md's Blocked on line is stale: it names closed cloud#100 (applied; build-light now waits only on the hub's re-pin to 90ab128 or later) (#62)
