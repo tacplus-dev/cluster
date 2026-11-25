@@ -159,8 +159,8 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   the apply of cloud's stacks (the `build-report` runner's registration and its token secret, landed in cloud), then
   the hub's re-pin to 8ee7a8e or later and `BUILD_REPORT_TAGS` set to `arm64, build-report`, for report builds a
   land's build preempts (landed as 8ee7a8e);
-  the apply of cloud's stacks with tacplus-dev/cloud#100 (the `build-light` runner's registration and token), then the
-  hub's re-pin to 90ab128 or later, for build's `pending`, `plan` and reports (tagged `arm64, build-light` in
+  the hub's re-pin to 90ab128 or later (cloud's stacks with the `build-light` runner's registration and token
+  applied, tacplus-dev/cloud#100), for build's `pending`, `plan` and reports (tagged `arm64, build-light` in
   looper since b1dbfe4) off the build runner's slots (the runner landed as 8f3a385);
   tacplus-dev/tacplus#315 (rootless BuildKit in the build image), for unpausing the in-cluster `build`
   runner 58541760 only; tacplus-dev/looper#190 (looper-scan leaving vendored paths out of Trivy's config scan), for
