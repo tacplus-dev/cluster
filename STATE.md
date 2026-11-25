@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by the looper (#59).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by the looper (#60).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line); `build.lock` and `gitlab-runner/pin.yaml`'s
@@ -8,7 +8,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by th
 - **Target (#7):** tacplus-dev/cloud's cluster `dev` (us-central1-a) in the project `tacplus-dev` (seabeam.net), as
   `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`; seatrials' deploy account and the runners' token
   secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1; `gitlab-runner-infra`, #25, made and
-  written by tacplus-dev/cloud's stacks, cloud#64; `gitlab-runner-kick`, #36, the same, cloud#81; `gitlab-runner-build-report`, #42, the same once tacplus-dev/cloud#93 makes it) in `tacplus-dev` too. The old `tacplus` in
+  written by tacplus-dev/cloud's stacks, cloud#64; `gitlab-runner-kick`, #36, the same, cloud#81; `gitlab-runner-build-report`, #42, the same once tacplus-dev/cloud#93 makes it; `gitlab-runner-manager`, #60, the same, tacplus-dev/cloud#106, merged) in `tacplus-dev` too. The old `tacplus` in
   `jody1-328023` is no longer the target; Jody deletes it once the pipeline applies to `dev`.
 - **Works:** the cluster pipeline (#1): `deployments.yaml` (`seatrials`; `test-idp`, #17, without an operator: `operator` optional, no deploymentproxy Role or operator binding then, the policy requiring both or neither; #59: with one, the operator's own Role `deployment-operator`, its chart's, bound to it in `tac-<name>` only, each grant within `fleet-deploy`, the policy holding it so, and `fleet-deploy` reading the deployment's `TenantNamespace`s, never writing them); deploymentproxy v0.2.2 (#22) fetched
   and pinned by commit, checksum and image digest, rendered as its image's user 65532:65532 with a 500m CPU limit (#31), bumped by one command (`deploymentproxy/bump.sh <tag>`, #4: the
@@ -48,13 +48,19 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by th
   kicker and plan on slots of their own, `concurrent` 2, the normal pool, its jobs at the looper's `.control` 50m/256Mi,
   #39; the policy keeps `kick` its tag alone and it on `arm64, kick` only) and `build-light` (#51, tacplus-dev/cloud#100:
   `arm64, build-light`, tacplus-dev/build's `pending`, `plan` and reports on the normal pool, `concurrent` 4, kick's
-  50m/256Mi; the policy keeps `build-light` its tag alone and it on `arm64, build-light` only, never `build`); every runner manager at the PriorityClass
+  50m/256Mi; the policy keeps `build-light` its tag alone and it on `arm64, build-light` only, never `build`) and
+  `manager` (#60, tacplus-dev/cloud#106: `arm64, manager`, the looper's managers on slots of their own, never behind
+  reports, `concurrent` 8, the peak #60 saw and a spare; its jobs at a manager's 250m/256Mi, no PriorityClass (0), the
+  normal pool first and their overflow on the looper pool, as `control`'s; the policy keeps `manager` its tag alone and
+  it on `arm64, manager` only, never `control`); every runner manager at the PriorityClass
   `ci-runner-manager`, above the jobs and preempting them (#39: `kick`'s manager stayed Pending while `control`'s old
   manager's jobs ran beside the new one's after an apply), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
-  `gitlab-runner/pool.yaml`, 1440m beside `kick`'s 2 and `build-light`'s 4 (#51)) plus
+  `gitlab-runner/pool.yaml`, 1390m beside `kick`'s 2 and `build-light`'s 4 (#51) and `manager`'s manager (#60)) plus
   the looper pool's at its max nodes (#47, tacplus-dev/cloud#95: 2 c4a-standard-2 from 0, less an estimated 400m/1Gi
-  of daemonsets a node, PROPOSALS.md), less the looper's managers' room (#53: `managers`, 4 x 250m/256Mi): 17 at 200m,
-  CPU the bound; `control`'s jobs alone tolerate `looper=true:NoSchedule`, preferring the
+  of daemonsets a node, PROPOSALS.md), less `manager`'s 8 jobs at 300m with the helper (#60, in place of #53's
+  `managers` reserve of 4 x 250m), counted first: 4 in the normal pool's room, 4 in the looper pool's, and the render
+  refuses a count the two cannot hold: 10 at 200m, CPU the bound (25 once the looper pool's max is 4, #61);
+  `control`'s and `manager`'s jobs alone tolerate `looper=true:NoSchedule`, preferring the
   normal pool, and the policy refuses the taint's toleration anywhere else; its default CPU request a report's 150m
   (#53: the recap's p90 139m; looper-dispatch asks it, and a manager 250m, once tacplus-dev/looper#229 lands; until
   then a manager asks 50m); the pool's reserve, kube-system and the
@@ -97,6 +103,10 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   a commit with it fails at `runner-tokens`), the hub re-pins to a commit with it, and the hub sets tacplus-dev/build's
   `BUILD_REPORT_TAGS` to `arm64, build-report`;
   #42's done-when (a land's gates pod starting within minutes on a spot pool full of report builds) is unverified.
+  `manager` (#60) takes no job until cloud's stacks apply tacplus-dev/cloud#106 (merged; its apply unverified here: its registration and
+  `gitlab-runner-manager` version 1: until then `apply` of a commit with it fails at `runner-tokens`), the hub re-pins
+  to a commit with it, and tacplus-dev/looper#236 tags the managers' jobs `arm64, manager`; until then the managers
+  still share `control`'s slots, which #60 lowered from 17 to 10 (25 with #61's looper pool of 4).
   `build-light` (#51): cloud's stacks applied tacplus-dev/cloud#100 (dc67c17, 2026-11-24) and its runner 59984739 is
   online, but every cluster apply since b1fca16 failed on its first rollout's stale `ProgressDeadlineExceeded` (#58,
   pipeline 3108203363) until #58's restart; it takes build's light jobs once tacplus-dev/looper#224 tags them `arm64, build-light` (and cloud
