@@ -34,9 +34,14 @@ the looper then marks it `promoted` or `declined` here with the date.
   in cloud is then best followed at once by this repository's issue for it; reading the value from a file both
   repositories share (the hub's decision allowed either) would make it one change, at the price of a render that
   reads another repository.
+- **The looper pool's max_nodes held to cloud's too** (2026-11-25, #61): `gitlab-runner/pool.yaml`'s `looper.max_nodes`
+  (4 since #61, tacplus-dev/cloud#107) and its machine type are a hand mirror of tacplus-dev/cloud's stacks/dev
+  `cluster.looper`, with no test holding them as `tests/spot_pool_test.sh` holds the spot pool's. The same test for the
+  looper pool would turn the gates red on a drift either way; it checks cloud's main, not its apply, so the order
+  #61 kept (here only after cloud's `apply:dev`, the lesson of #51) stays a matter of the issue's Blocked-by.
 - **The looper pool's daemonsets, measured** (2026-11-23, #47): `gitlab-runner/pool.yaml`'s `looper.daemonsets`
   (400m and 1Gi a node) is an estimate, the normal pool's whole reserve per node, which also holds kube-system's
-  Deployments; `control`'s `concurrent` (17 since #53: 3060m of its 3500m on 2 looper nodes) follows from it. Once a
+  Deployments; `control`'s `concurrent` (32 since #61: 6120m of its 6560m on 4 looper nodes) follows from it. Once a
   looper node is up, `kubectl describe node -l looper=true` (Allocated resources, less the `ci` pods) gives the real
   figure; a smaller one gives `control` more slots. The issue's own estimate was about 18: it counted a report pod at
   550m, where `control`'s defaults (a report's, tacplus-dev/looper#165) are 200m with the helper since #53. If looper pods ask

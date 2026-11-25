@@ -342,13 +342,13 @@ concurrent() { R=$1 yq 'select(.kind == "ConfigMap" and .metadata.name == "gitla
 # 4 x 550m (infra) - 2 x 100m (kick) - 4 x 100m (build-light) = 1440m (#39, #42, #51); memory 3 x 6144Mi - 3Gi -
 # 6 x 128Mi - 64Mi - 4 x 1088Mi - 2 x 320Mi - 4 x 320Mi = 8256Mi. The spot pool's runners (build, build-report) take
 # nothing of it but their managers. Control's jobs overflow onto the looper pool (#47), counted at its max nodes less
-# their daemonsets: 2 x (1930m - 400m) = 3060m and 2 x (6144Mi - 1024Mi) = 10240Mi more; of the 4500m and 18496Mi,
-# the looper's managers' room (#53: 4 x 250m, 4 x 256Mi) leaves 3500m for 17 pods of 200m (a report's 150m and the
-# helper's 50m), 17472Mi for 30 of 576Mi.
-[ "$(concurrent control "$ci")" = 17 ] && [ "$(concurrent infra "$ci")" = 4 ] && [ "$(concurrent kick "$ci")" = 2 ] &&
+# their daemonsets: 4 x (1930m - 400m) = 6120m and 4 x (6144Mi - 1024Mi) = 20480Mi more (#61: 4 nodes, Jody's yes of
+# 2026-11-24, tacplus-dev/cloud#107); of the 7560m and 28736Mi, the looper's managers' room (#53: 4 x 250m, 4 x 256Mi)
+# leaves 6560m for 32 pods of 200m (a report's 150m and the helper's 50m), 27712Mi for 48 of 576Mi.
+[ "$(concurrent control "$ci")" = 32 ] && [ "$(concurrent infra "$ci")" = 4 ] && [ "$(concurrent kick "$ci")" = 2 ] &&
   [ "$(concurrent build-light "$ci")" = 4 ] && [ "$(concurrent build "$ci") $(concurrent build-report "$ci")" = "8 8" ] &&
-  grep -q '^# The runner control .*concurrent 17, the normal pool.s room and the looper pool.s' "$ci" &&
-  ok "control's concurrent is the normal and looper pools' room for its jobs beside the managers' (17), infra's, kick's, build-light's, build's and build-report's their own (4, 2, 4, 8, 8)" ||
+  grep -q '^# The runner control .*concurrent 32, the normal pool.s room and the looper pool.s' "$ci" &&
+  ok "control's concurrent is the normal and looper pools' room for its jobs beside the managers' (32), infra's, kick's, build-light's, build's and build-report's their own (4, 2, 4, 8, 8)" ||
   fail "concurrent: control [$(concurrent control "$ci")], infra [$(concurrent infra "$ci")], kick [$(concurrent kick "$ci")], build-light [$(concurrent build-light "$ci")], build [$(concurrent build "$ci")], build-report [$(concurrent build-report "$ci")]"
 # pooled NAME YQ WANT: control's concurrent with gitlab-runner/pool.yaml changed by YQ is WANT, or render.sh refuses it
 # saying WANT.
@@ -367,20 +367,20 @@ pooled "4Gi nodes, memory the bound" '.allocatable.memory = "4Gi" | del(.looper)
 pooled "a smaller reserve" '.reserved.cpu = "800m" | del(.looper)' 4
 pooled "no room for one job" '.reserved.cpu = "1500m" | del(.looper)' "the normal pool has no room for one job of control"
 pooled "a quantity it cannot read" '.reserved.cpu = "1.5"' "gitlab-runner/pool.yaml: reserved.cpu \[1.5\] is not"
-# The looper pool's room (#47): (440m + 1530m) / 200m = 9 at one node; memory (7232Mi + 2 x 1024Mi) / 576Mi = 16 with
-# 5Gi of daemonsets; none at 0 nodes or without it; the normal pool full, the looper pool's room (140m + 3060m - 1000m,
-# 11).
+# The looper pool's room (#47): (440m + 1530m) / 200m = 9 at one node; memory (7232Mi + 4 x 1024Mi) / 576Mi = 19 with
+# 5Gi of daemonsets; none at 0 nodes or without it; the normal pool full, the looper pool's room (140m + 6120m - 1000m,
+# 26).
 pooled "the looper pool at one node" '.looper.max_nodes = 1' 9
-pooled "the looper pool's daemonsets larger, memory the bound" '.looper.daemonsets.memory = "5Gi"' 16
+pooled "the looper pool's daemonsets larger, memory the bound" '.looper.daemonsets.memory = "5Gi"' 19
 pooled "the looper pool at 0 nodes" '.looper.max_nodes = 0' 2
 pooled "no looper pool" 'del(.looper)' 2
-pooled "the normal pool full, the looper pool's room" '.reserved.cpu = "2500m"' 11
+pooled "the normal pool full, the looper pool's room" '.reserved.cpu = "2500m"' 26
 # The looper's managers' room (#53): control's jobs, at their own requests (250m and 256Mi, above the report's its
-# defaults count), taken from the pools' room before its slots; without it, none: 4500m / 200m = 22.
-pooled "no managers' room" 'del(.managers)' 22
-pooled "8 managers" '.managers.count = 8' 12
-pooled "managers' memory the bound" '.managers.memory = "4Gi"' 3
-pooled "managers filling the pools" '.managers.count = 18' "the normal pool has no room for one job of control"
+# defaults count), taken from the pools' room before its slots; without it, none: 7560m / 200m = 37.
+pooled "no managers' room" 'del(.managers)' 37
+pooled "8 managers" '.managers.count = 8' 27
+pooled "managers' memory the bound" '.managers.memory = "4Gi"' 21
+pooled "managers filling the pools" '.managers.count = 30' "the normal pool has no room for one job of control"
 pooled "the managers' count not a number" '.managers.count = "four"' "gitlab-runner/pool.yaml: managers.count \[four\] is not a number of managers"
 pooled "a managers' quantity it cannot read" '.managers.cpu = "0.25"' "gitlab-runner/pool.yaml: managers.cpu \[0.25\] is not"
 pooled "the looper pool's nodes not a number" '.looper.max_nodes = "two"' "gitlab-runner/pool.yaml: looper.max_nodes \[two\] is not a number of nodes"

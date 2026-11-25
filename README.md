@@ -206,7 +206,7 @@ Before the first pipeline:
    and a pull request moving `tacplus.token` to it. Until every runner's version is readable, `apply` fails after
    applying the rest, saying `runner-tokens: Secret Manager refused <version>`.
 8. **The pools:** the spot pool labelled `spot=true` and tainted `spot=true:NoSchedule` (tacplus-dev/cloud#7's
-   answer; tacplus-dev/cloud's `dev` stack makes them so), the looper pool (on demand, autoscaling 0 to 2) labelled
+   answer; tacplus-dev/cloud's `dev` stack makes them so), the looper pool (on demand, autoscaling 0 to 4) labelled
    `looper=true` and tainted `looper=true:NoSchedule` (tacplus-dev/cloud#95), the normal pool neither; Workload Identity on the cluster and its pools (`GKE_METADATA`), and NetworkPolicy enforced (Dataplane V2, as
    tacplus-dev/cloud's `dev` cluster has), for the `ci` namespace's NetworkPolicy to hold.
 
@@ -288,9 +288,9 @@ room for (`concurrent: pool`, #36), which `render.sh` counts from `gitlab-runner
 allocatable, a reserve for kube-system and the deployments' pods) less every runner manager, deploymentproxy and
 `infra`'s, `kick`'s and `build-light`'s jobs at their full concurrent, by each job pod's default requests (job and
 helper) in CPU and memory (1440m: `build-report`'s manager took 50m, #42, and `build-light`'s manager and four jobs
-450m, #51), plus the looper pool's room at its max nodes less each node's daemonsets (#47: 2 x (1930m - 400m)), less
-the room of the looper's managers, which ask more than a report (#53: `managers`, 4 x 250m): 3500m, 17 jobs of 200m,
-CPU the bound. Its jobs fill the
+450m, #51), plus the looper pool's room at its max nodes less each node's daemonsets (#47: 4 x (1930m - 400m), 4
+nodes since #61, tacplus-dev/cloud#107), less the room of the looper's managers, which ask more than a report (#53:
+`managers`, 4 x 250m): 6560m, 32 jobs of 200m, CPU the bound. Its jobs fill the
 normal nodes first; the ones that do not fit pend, which is what makes the cluster autoscaler add a looper node, and
 it removes the node once its jobs end, back to 0; a job waits up to 15 minutes (`poll_timeout`) for its pod to start.
 The render refuses runners the pool cannot hold. `control`'s defaults are a report's

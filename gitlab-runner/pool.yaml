@@ -31,12 +31,13 @@ reserved:
 #   looper       the looper pool (tacplus-dev/cloud#95; tacplus-dev/roadmap decisions/cluster-node-pools-2026-11-03.md,
 #                addendum 2026-11-22): tacplus-dev/cloud's stacks/dev, cluster.looper (c4a-standard-2, on demand,
 #                autoscaling 0 to max_nodes, label looper=true, taint looper=true:NoSchedule); a larger max_nodes is
-#                Jody's yes there first, then here. Its allocatable is a c4a-standard-2's, as above; daemonsets what
-#                each node runs before any job (GKE's kube-system DaemonSets: logging, metrics, the CSI driver,
-#                Dataplane V2, the metadata server), an estimate, unmeasured: the normal pool's whole reserve per node
-#                (1200m / 3, 3Gi / 3), which holds kube-system's Deployments too, bounds it from above (PROPOSALS.md).
+#                Jody's yes there first, then here (4 since #61: Jody's yes of 2026-11-24, tacplus-dev/cloud#107). Its
+#                allocatable is a c4a-standard-2's, as above; daemonsets what each node runs before any job (GKE's
+#                kube-system DaemonSets: logging, metrics, the CSI driver, Dataplane V2, the metadata server), an
+#                estimate, unmeasured: the normal pool's whole reserve per node (1200m / 3, 3Gi / 3), which holds
+#                kube-system's Deployments too, bounds it from above (PROPOSALS.md).
 looper:
-  max_nodes: 2
+  max_nodes: 4
   allocatable:
     cpu: 1930m
     memory: 6Gi
