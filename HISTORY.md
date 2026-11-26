@@ -57,3 +57,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-24 looper issue apply: rollout status fails on a deployment stuck at ProgressDeadlineExceeded from an earlier apply (build-light) (#58)
 - 2026-11-24 looper issue Per-deployment operatorRole in tac-<name> and read access to TenantNamespaces for the deploy account (fleet-seatrials#76 follow-up) (#59)
 - 2026-11-25 looper issue STATE.md's Blocked on line is stale: it names closed cloud#100 (applied; build-light now waits only on the hub's re-pin to 90ab128 or later) (#62)
+- 2026-11-26 looper issue A nightly runner entry on the normal pool (arm64, build-nightly), concurrent from the pool's room, for the nightly security fan-out (#46)
