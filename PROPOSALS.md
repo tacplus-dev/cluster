@@ -347,6 +347,16 @@ the looper then marks it `promoted` or `declined` here with the date.
   today's formula; counting that the managers share its `concurrent` (at most 4 of its jobs at 250m) would give 6, a
   change to the count Jody decides. Supersedes #61 and, once built, the looper daemonsets entry above. Links: #64,
   tacplus-dev/cloud#114, #61, #47.
+- **No one-release check against tacplus-dev/cloud's runner block** (2026-11-26, #65): `gitlab-runner/fetch.sh
+  --check` (the `validate` job) reads `stacks/ci/main.tf` on cloud's main and refuses a `build:` whose version, commit
+  or runner SHA-256 is not its `runner` block. tacplus-dev/cloud#113 deletes that block with the runner pools and their
+  manager (Jody, 2026-11-25: cut the dead stuff), after which every cluster pipeline fails at `validate`; nothing in
+  cloud runs GitLab Runner then, so `pin.yaml`'s `build:` is the only pin. Drop the download and the comparison (keep
+  the appVersion checks; `ci/runner-images.sh` still holds the binaries to `runner_sha256`), the README bullet and
+  the "cloud's `ci/runner.sh` recipe" wording, the same claim in the comments of `pin.yaml`, `ci/runner-images.sh`
+  and `tests/ci_test.sh`, and put The infra runner section in the past tense. It lands before cloud#113, which waits
+  on it. Open: whether it waits if cloud keeps its build pool's manager (cloud#113's Q1 option b). Links: #65,
+  tacplus-dev/cloud#113.
 
 ## Promoted / declined
 - **The security job fails only on what ships** (2026-11-23, #55; tacplus-dev/looper#225): `ci/security.sh` fails
