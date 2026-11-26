@@ -6,7 +6,7 @@
 # node's whole jobs times the nodes, never the pool's sum divided; and the largest kind's, so no pod waits past
 # poll_timeout for room that does not exist (the hub's decision on #41, 2026-11-23: one a node, max_nodes of them).
 # Each such runner counts the whole pool: a land's build preempts a report build (#42), so build-report's jobs never
-# hold build's room. A fixed concurrent beyond the room is refused.
+# hold build's room. A fixed concurrent beyond the room is refused (nightly's 4, #46).
 #
 #   machine_type  the pool's nodes: tacplus-dev/cloud's stacks/dev, cluster.spot (spot, autoscaling 0 to max_nodes,
 #   max_nodes     label spot=true, taint spot=true:NoSchedule); tests/spot_pool_test.sh holds both to cloud's main, so

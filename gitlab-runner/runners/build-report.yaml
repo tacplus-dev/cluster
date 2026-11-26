@@ -2,7 +2,8 @@
 # tacplus-dev/build's report builds (every build but a manager's land: BUILD_REPORT_TAGS), each a pod on the spot pool
 # as build's are, so a land's build always gets a node first. Its jobs are build's (the spot pool's node selector and
 # toleration, the security context, rootless BuildKit's Unconfined build container, the defaults and ceilings) but at
-# the PriorityClass build-report (render.sh), below a land's build's pods (0, none set) and never preempting: when the
+# the PriorityClass build-report (render.sh), below a land's build's pods (build) and the nightly's (build-nightly,
+# #46) and never preempting: when the
 # spot pool is full of report builds, the scheduler evicts one for a land's gates pod instead of leaving it to wait for
 # a report build to end (~55 minutes for tacplus's: the hub's evidence of 2026-11-21, pipeline 3096869974). The
 # evicted job fails runner_system_failure, which tacplus-dev/build's CI file retries. Its tags are arm64 and

@@ -27,7 +27,11 @@
 # build-report, build-report on any other runner, and the PriorityClass build-report missing, the default, preempting,
 # not below the jobs' (0), or expendable to the autoscaler (below -10) (#42); control's jobs not at the PriorityClass
 # control-job, infra's or kick's at it, and the PriorityClass control-job missing, the default, preempting, not below
-# the jobs' (0), or expendable (#49); a token by latest; cluster RBAC,
+# the jobs' (0), or expendable (#49); a land's build's jobs not at the PriorityClass build, the nightly's not at
+# build-nightly or off the spot pool, nightly taking a tag but arm64 and build-nightly, or not build-nightly,
+# build-nightly on any other runner, the PriorityClasses build and build-nightly missing, the default or not
+# preempting, build not above 0 or not below the managers', build-nightly not below build nor above build-report
+# (#46); a token by latest; cluster RBAC,
 # a `*`, a resource the executor does not need, another namespace's account or object, a Secret. Needs bash, yq, jq, helm.
 #
 #   tests/policy_test.sh
@@ -170,7 +174,7 @@ breach_ci "a runner manager image by tag only" "$(deployment control '.spec.cont
 pc='(select(.kind == "PriorityClass" and .metadata.name == "ci-runner-manager") | '
 breach_ci "a runner manager without the managers' priority" "del($(deployment control '.spec.priorityClassName'))" "Deployment gitlab-runner-control does not run at the runner managers' priority (priorityClassName ci-runner-manager)"
 breach_ci "no PriorityClass for the managers" 'del(select(.kind == "PriorityClass" and .metadata.name == "ci-runner-manager"))' "no PriorityClass ci-runner-manager"
-breach_ci "another PriorityClass" '.' "the PriorityClass high, not ci-runner-manager, build-report or control-job" '{"apiVersion": "scheduling.k8s.io/v1", "kind": "PriorityClass", "metadata": {"name": "high"}, "value": 1000}'
+breach_ci "another PriorityClass" '.' "the PriorityClass high, not ci-runner-manager, build, build-nightly, build-report or control-job" '{"apiVersion": "scheduling.k8s.io/v1", "kind": "PriorityClass", "metadata": {"name": "high"}, "value": 1000}'
 breach_ci "the managers' priority the cluster's default" "$pc.globalDefault) = true" "the PriorityClass ci-runner-manager is the cluster's default"
 breach_ci "the managers' priority not preempting" "$pc.preemptionPolicy) = \"Never\"" "the PriorityClass ci-runner-manager does not preempt the jobs (preemptionPolicy PreemptLowerPriority)"
 breach_ci "the managers' priority not above the jobs'" "$pc.value) = 0" "the PriorityClass ci-runner-manager's value \[0\] is not above the jobs' (0) and below the system's"
@@ -179,7 +183,7 @@ breach_ci "a job at a priority class" "$(toml kick 'privileged = false' 'privile
 # The report builds' runner (#42; tacplus-dev/looper#209): its jobs at the PriorityClass build-report, below a land's
 # build's (0), preempted by them and preempting nothing, on the spot pool as build's; its tag its own.
 rc='(select(.kind == "PriorityClass" and .metadata.name == "build-report") | '
-breach_ci "a land's build's jobs at build-report" "$(toml build 'privileged = false' 'privileged = false\n    priority_class_name = \"build-report\"')" "gitlab-runner-build: its jobs set a priority class (priority_class_name)"
+breach_ci "a land's build's jobs at build-report" "$(toml build 'priority_class_name = \"build\"' 'priority_class_name = \"build-report\"')" "gitlab-runner-build: its jobs do not run at a land's build's priority (priority_class_name = \"build\")"
 breach_ci "build-report's jobs at no priority class" "$(toml build-report 'priority_class_name = \"build-report\"' '')" "gitlab-runner-build-report: its jobs do not run at the report builds' priority (priority_class_name = \"build-report\")"
 breach_ci "build-report's jobs at the managers' priority" "$(toml build-report 'priority_class_name = \"build-report\"' 'priority_class_name = \"ci-runner-manager\"')" "gitlab-runner-build-report: its jobs do not run at the report builds' priority"
 breach_ci "build-report's jobs off the spot pool" "$(toml build-report '\"spot\" = \"true\"' '\"pool\" = \"any\"')" "gitlab-runner-build-report: its build jobs do not select the spot pool"
@@ -191,6 +195,37 @@ breach_ci "the report builds' priority the cluster's default" "$rc.globalDefault
 breach_ci "the report builds' priority preempting" "$rc.preemptionPolicy) = \"PreemptLowerPriority\"" "the PriorityClass build-report preempts (preemptionPolicy Never)"
 breach_ci "the report builds' priority a land's build's" "$rc.value) = 0" "the PriorityClass build-report's value \[0\] is not below the jobs' (0) and at or above the autoscaler's expendable cutoff (-10)"
 breach_ci "the report builds' priority expendable" "$rc.value) = -11" "the PriorityClass build-report's value \[-11\] is not below"
+# The nightly's runner (#46; tacplus-dev/looper#220): its jobs at the PriorityClass build-nightly, between the report
+# builds' (which it preempts) and a land's build's (build, which preempts it), on the spot pool as build's; its tag its
+# own.
+lc='(select(.kind == "PriorityClass" and .metadata.name == "build") | '
+nc='(select(.kind == "PriorityClass" and .metadata.name == "build-nightly") | '
+breach_ci "a land's build's jobs at no priority class" "$(toml build 'priority_class_name = \"build\"' '')" "gitlab-runner-build: its jobs do not run at a land's build's priority (priority_class_name = \"build\")"
+breach_ci "a land's build's jobs at the nightly's priority" "$(toml build 'priority_class_name = \"build\"' 'priority_class_name = \"build-nightly\"')" "gitlab-runner-build: its jobs do not run at a land's build's priority"
+breach_ci "the nightly's jobs at no priority class" "$(toml nightly 'priority_class_name = \"build-nightly\"' '')" "gitlab-runner-nightly: its jobs do not run at the nightly's priority (priority_class_name = \"build-nightly\")"
+breach_ci "the nightly's jobs at a land's priority" "$(toml nightly 'priority_class_name = \"build-nightly\"' 'priority_class_name = \"build\"')" "gitlab-runner-nightly: its jobs do not run at the nightly's priority"
+breach_ci "the nightly's jobs at the report builds' priority" "$(toml nightly 'priority_class_name = \"build-nightly\"' 'priority_class_name = \"build-report\"')" "gitlab-runner-nightly: its jobs do not run at the nightly's priority"
+breach_ci "the report builds' jobs at the nightly's priority" "$(toml build-report 'priority_class_name = \"build-report\"' 'priority_class_name = \"build-nightly\"')" "gitlab-runner-build-report: its jobs do not run at the report builds' priority"
+breach_ci "control's jobs at a land's priority" "$(toml control 'priority_class_name = \"control-job\"' 'priority_class_name = \"build\"')" "gitlab-runner-control: its jobs do not run at control's priority"
+breach_ci "kick's jobs at the nightly's priority" "$(toml kick 'privileged = false' 'privileged = false\n    priority_class_name = \"build-nightly\"')" "gitlab-runner-kick: its jobs set a priority class (priority_class_name)"
+breach_ci "the nightly's jobs off the spot pool" "$(toml nightly '\"spot\" = \"true\"' '\"pool\" = \"any\"')" "gitlab-runner-nightly: its build jobs do not select the spot pool"
+breach_ci "the nightly's jobs not tolerating spot" "$(toml nightly '\"spot=true\" = \"NoSchedule\"' '\"other=true\" = \"NoSchedule\"')" "gitlab-runner-nightly: its build jobs do not tolerate the spot pool"
+breach_ci "the nightly's jobs as root" "$(toml nightly 'run_as_non_root = true' 'run_as_non_root = false')" "gitlab-runner-nightly: its build jobs may run as root"
+breach_ci "nightly taking build" "$(deployment nightly '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,build-nightly,build\"" "gitlab-runner-nightly: takes a tag that is not arm64 or build-nightly (build)"
+breach_ci "nightly without its tag" "$(deployment nightly '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64\"" "gitlab-runner-nightly: does not take build-nightly"
+breach_ci "build taking build-nightly" "$(deployment build '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,build,build-nightly\"" "gitlab-runner-build: takes build-nightly, the nightly's runner's tag"
+breach_ci "build-report taking build-nightly" "$(deployment build-report '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,build-report,build-nightly\"" "gitlab-runner-build-report: takes build-nightly, the nightly's runner's tag"
+breach_ci "control taking build-nightly" "$(deployment control '.metadata.annotations."tacplus.dev/runner-tags"') = \"arm64,control,build-nightly\"" "gitlab-runner-control: takes build-nightly, the nightly's runner's tag"
+breach_ci "no PriorityClass for a land's build" 'del(select(.kind == "PriorityClass" and .metadata.name == "build"))' "no PriorityClass build$"
+breach_ci "no PriorityClass for the nightly" 'del(select(.kind == "PriorityClass" and .metadata.name == "build-nightly"))' "no PriorityClass build-nightly"
+breach_ci "a land's priority the cluster's default" "$lc.globalDefault) = true" "the PriorityClass build is the cluster's default"
+breach_ci "a land's priority not preempting" "$lc.preemptionPolicy) = \"Never\"" "the PriorityClass build does not preempt (preemptionPolicy PreemptLowerPriority)"
+breach_ci "the nightly's priority the cluster's default" "$nc.globalDefault) = true" "the PriorityClass build-nightly is the cluster's default"
+breach_ci "the nightly's priority not preempting" "$nc.preemptionPolicy) = \"Never\"" "the PriorityClass build-nightly does not preempt (preemptionPolicy PreemptLowerPriority)"
+breach_ci "a land's priority not above 0" "$lc.value) = 0" "the PriorityClass build's value \[0\] is not above the jobs' (0) and below the runner managers' (1000000)"
+breach_ci "a land's priority the managers'" "$lc.value) = 1000000" "the PriorityClass build's value \[1000000\] is not above the jobs' (0)"
+breach_ci "the nightly's priority a land's" "$nc.value) = 1" "the PriorityClass build-nightly's value \[1\] is not below build's (1), above build-report's (-1)"
+breach_ci "the nightly's priority the report builds'" "$nc.value) = -1" "the PriorityClass build-nightly's value \[-1\] is not below build's (1), above build-report's (-1)"
 # control's jobs (#49): at the PriorityClass control-job, below infra's and kick's (0), which preempt them when the
 # normal pool is full, and preempting nothing themselves; infra's and kick's never at it.
 cc='(select(.kind == "PriorityClass" and .metadata.name == "control-job") | '

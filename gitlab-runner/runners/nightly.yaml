@@ -1,0 +1,83 @@
+# The nightly security fan-out's runner (#46; tacplus-dev/looper#220): the tacplus-dev group's jobs tagged
+# `arm64, build-nightly`, every job of tacplus-dev/build's nightly (BUILD_NIGHTLY_TAGS), its CodeQL security jobs
+# above all, each a pod on the spot pool as build's are. Its jobs are build's (the spot pool's node selector and
+# toleration, the security context, rootless BuildKit's Unconfined build container, the defaults and ceilings: a
+# nightly's security job asks 3500m and 12Gi for CodeQL, tacplus-dev/looper#189, which no normal-pool node holds) but
+# at the PriorityClass build-nightly (render.sh): above the report builds' (build-report), which it preempts, and below
+# a land's build's (build), which preempts it. On 2026-11-21/22 the nightly's security jobs, on build's tags, waited
+# Pending 15 minutes behind the report builds filling the spot pool, failed runner_system_failure three times each, and
+# 10 of 31 repositories' nightly published nothing; now a nightly job evicts a report build instead of timing out, and
+# never delays a land. The evicted job fails runner_system_failure, which tacplus-dev/build's CI file retries. Its tags
+# are arm64 and build-nightly, never build: GitLab gives a runner every job whose tags it holds, so holding build it
+# would take a land's jobs too, at the nightly's priority; and no other runner holds build-nightly (ci/policy.sh). Its
+# concurrent is fixed at half the spot pool's room (render.sh refuses more than the room, gitlab-runner/spot-pool.yaml):
+# the fan-out runs a few repositories at a time through the night, and leaves the other half to the report builds,
+# which it would otherwise evict all night. The hub's decision on #46 (2026-11-26, option A): interim, until the spot
+# pool goes with the merge train (tacplus-dev/cloud#114) and the nightly checks move with the release builds.
+#
+#   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
+#   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
+#                   writes it into the Secret gitlab-runner-nightly at apply time
+tacplus:
+  tags: [arm64, build-nightly]
+  token: projects/tacplus-dev/secrets/gitlab-runner-nightly/versions/1
+concurrent: 4
+runners:
+  name: tacplus-dev nightly (cluster, ci, spot pool, above report builds)
+  config: |
+    [[runners]]
+      executor = "kubernetes"
+      # uid 1000 has no home in the job image, so HOME would be / (#20): HOME is the emptyDir below instead.
+      environment = ["HOME=/tmp/home"]
+      [runners.kubernetes]
+        namespace = "ci"
+        image = "{{ .Values.pinned.job }}"
+        helper_image = "{{ .Values.pinned.helper }}"
+        service_account = "ci-job"
+        automount_service_account_token = false
+        privileged = false
+        # Above the report builds' jobs, which it preempts, and below a land's build's, which preempt it (#46).
+        priority_class_name = "build-nightly"
+        # A spot node from 0 takes minutes to come up.
+        poll_timeout = 900
+        cpu_request = "1"
+        cpu_limit = "3"
+        memory_request = "4Gi"
+        memory_limit = "8Gi"
+        cpu_request_overwrite_max_allowed = "3500m"
+        cpu_limit_overwrite_max_allowed = "3500m"
+        memory_request_overwrite_max_allowed = "12Gi"
+        memory_limit_overwrite_max_allowed = "12Gi"
+        helper_cpu_request = "100m"
+        helper_cpu_limit = "1"
+        helper_memory_request = "128Mi"
+        helper_memory_limit = "512Mi"
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "home"
+          mount_path = "/tmp/home"
+        [runners.kubernetes.pod_labels]
+          "tacplus.dev/ci-runner" = "nightly"
+        [runners.kubernetes.node_selector]
+          "kubernetes.io/arch" = "arm64"
+          "spot" = "true"
+        [runners.kubernetes.node_tolerations]
+          "spot=true" = "NoSchedule"
+          "kubernetes.io/arch=arm64" = "NoSchedule"
+        [runners.kubernetes.pod_security_context]
+          run_as_non_root = true
+          run_as_user = 1000
+          run_as_group = 1000
+          fs_group = 1000
+          [runners.kubernetes.pod_security_context.seccomp_profile]
+            type = "RuntimeDefault"
+        # Rootless BuildKit: user namespaces and mounts (unshare, mount) need these two unconfined; its
+        # newuidmap is setuid, so privilege escalation stays allowed in this container. No capability is added.
+        [runners.kubernetes.build_container_security_context]
+          [runners.kubernetes.build_container_security_context.seccomp_profile]
+            type = "Unconfined"
+          [runners.kubernetes.build_container_security_context.app_armor_profile]
+            type = "Unconfined"
+        [runners.kubernetes.helper_container_security_context]
+          allow_privilege_escalation = false
+          [runners.kubernetes.helper_container_security_context.capabilities]
+            drop = ["ALL"]

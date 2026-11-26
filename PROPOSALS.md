@@ -57,6 +57,16 @@ the looper then marks it `promoted` or `declined` here with the date.
   --field-selector reason=Preempted`). Its `concurrent` is `build`'s, the spot pool's room (#41: 8, one a node): each
   counts the whole pool, by the hub's decision on #41, since a land's build preempts a report build (the looper's
   report slots, `BUILD_POOL_NODES - 1`, already bound the report builds' gates).
+- **The nightly on the nightly runner** (2026-11-26, #46; tacplus-dev/looper#220): `gitlab-runner/runners/nightly.yaml`
+  (tags `arm64, build-nightly`, `concurrent` 4, the spot pool, its jobs at the PriorityClass `build-nightly`, between
+  `build-report` and a land's `build`) takes no job until tacplus-dev/cloud#116 registers it and writes
+  `gitlab-runner-nightly` version 1, the hub re-pins the cluster to a commit with it (its `apply` fails at
+  `runner-tokens` before cloud#116), and tacplus-dev/looper#220 sets tacplus-dev/build's `BUILD_NIGHTLY_TAGS` to
+  `arm64, build-nightly`, in that order, or the nightly finds no runner. Then #46's done-when, unverified here: no
+  nightly security job fails `runner_system_failure` on a spot pool full of report builds (`kubectl -n ci get events
+  --field-selector reason=Preempted`). Its 4 is a guess at half the pool, unmeasured: if the fan-out does not finish
+  overnight, raise it (the render refuses more than the room, 8). Interim, by the hub's decision: it goes with the
+  spot pool when the merge train retires (tacplus-dev/cloud#114).
 - **build's light jobs on the build-light runner** (2026-11-23, #51; tacplus-dev/cloud#100):
   `gitlab-runner/runners/build-light.yaml` (tags `arm64, build-light`, `concurrent` 4, the normal pool, kick's 50m /
   256Mi) takes no job until cloud#100 registers it and writes `gitlab-runner-build-light` version 1 (its `apply` fails

@@ -18,14 +18,16 @@
 #                               deploymentproxy, CRDs, ClusterRoles and ClusterRoleBindings.
 #   20-ci.yaml                  namespaced objects only in ci, and only service accounts, ConfigMaps, NetworkPolicies,
 #                               Roles, RoleBindings and Deployments; cluster-scoped, only the Namespace ci, the
-#                               admission policy ci-pods, the runner managers' PriorityClass ci-runner-manager, the
-#                               report builds' build-report and control's jobs' control-job (no ClusterRole, no
-#                               ClusterRoleBinding): every manager runs at ci-runner-manager, and it is above the
-#                               jobs (0, which set none but build-report's and control's), preempts them, is no
-#                               default and no system priority (#39); the report builds' jobs alone run at
-#                               build-report (#42), control's alone at control-job (#49: infra's and kick's preempt
-#                               them), each below the jobs' (0) and at or above the autoscaler's expendable cutoff
-#                               (-10), never preempting, no default. A Role
+#                               admission policy ci-pods, the runner managers' PriorityClass ci-runner-manager, a
+#                               land's build's build, the nightly's build-nightly, the report builds' build-report
+#                               and control's jobs' control-job (no ClusterRole, no ClusterRoleBinding): every
+#                               manager runs at ci-runner-manager, and it is above the jobs (and build's), preempts
+#                               them, is no default and no system priority (#39); a land's build's jobs alone run at
+#                               build (#46), above 0 and preempting, the nightly's alone at build-nightly (#46),
+#                               preempting, between build-report's and build's and at or above the autoscaler's
+#                               expendable cutoff (-10), the report builds' jobs alone at build-report (#42),
+#                               control's alone at control-job (#49: infra's and kick's preempt them), each of those
+#                               two below the jobs' (0) and at or above -10, never preempting; none the default. A Role
 #                               names only
 #                               what the Kubernetes executor needs (CI_RESOURCES below), every verb, no escalate,
 #                               bind or impersonate; a RoleBinding binds a Role to service accounts of ci. The
@@ -106,7 +108,7 @@ ci_runner_writes() {
 
 # ci_runner FILE DEPLOYMENT RENDER: the runner DEPLOYMENT's config.toml (its ConfigMap's config.template.toml) keeps
 # the job rules: one Kubernetes runner, its jobs in ci, as ci-job without a token, images by digest, no privilege,
-# no host path, no Docker socket, no capability added, no priority class but the report builds' and control's (below), nothing a
+# no host path, no Docker socket, no capability added, no priority class but the spot pool's and control's (below), nothing a
 # job may override but its resources up to a ceiling;
 # a default and a ceiling for CPU and memory. A runner tagged build places its jobs on the spot pool only (its node
 # selector and the spot taint's toleration), takes no other tag but arm64, runs them non-root, and is the only one
@@ -121,7 +123,9 @@ ci_runner_writes() {
 # report's, so they never wait behind control's. The tag build-report is the runner build-report's alone (#42;
 # tacplus-dev/looper#209), which takes no other but arm64, places its jobs as a build runner's (the spot pool, non-root,
 # its build container alone Unconfined), and runs them at the PriorityClass build-report, below a land's build's, which
-# preempt them. control's jobs run at the PriorityClass control-job (#49), below infra's and kick's, which preempt them
+# preempt them. The tag build-nightly is the runner nightly's alone (#46; tacplus-dev/looper#220), which takes no other
+# but arm64, places its jobs as a build runner's, and runs them at the PriorityClass build-nightly, above the report
+# builds' and below a land's build's, whose jobs (tagged build) run at the PriorityClass build. control's jobs run at the PriorityClass control-job (#49), below infra's and kick's, which preempt them
 # when the normal pool is full of control's; no other runner's jobs set a priority class. The tag build-light is the
 # runner build-light's alone (#51; tacplus-dev/cloud#100), and build-light takes no other but arm64: above all not build,
 # which would bring the gates and security jobs onto the normal pool; its slots are the light builds' (pending, plan,
@@ -144,6 +148,7 @@ ci_runner() {
     ($tags | split(",")) as $tags | ($tags | index("build") != null) as $build | ($runner == "gitlab-runner-infra") as $infra |
     ($runner == "gitlab-runner-kick") as $kick | ($runner == "gitlab-runner-build-report") as $report |
     ($runner == "gitlab-runner-control") as $control | ($runner == "gitlab-runner-build-light") as $light |
+    ($runner == "gitlab-runner-nightly") as $nightly |
     ["cloud", "cluster", "deploy"] as $infra_tags |
     if (.runners | length) != 1 then "has \(.runners | length) [[runners]], not one" else
     .runners[0] as $r | ($r.kubernetes // {}) as $k |
@@ -158,10 +163,14 @@ ci_runner() {
     (select($k | has("pod_spec")) | "it patches its jobs pod spec (pod_spec)"),
     (if $report then
       (select($k.priority_class_name != "build-report") | "its jobs do not run at the report builds\u0027 priority (priority_class_name = \"build-report\"): a land\u0027s build would wait for them to end")
+    elif $nightly then
+      (select($k.priority_class_name != "build-nightly") | "its jobs do not run at the nightly\u0027s priority (priority_class_name = \"build-nightly\"): a nightly security job would wait Pending behind the report builds, or delay a land")
+    elif $build then
+      (select($k.priority_class_name != "build") | "its jobs do not run at a land\u0027s build\u0027s priority (priority_class_name = \"build\"): a land would wait for a nightly to end")
     elif $control then
       (select($k.priority_class_name != "control-job") | "its jobs do not run at control\u0027s priority (priority_class_name = \"control-job\"): infra\u0027s and kick\u0027s jobs would wait Pending for them to end")
     else
-      (select($k | has("priority_class_name")) | "its jobs set a priority class (priority_class_name): only the runner managers run above the jobs, and the report builds and control\u0027s below them")
+      (select($k | has("priority_class_name")) | "its jobs set a priority class (priority_class_name): only the runner managers run above the jobs, a land\u0027s build and the nightly on the spot pool beside them, and the report builds and control\u0027s below them")
     end),
     (select($k.service_account != "ci-job") | "its jobs run as [\($k.service_account // "")], not ci-job"),
     (select($k.automount_service_account_token != false) | "its jobs get a service account token"),
@@ -190,10 +199,16 @@ ci_runner() {
     else
       ($tags[] | select(. == "build-report") | "takes build-report, the report builds\u0027 runner\u0027s tag: report builds would run at a land\u0027s priority")
     end),
+    (if $nightly then
+      (($tags - ["arm64", "build-nightly"])[] | "takes a tag that is not arm64 or build-nightly (\(.)): its jobs would run at the nightly\u0027s priority"),
+      (select($tags | index("build-nightly") == null) | "does not take build-nightly: the nightly\u0027s jobs would have no runner of their own")
+    else
+      ($tags[] | select(. == "build-nightly") | "takes build-nightly, the nightly\u0027s runner\u0027s tag: the nightly\u0027s jobs would run at another priority")
+    end),
     (("cpu_request", "cpu_limit", "memory_request", "memory_limit") as $c |
       if $k[$c] == null then "no default \($c)" elif $k[$c + "_overwrite_max_allowed"] == null then "no ceiling for \($c) (\($c)_overwrite_max_allowed)" else empty end),
     ([$k | paths(. == "Unconfined") | map(tostring) | join(".")] as $u |
-      ($u - (if $build or $report then ["build_container_security_context.seccomp_profile.type", "build_container_security_context.app_armor_profile.type"] else [] end))[] |
+      ($u - (if $build or $report or $nightly then ["build_container_security_context.seccomp_profile.type", "build_container_security_context.app_armor_profile.type"] else [] end))[] |
       "its jobs are Unconfined (\(.))"),
     (select(($k.node_selector // {}) | has("looper")) | "its jobs select a looper node"),
     (if $control then
@@ -205,7 +220,7 @@ ci_runner() {
     else
       (($k.node_tolerations // {}) | keys[] | select(startswith("looper")) | "its jobs tolerate the looper taint (\(.)): only control\u0027s jobs overflow onto the looper pool")
     end),
-    if $build or $report then
+    if $build or $report or $nightly then
       (select($build and (($tags - ["arm64", "build"]) | length > 0)) | "takes build with other tags (\($tags | join(", "))): their jobs would run on spot"),
       (select(($k.node_selector // {}).spot != "true") | "its build jobs do not select the spot pool (node_selector spot = \"true\")"),
       (select(($k.node_tolerations // {})["spot=true"] != "NoSchedule") | "its build jobs do not tolerate the spot pool (node_tolerations \"spot=true\" = \"NoSchedule\")"),
@@ -314,11 +329,11 @@ for b in "${files[@]##*/}"; do
           ValidatingAdmissionPolicy|ValidatingAdmissionPolicyBinding)
             [ "$name" = ci-pods ] || breach "$b: the $kind $name, not ci-pods" ;;
           PriorityClass)
-            [ "$name" = ci-runner-manager ] || [ "$name" = build-report ] || [ "$name" = control-job ] ||
-              breach "$b: the PriorityClass $name, not ci-runner-manager, build-report or control-job" ;;
+            [[ " ci-runner-manager build build-nightly build-report control-job " == *" $name "* ]] ||
+              breach "$b: the PriorityClass $name, not ci-runner-manager, build, build-nightly, build-report or control-job" ;;
           ServiceAccount|ConfigMap|NetworkPolicy|Role|RoleBinding|Deployment)
             [ "$ns" = ci ] || breach "$b: $kind $name in [$ns], not ci" ;;
-          *) breach "$b: $kind $name: ci holds only its Namespace, its admission policy, the runner managers', the report builds' and control's PriorityClasses, and service accounts, ConfigMaps, NetworkPolicies, Roles, RoleBindings and Deployments in ci" ;;
+          *) breach "$b: $kind $name: ci holds only its Namespace, its admission policy, the runner managers', the spot pool's and control's PriorityClasses, and service accounts, ConfigMaps, NetworkPolicies, Roles, RoleBindings and Deployments in ci" ;;
         esac
         case $kind in
           Role)
@@ -380,6 +395,29 @@ for b in "${files[@]##*/}"; do
           breach "$b: no PriorityClass $n"
         fi
       done
+      # The spot pool's order (#46): a land's build's jobs (build) above 0, preempting the nightly's (build-nightly),
+      # which preempt the report builds' (build-report); the nightly's at or above the autoscaler's expendable cutoff
+      # (-10); a land's below the managers'; neither the cluster's default.
+      pvalue() { yq "select(.kind == \"PriorityClass\" and .metadata.name == \"$1\") | .value // 0" "$f"; }
+      for n in build build-nightly; do
+        if has "$f" PriorityClass "$n"; then
+          pc="select(.kind == \"PriorityClass\" and .metadata.name == \"$n\")"
+          [ "$(yq "$pc | .globalDefault // false" "$f")" = false ] || breach "$b: the PriorityClass $n is the cluster's default"
+          [ "$(yq "$pc | .preemptionPolicy // \"PreemptLowerPriority\"" "$f")" = PreemptLowerPriority ] ||
+            breach "$b: the PriorityClass $n does not preempt (preemptionPolicy PreemptLowerPriority): its job would wait Pending for a lower one's to end"
+        else
+          breach "$b: no PriorityClass $n"
+        fi
+      done
+      if has "$f" PriorityClass build && has "$f" PriorityClass build-nightly && has "$f" PriorityClass build-report && has "$f" PriorityClass ci-runner-manager; then
+        land=$(pvalue build) nightly=$(pvalue build-nightly) report=$(pvalue build-report) manager=$(pvalue ci-runner-manager)
+        [[ $land =~ ^-?[0-9]+$ && $nightly =~ ^-?[0-9]+$ ]] &&
+          [ "$land" -gt 0 ] && [ "$land" -lt "$manager" ] ||
+          breach "$b: the PriorityClass build's value [$land] is not above the jobs' (0) and below the runner managers' ($manager)"
+        [[ $land =~ ^-?[0-9]+$ && $nightly =~ ^-?[0-9]+$ ]] &&
+          [ "$nightly" -lt "$land" ] && [ "$nightly" -gt "$report" ] && [ "$nightly" -ge -10 ] ||
+          breach "$b: the PriorityClass build-nightly's value [$nightly] is not below build's ($land), above build-report's ($report) and at or above the autoscaler's expendable cutoff (-10)"
+      fi
       [ ${#runners[@]} -gt 0 ] || breach "$b: no runner"
       for d in "${runners[@]}"; do ci_runner "$b" "$d" "$f"; done
       ;;

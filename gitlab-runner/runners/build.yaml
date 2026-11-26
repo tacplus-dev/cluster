@@ -6,7 +6,9 @@
 # A job may raise its requests and limits (KUBERNETES_CPU_REQUEST and the rest) up to the *_overwrite_max_allowed
 # ceilings, which fit a c4a-standard-4 (4 CPUs, 16 GB); it may not move its pod, its namespace or its account.
 # Its concurrent is the spot pool's room for jobs at those ceilings, one a node at its max nodes (render.sh,
-# gitlab-runner/spot-pool.yaml; #41).
+# gitlab-runner/spot-pool.yaml; #41). Its jobs, a land's build's, run at the PriorityClass build (render.sh, #46), the
+# spot pool's highest: they preempt the nightly's (build-nightly) and the report builds' (build-report), so a land
+# never waits for either to end.
 #
 #   tacplus.tags    the tags of its registration in GitLab (README, What the hub does): the tags it takes
 #   tacplus.token   its authentication token in Secret Manager, by version (never "latest"): ci/runner-tokens.sh
@@ -29,6 +31,8 @@ runners:
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
+        # Above the nightly's and the report builds' jobs, which they preempt (#46).
+        priority_class_name = "build"
         # A spot node from 0 takes minutes to come up.
         poll_timeout = 900
         cpu_request = "1"
