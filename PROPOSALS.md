@@ -338,6 +338,15 @@ the looper then marks it `promoted` or `declined` here with the date.
   deploymentproxy's release) and a render or test comparing the two would say so. The fleet pins the operator by
   commit (fleet-seatrials `images/pins.yaml`), and two deployments may run different ones: which commit the cluster
   follows is a decision. Links: #59, tacplus-dev/fleet-seatrials#76, tacplus-dev/fleet-seatrials#78.
+- **The looper pool out of control's capacity, toleration and policy** (2026-11-26, #64; tacplus-dev/cloud#114 step
+  1): cloud deletes the `looper` pool, and `control`'s `concurrent` (17) still counts its 2 nodes, so the overflow would
+  pend until `poll_timeout = 900` and fail. First, here: drop `pool.yaml`'s `looper:` block, `control.yaml`'s toleration,
+  preferred affinity and `poll_timeout` reason, `render.sh`'s looper room (a missing block already counts 0 nodes, but
+  the code is dead), and `ci/policy.sh`'s exception for `control`: no runner or workload tolerates or selects `looper`
+  (the key-less `Exists` check stays, for the spot taint). `control` then gets the normal pool's room alone, 2 by
+  today's formula; counting that the managers share its `concurrent` (at most 4 of its jobs at 250m) would give 6, a
+  change to the count Jody decides. Supersedes #61 and, once built, the looper daemonsets entry above. Links: #64,
+  tacplus-dev/cloud#114, #61, #47.
 
 ## Promoted / declined
 - **The security job fails only on what ships** (2026-11-23, #55; tacplus-dev/looper#225): `ci/security.sh` fails
