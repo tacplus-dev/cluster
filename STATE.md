@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by the looper (#59).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-26 by the looper (#46).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line); `build.lock` and `gitlab-runner/pin.yaml`'s
@@ -8,7 +8,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-24 by th
 - **Target (#7):** tacplus-dev/cloud's cluster `dev` (us-central1-a) in the project `tacplus-dev` (seabeam.net), as
   `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`; seatrials' deploy account and the runners' token
   secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1; `gitlab-runner-infra`, #25, made and
-  written by tacplus-dev/cloud's stacks, cloud#64; `gitlab-runner-kick`, #36, the same, cloud#81; `gitlab-runner-build-report`, #42, the same once tacplus-dev/cloud#93 makes it) in `tacplus-dev` too. The old `tacplus` in
+  written by tacplus-dev/cloud's stacks, cloud#64; `gitlab-runner-kick`, #36, the same, cloud#81; `gitlab-runner-build-report`, #42, the same once tacplus-dev/cloud#93 makes it; `gitlab-runner-nightly`, #46, the same once tacplus-dev/cloud#116 makes it) in `tacplus-dev` too. The old `tacplus` in
   `jody1-328023` is no longer the target; Jody deletes it once the pipeline applies to `dev`.
 - **Works:** the cluster pipeline (#1): `deployments.yaml` (`seatrials`; `test-idp`, #17, without an operator: `operator` optional, no deploymentproxy Role or operator binding then, the policy requiring both or neither; #59: with one, the operator's own Role `deployment-operator`, its chart's, bound to it in `tac-<name>` only, each grant within `fleet-deploy`, the policy holding it so, and `fleet-deploy` reading the deployment's `TenantNamespace`s, never writing them); deploymentproxy v0.2.2 (#22) fetched
   and pinned by commit, checksum and image digest, rendered as its image's user 65532:65532 with a 500m CPU limit (#31), bumped by one command (`deploymentproxy/bump.sh <tag>`, #4: the
@@ -97,6 +97,12 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   a commit with it fails at `runner-tokens`), the hub re-pins to a commit with it, and the hub sets tacplus-dev/build's
   `BUILD_REPORT_TAGS` to `arm64, build-report`;
   #42's done-when (a land's gates pod starting within minutes on a spot pool full of report builds) is unverified.
+  `nightly` (#46; tags `arm64, build-nightly`, `concurrent` 4, the spot pool) runs tacplus-dev/build's nightly at the
+  PriorityClass `build-nightly` (0, preempting), between `build-report` (-1) and a land's build's new `build` (1,
+  preempting); it takes no job until tacplus-dev/cloud#116 registers it and writes `gitlab-runner-nightly` version 1
+  (until then `apply` of a commit with it fails at `runner-tokens`), the hub re-pins to a commit with it, and
+  tacplus-dev/looper#220 sets `BUILD_NIGHTLY_TAGS` to `arm64, build-nightly`; #46's done-when (no nightly security
+  job failing `runner_system_failure` behind report builds) is unverified.
   `build-light` (#51): cloud's stacks applied tacplus-dev/cloud#100 (dc67c17, 2026-11-24) and its runner 59984739 is
   online, but every cluster apply since b1fca16 failed on its first rollout's stale `ProgressDeadlineExceeded` (#58,
   pipeline 3108203363) until #58's restart; it takes build's light jobs once tacplus-dev/looper#224 tags them `arm64, build-light` (and cloud
