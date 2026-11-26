@@ -21,6 +21,7 @@ Nothing built yet. The design is approved (tacplus-dev/roadmap#1, 2026-11-02).
 - The control runner's job pods overflow onto the looper pool (0 to 2) and its concurrent counts that pool's max room (#47; tacplus-dev/cloud#95). Hub, at Jody's request, 2026-11-22 (`tacplus-dev/roadmap:decisions/cluster-node-pools-2026-11-03.md`, addendum 2026-11-22).
 - Drop the one-release check against tacplus-dev/cloud's runner block, so cloud can retire its runner pools and manager (#65; tacplus-dev/cloud#113). Hub, at Jody's request, 2026-11-26 ("make sure you have all the dead stuff cut. I dont want a large bill").
 - Drop the looper pool from the control runner's capacity and tolerations, so cloud can delete it (#64; tacplus-dev/cloud#114). Hub, at Jody's request, 2026-11-26 (`tacplus-dev/roadmap:decisions/agentic-dev-flow-2026-11-25.md`; "dont wait on me unless you absolutely have to").
+- A nightly runner entry on the spot pool, with a PriorityClass between report builds and lands (#46). Hub, on its recommendation with Jody's standing agreement (tp-act-on-recommendations), 2026-11-26.
 
 ## Later
 - A reconciler (GKE Config Sync or Argo CD) instead of a manual apply, if standing privilege becomes acceptable (roadmap#1, alternative ii).
