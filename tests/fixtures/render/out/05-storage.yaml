@@ -1,0 +1,19 @@
+# The cluster's default StorageClass. Rendered by render.sh; never edited.
+#
+# Every node of dev is C4A (Axion), and C4A attaches Hyperdisk only: a claim that names no class took GKE's own
+# default, standard-rwo (pd-balanced), and its volume never attached ("pd-balanced disk type cannot be used by
+# c4a-standard-2 machine type": seatrials' first deploy, 2026-11-26: kernel, stratum and eventbus never started).
+# Kubernetes gives a claim the newest of several default classes, so this one wins over GKE's, which GKE owns and
+# this render leaves alone.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hyperdisk-balanced
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: hyperdisk-balanced
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete

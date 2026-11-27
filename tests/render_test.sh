@@ -55,7 +55,7 @@ if "$here/render.sh" "$fixtures/deployments.yaml" "$work/out" > "$work/log" 2>&1
 else
   fail "render.sh failed on the fixture: $(cat "$work/log")"
 fi
-[ "$(ls "$work/out" 2>/dev/null | tr '\n' ' ')" = "00-deploymentproxy.yaml 10-deployment-alpha.yaml 10-deployment-beta-2.yaml 20-ci.yaml " ] &&
+[ "$(ls "$work/out" 2>/dev/null | tr '\n' ' ')" = "00-deploymentproxy.yaml 05-storage.yaml 10-deployment-alpha.yaml 10-deployment-beta-2.yaml 20-ci.yaml " ] &&
   ok "one file for deploymentproxy, one per deployment, one for ci" || fail "the files are: $(ls "$work/out" 2>/dev/null | tr '\n' ' ')"
 
 dp=$work/out/00-deploymentproxy.yaml
@@ -255,7 +255,7 @@ diff <(yq 'select(.kind == "ConfigMap")' "$work/removed/00-deploymentproxy.yaml"
   ok "with every quota the default, the ConfigMap is the release's" || fail "the default quota changed the release's ConfigMap"
 
 # A removed entry renders nothing for it, and the rest as before.
-[ "$(ls "$work/removed" | tr '\n' ' ')" = "00-deploymentproxy.yaml 10-deployment-alpha.yaml 20-ci.yaml " ] &&
+[ "$(ls "$work/removed" | tr '\n' ' ')" = "00-deploymentproxy.yaml 05-storage.yaml 10-deployment-alpha.yaml 20-ci.yaml " ] &&
   cmp -s "$work/removed/10-deployment-alpha.yaml" "$fixtures/out/10-deployment-alpha.yaml" &&
   ! grep -q beta "$work/removed/"* &&
   ok "a removed entry renders nothing for it" || fail "a removed entry: $(ls "$work/removed" | tr '\n' ' ')"

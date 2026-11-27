@@ -63,7 +63,7 @@ echo yes > "$KSTUB/grant"
 if run rb "$here/ci/rollback.sh" "$commit"; then
   grep -q "^rollback: tacplus-dev/cluster at $commit: good$" "$work/rb" &&
     grep -qx 'gcloud container clusters get-credentials dev --zone us-central1-a --project tacplus-dev' "$KSTUB/log" &&
-    [ "$(grep -cE '^kubectl apply --server-side --field-manager=tacplus-cluster --force-conflicts -f out/(00-deploymentproxy|10-deployment-seatrials|10-deployment-test-idp|20-ci)\.yaml$' "$KSTUB/log")" = 4 ] &&
+    [ "$(grep -cE '^kubectl apply --server-side --field-manager=tacplus-cluster --force-conflicts -f out/(00-deploymentproxy|05-storage|10-deployment-seatrials|10-deployment-test-idp|20-ci)\.yaml$' "$KSTUB/log")" = 5 ] &&
     grep -qx 'kubectl -n ci rollout status deployment/gitlab-runner-infra --timeout=5m' "$KSTUB/log" &&
     [ -f "$KSTUB/live/v1.Secret.ci.gitlab-runner-infra" ] &&
     grep -q "^rollback: dev is at $commit; now re-pin the GitLab project to it: ci/pin.sh $commit" "$work/rb" &&

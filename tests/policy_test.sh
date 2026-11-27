@@ -46,6 +46,16 @@ ok() { echo "ok   $*"; }
 "$here/render.sh" "$here/tests/fixtures/render/deployments.yaml" "$work/good" >/dev/null || { echo "FAIL render.sh"; exit 1; }
 "$here/ci/policy.sh" "$work/good" > "$work/log" 2>&1 && ok "the fixture's render keeps the rules" || fail "the fixture's render: $(cat "$work/log")"
 
+# The storage file: the one default StorageClass, Hyperdisk Balanced, and nothing else.
+rm -rf "$work/bad" && cp -R "$work/good" "$work/bad"
+yq -i '.parameters.type = "pd-balanced"' "$work/bad/05-storage.yaml"
+! "$here/ci/policy.sh" "$work/bad" > "$work/log" 2>&1 && grep -q '05-storage.yaml: not the one StorageClass hyperdisk-balanced' "$work/log" &&
+  ok "a StorageClass of another disk type is a breach" || fail "pd-balanced in the storage file: $(cat "$work/log")"
+rm -rf "$work/bad" && cp -R "$work/good" "$work/bad"
+printf -- '---\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: extra\n' >> "$work/bad/05-storage.yaml"
+! "$here/ci/policy.sh" "$work/bad" > "$work/log" 2>&1 && grep -q '05-storage.yaml: not the one StorageClass hyperdisk-balanced' "$work/log" &&
+  ok "a second object in the storage file is a breach" || fail "a second object in the storage file: $(cat "$work/log")"
+
 # breach WHAT YQ WANT: the fixture's alpha file changed by the yq expression YQ is a breach saying WANT.
 breach() {
   rm -rf "$work/bad" && cp -R "$work/good" "$work/bad"

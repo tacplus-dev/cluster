@@ -48,7 +48,7 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `gitlab-runner/release/` | The chart as fetched (`gitlab-runner/fetch.sh`), with its `SHA256SUMS`. Never edited. |
 | `gitlab-runner/values.yaml` | The chart's values every runner shares: the runner manager's pod, its Role in `ci`, its placement. |
 | `gitlab-runner/runners/<runner>.yaml` | One runner each (`build`, `build-light`, `build-report`, `control`, `infra`, `kick`, `nightly`): its tags, whether it takes protected refs only, its token's Secret Manager version, its jobs' `config.toml`. |
-| `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
+| `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/05-storage.yaml` (the default StorageClass, Hyperdisk Balanced: what C4A nodes attach), `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
 | `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `rollback` (the way back without a runner: Rolling back, below); `lib.sh` (credentials); `tools.sh` (the pinned tools). |
 | `build.lock`, `gates.yaml` | The build image by digest (the CI image), and the gates run in it (How a change reaches the cluster, below). |

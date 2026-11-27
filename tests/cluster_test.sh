@@ -77,6 +77,7 @@ if run plan env PLAN_SUMMARY="$work/summary" "$here/ci/plan.sh" "$work/out"; the
     grep -qx 'alpha: add v1.Namespace..tac-alpha' "$work/summary" &&
     grep -qx 'beta-2: add rbac.authorization.k8s.io.v1.Role.tac-beta-2.fleet-deploy' "$work/summary" &&
     grep -q '^plan: alpha: add rbac.authorization.k8s.io.v1.RoleBinding.tac-alpha.fleet-deploy$' "$work/plan" &&
+    grep -qx 'storage: add storage.k8s.io.v1.StorageClass..hyperdisk-balanced' "$work/summary" &&
     grep -qx 'ci: add v1.Namespace..ci' "$work/summary" &&
     grep -qx 'ci: add apps.v1.Deployment.ci.gitlab-runner-build' "$work/summary" &&
     grep -qx 'ci: add rbac.authorization.k8s.io.v1.Role.ci.gitlab-runner-control' "$work/summary" &&
@@ -94,9 +95,10 @@ run apply "$here/ci/apply.sh" "$work/out" && fail "apply without the runners' to
 mv "$work/sm.away" "$SMSTUB"
 : > "$KSTUB/log"
 run apply "$here/ci/apply.sh" "$work/out" && grep -q 'apply: done' "$work/apply" &&
-  [ "$(grep -c "^kubectl apply --server-side --field-manager=tacplus-cluster --force-conflicts -f $work/out/" "$KSTUB/log")" = 4 ] &&
+  [ "$(grep -c "^kubectl apply --server-side --field-manager=tacplus-cluster --force-conflicts -f $work/out/" "$KSTUB/log")" = 5 ] &&
   grep -qx 'kubectl -n ci rollout status deployment/gitlab-runner-control --timeout=5m' "$KSTUB/log" &&
-  ok "apply applies the four files server-side and waits for the runners" || fail "apply: $(cat "$work/apply" "$KSTUB/log")"
+  [ -f "$KSTUB/live/storage.k8s.io.v1.StorageClass..hyperdisk-balanced" ] &&
+  ok "apply applies the five files server-side and waits for the runners" || fail "apply: $(cat "$work/apply" "$KSTUB/log")"
 # Each runner's token, from Secret Manager by its version, in the Secret its pods mount, and printed nowhere.
 s=$KSTUB/live/v1.Secret.ci.gitlab-runner-build
 [ -f "$s" ] && [ "$(yq '.data."runner-token"' "$s" | base64 -d)" = glrt-stubbuild_t0ken ] &&

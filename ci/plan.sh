@@ -30,6 +30,7 @@ for f in "$out"/*.yaml; do
   b=$(basename "$f" .yaml)
   case $b in
     00-deploymentproxy) unit=deploymentproxy ;;
+    05-storage) unit=storage ;;
     10-deployment-*) unit=${b#10-deployment-}; rendered+=("$unit") ;;
     20-ci) unit=ci ;;
     *) echo "plan: $f is not a file render.sh writes" >&2; exit 1 ;;

@@ -14,6 +14,7 @@
 #                               operator's RoleBinding both, or neither (a deployment without an operator); the
 #                               operator's own Role deployment-operator and its RoleBinding both, only with
 #                               deploymentproxy's, each grant within fleet-deploy (#59).
+#   05-storage.yaml             one object: the default StorageClass hyperdisk-balanced (pd.csi.storage.gke.io)
 #   00-deploymentproxy.yaml     namespaced objects only in deploymentproxy; cluster-scoped, only the Namespace
 #                               deploymentproxy, CRDs, ClusterRoles and ClusterRoleBindings.
 #   20-ci.yaml                  namespaced objects only in ci, and only service accounts, ConfigMaps, NetworkPolicies,
@@ -260,6 +261,12 @@ for b in "${files[@]##*/}"; do
           *) [ "$ns" = deploymentproxy ] || breach "$b: $kind $name in [$ns], not deploymentproxy" ;;
         esac
       done < <(yq -N '[.kind, .metadata.namespace // "", .metadata.name] | join("|")' "$f")
+      ;;
+    05-storage.yaml)
+      # One object: the default StorageClass, Hyperdisk Balanced by GKE's own CSI driver. Nothing else is cluster storage.
+      [ "$(yq -N '[.kind, .metadata.name, .provisioner, .parameters.type, .metadata.annotations."storageclass.kubernetes.io/is-default-class" // ""] | join("|")' "$f")" = \
+        "StorageClass|hyperdisk-balanced|pd.csi.storage.gke.io|hyperdisk-balanced|true" ] ||
+        breach "$b: not the one StorageClass hyperdisk-balanced (pd.csi.storage.gke.io, type hyperdisk-balanced, the default)"
       ;;
     10-deployment-*.yaml)
       d=${b#10-deployment-}; d=${d%.yaml}; tns=tac-$d
