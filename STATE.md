@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-27 by the looper (#66).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-27 by the looper (#67).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line); `build.lock` and `gitlab-runner/pin.yaml`'s
@@ -10,10 +10,10 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-27 by th
   secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1; `gitlab-runner-infra`, #25, made and
   written by tacplus-dev/cloud's stacks, cloud#64; `gitlab-runner-kick`, #36, the same, cloud#81; `gitlab-runner-build-report`, #42, the same once tacplus-dev/cloud#93 makes it; `gitlab-runner-nightly`, #46, the same once tacplus-dev/cloud#116 makes it) in `tacplus-dev` too. The old `tacplus` in
   `jody1-328023` is no longer the target; Jody deletes it once the pipeline applies to `dev`.
-- **Works:** the cluster pipeline (#1): `deployments.yaml` (`seatrials`; `test-idp`, #17, without an operator: `operator` optional, no deploymentproxy Role or operator binding then, the policy requiring both or neither; #59: with one, the operator's own Role `deployment-operator`, its chart's, bound to it in `tac-<name>` only, each grant within `fleet-deploy`, the policy holding it so, and `fleet-deploy` reading the deployment's `TenantNamespace`s, never writing them); deploymentproxy v0.2.2 (#22) fetched
+- **Works:** the cluster pipeline (#1): `deployments.yaml` (`seatrials`; `test-idp`, #17, without an operator: `operator` optional, no deploymentproxy Role or operator binding then, the policy requiring both or neither; #59: with one, the operator's own Role `deployment-operator`, its chart's, bound to it in `tac-<name>` only, each grant within `fleet-deploy`, the policy holding it so, and `fleet-deploy` reading the deployment's `TenantNamespace`s, never writing them; #67: every deployment's service account `kernel` bound by `tac-<name>-kernel-tokenreview` to the ClusterRole `kernel-tokenreview`, `out/06-kernel-tokenreview.yaml`, create `tokenreviews` and nothing else, the policy allowing exactly these and no other cluster RBAC in a deployment's file, `apply` failing unless `auth can-i` says each kernel may, `delete-deployment` deleting the binding with the deployment; seatrials' token exchanges answered 403 without it until the hub applies it); deploymentproxy v0.2.2 (#22) fetched
   and pinned by commit, checksum and image digest, rendered as its image's user 65532:65532 with a 500m CPU limit (#31), bumped by one command (`deploymentproxy/bump.sh <tag>`, #4: the
   pin, the release and the render fixture); `render.sh`; `ci/policy.sh` (no cluster-scoped resource or `*`
-  in a deployment's Roles); `ci/tools.sh` pinning every tool by version and SHA-256 (#5: kubectl v1.34.13 and
+  in a deployment's Roles; its one cluster binding kernel's TokenReview right, #67); `ci/tools.sh` pinning every tool by version and SHA-256 (#5: kubectl v1.34.13 and
   gke-gcloud-auth-plugin 0.5.21 pinned, no longer the CI image's gcloud components); the GitLab jobs `render`, `validate`,
   `security` (#5: OSV-Scanner, govulncheck on `bin/`, gitleaks on the tree and history, Trivy on the CI image and,
   #9, on each image the pins deploy by digest for linux/arm64 (GitLab Runner's runner, helper and job, deploymentproxy's);
@@ -124,7 +124,7 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   re-pins the GitLab copy for #3, #4, #7, #12 and #19 (the drift job's key: its first mint through `tacplus-ci` is
   the proof tacplus-dev/cloud#30 waits on to revoke the app's old key), after setting `GCP_WIF_PROVIDER` to `dev`'s provider (README, What the
   hub does, the move from `tacplus` to `dev`). The cluster-scoped objects a fleet's chart needs have no
-  place in the render yet.
+  general place in the render yet; kernel's TokenReview right (#67) is the one it has.
 - **Known vulnerabilities:** 10 accepted in `security-exceptions.yaml` until 2026-12-04 (#5), none with a fixed
   release of its tool: kubectl v1.34.13 (x/net, x/text, otel) and gke-gcloud-auth-plugin 0.5.21 (x/net/html), and
   x/crypto/openpgp (GO-2026-5932) in our runner images. gitleaks, OSV-Scanner, crane and trivy (v0.76.2, x/net v0.62.0
