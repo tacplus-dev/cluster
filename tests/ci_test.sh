@@ -61,7 +61,7 @@ gates+=' && ci/runner-images.sh --if-changed "${LOOPER_GATES_BASE:-}" images'
 # Our GitLab Runner images (#21): gitlab-runner/pin.yaml's runner: and helper: are the images ci/runner-images.sh
 # builds, in tacplus-dev/cloud's ci-images (its dev stack's registry), of the build's release, by digest; its recipe
 # names the runner's commit, both binaries' SHA-256s, upstream's base images' commit, alpine:3.24 by digest and each
-# image's packages by version. (gitlab-runner/fetch.sh checks the release is the chart's and cloud's.)
+# image's packages by version. (gitlab-runner/fetch.sh checks the release is the chart's appVersion.)
 pin=$here/gitlab-runner/pin.yaml
 registry=$(yq -r '.build.registry' "$pin") version=$(yq -r '.build.version' "$pin")
 [ "$registry" = us-central1-docker.pkg.dev/tacplus-dev/ci-images ] && ok "our images' registry is tacplus-dev/cloud's ci-images" ||

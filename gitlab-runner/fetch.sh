@@ -14,8 +14,7 @@
 # version; a chart whose appVersion is not the images' version; an image whose tag no longer has the pinned digest.
 # Our runner and helper images (pin.yaml's build:, #21) are in a private registry and are their build's
 # (ci/runner-images.sh refuses any other digest), so their tags are not read: their release must be the chart's
-# appVersion, and the release, commit and runner SHA-256 tacplus-dev/cloud's manager runs (its stacks/ci/main.tf
-# runner block on main: one release in both places).
+# appVersion. pin.yaml's build: is the only GitLab Runner pin (tacplus-dev/cloud#113 retired cloud's, #65).
 # Needs bash, curl, jq, yq (mikefarah v4), sha256sum, tar.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
@@ -61,13 +60,6 @@ live_digest() {
 ours=$("$yq" -e '.build.registry' "$pin")
 build_version=$("$yq" -e '.build.version' "$pin")
 [ "$build_version" = "v$app" ] || die "the images' build is GitLab Runner $build_version, not the chart's appVersion $app"
-cloud_main=${CLOUD_MAIN_TF:-https://raw.githubusercontent.com/tacplus-dev/cloud/main/stacks/ci/main.tf}
-curl -fsSL --retry 3 -o "$t/cloud.tf" "$cloud_main" || die "no tacplus-dev/cloud runner block at $cloud_main"
-cloud() { sed -n "/^  runner = {/,/^  }/s/^    $1 *= *\"\(.*\)\"$/\1/p" "$t/cloud.tf"; }
-for k in version:version commit:commit runner_sha256:runner_sha256; do
-  [ "$(cloud "${k#*:}")" = "$("$yq" -e ".build.${k%%:*}" "$pin")" ] ||
-    die "the images' build.${k%%:*} is $("$yq" -e ".build.${k%%:*}" "$pin"), tacplus-dev/cloud's runner ${k#*:} is [$(cloud "${k#*:}")]: one release in both places"
-done
 for key in runner helper job; do
   image=$("$yq" -e ".$key" "$pin")
   [[ $image =~ ^[a-z0-9.-]+/[a-z0-9/._-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$ ]] ||
@@ -86,7 +78,7 @@ mv "$t/SHA256SUMS" "$t/x/$name/SHA256SUMS"
 if [ "${1:-}" = --check ]; then
   (cd "$release" && sha256sum --quiet -c SHA256SUMS) || die "release/ does not match its SHA256SUMS"
   diff -u "$release/SHA256SUMS" "$t/x/$name/SHA256SUMS" || die "release/ is not $name $version ($digest): run gitlab-runner/fetch.sh"
-  echo "$name $version ($digest, app $app): release/ matches, $(wc -l < "$release/SHA256SUMS") files; the job image's tag has its digest; our images' build is tacplus-dev/cloud's runner release"
+  echo "$name $version ($digest, app $app): release/ matches, $(wc -l < "$release/SHA256SUMS") files; the job image's tag has its digest; our images' build is the chart's appVersion"
 else
   rm -rf "$release"
   cp -R "$t/x/$name" "$release"

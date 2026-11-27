@@ -6,9 +6,8 @@
 # build: block names its release) are built with go1.26.10 (GO-2026-6859), x/net v0.58.0 and go-jose v4.1.4, on
 # Alpine packages since fixed (git 2.54.0-r0). This builds the same release's two binaries with go1.27.4 and at least
 # x/net v0.62.0, klauspost/compress v1.20.2 and go-jose v4.1.6 (each only raised: v19.6.0 requires compress v1.20.3,
-# which stays, #52), as tacplus-dev/cloud's ci/runner.sh builds the VM
-# manager's runner (one release in both places: the runner's SHA-256 is cloud's runner_sha256), and puts each on a
-# pinned alpine:3.24 with upstream's packages, files and config (its base images' Dockerfiles, at the commit
+# which stays, #52), each binary refused unless its SHA-256 is build:'s runner_sha256 or helper_sha256, and puts
+# each on a pinned alpine:3.24 with upstream's packages, files and config (its base images' Dockerfiles, at the commit
 # build.base_images), without docker-machine (the Kubernetes executor never runs it). No container runtime: the
 # packages are installed into the root file system by Alpine's static apk (unprivileged, no scripts: their only
 # effects are the files written here), every package checked against Alpine's signed index; crane assembles the
@@ -42,7 +41,7 @@ yq=${YQ:-yq}
 die() { echo "runner-images.sh: $*" >&2; exit 1; }
 say() { echo "runner-images.sh: $*" >&2; }
 
-# The binaries' recipe: tacplus-dev/cloud's ci/runner.sh's, which builds the same commit.
+# The binaries' recipe.
 go_version=go1.27.4
 deps=(golang.org/x/net@v0.62.0 github.com/klauspost/compress@v1.20.2 github.com/go-jose/go-jose/v4@v4.1.6)
 # Alpine's static apk, run on this machine (linux/amd64 or linux/arm64), from the same release as the images.
@@ -122,7 +121,7 @@ built=$(TZ=UTC0 git -C "$src" log -1 --format=%cd --date=format-local:%Y-%m-%dT%
 epoch=$(git -C "$src" log -1 --format=%ct)
 rm -rf "$src/.git"
 
-# The binaries, as tacplus-dev/cloud's ci/runner.sh builds the runner: upstream's ldflags (its Makefile's
+# The binaries: upstream's ldflags (its Makefile's
 # GO_LDFLAGS; REVISION and BUILT, which its build reads from the VCS stamp, from the commit), CGO off, -trimpath,
 # each refused unless its SHA-256 is the pinned one.
 (

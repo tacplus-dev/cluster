@@ -18,10 +18,9 @@ runner: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v1
 helper: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a
 # The runner and helper images' recipe (ci/runner-images.sh, #21): GitLab Runner's release (the chart's appVersion),
 # built with go1.27.4 and the fixed modules, on alpine:3.24, into tacplus-dev/cloud's registry ci-images (its dev
-# stack; cluster-admin-pipeline its only writer, the cluster's nodes its readers). One release with tacplus-dev/cloud
-# (its stacks/ci/main.tf runner block: the same commit, the same runner SHA-256; gitlab-runner/fetch.sh checks it):
-# a bump here names the cloud issue that moves its pins. A bump of anything here, or of an Alpine package, is new
-# digests for runner: and helper: (README, Our GitLab Runner images).
+# stack; cluster-admin-pipeline its only writer, the cluster's nodes its readers). The only GitLab Runner pin: nothing
+# in tacplus-dev/cloud builds or runs one since cloud#113 (#65). A bump of anything here, or of an Alpine package, is
+# new digests for runner: and helper: (README, Our GitLab Runner images).
 build:
   version: v19.6.0
   branch: 19-6-stable

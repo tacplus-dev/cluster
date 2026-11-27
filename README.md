@@ -163,7 +163,7 @@ Before the first pipeline:
 
 1. **The runner:** a project runner registered to `tacplus-dev/cluster` only, tag `cluster`, VMs used once, with
    no Google account; group runners off on the project. Until step 7's `infra` takes over, when group runners go on
-   (it is one) and the VM runner is paused.
+   (it is one) and the VM runner is paused; it is gone since tacplus-dev/cloud#113 (The infra runner, below).
 2. **The project:** `main` protected; the protected environment `cluster`, deployable by Jody and by the account
    whose merges start the pipelines on main (the hub's): GitLab runs an automatic job in a protected environment only
    for a pipeline started by one of its deployers, so `apply` fails for anyone else's; pipeline variables allowed to the Owner role only (Settings > CI/CD > Variables, "Minimum role to use pipeline
@@ -399,9 +399,9 @@ The runner manager's image and the jobs' helper image are built here (#21; the h
 upstream's: GitLab's 19.5.3 images, when #21 moved to our own, were built with go1.26.10 (GO-2026-6859) and git
 2.54.0-r0, and no newer release existed. `ci/runner-images.sh` builds GitLab Runner's release at its commit (`gitlab-runner/pin.yaml`'s `build:`)
 with go1.27.4 and at least x/net v0.62.0, klauspost/compress v1.20.2 and go-jose v4.1.6 (a module the release
-already requires newer, as 19.6.0's compress v1.20.3, stays), the recipe of tacplus-dev/cloud's
-`ci/runner.sh` for the VM manager's runner (so the runner binary's SHA-256 is cloud's `runner_sha256`), and puts
-each binary on `alpine:3.24` (pinned by digest) with upstream's packages, files and config, from its base images'
+already requires newer, as 19.6.0's compress v1.20.3, stays), with upstream's ldflags, CGO off and `-trimpath`
+(this repository's recipe: each binary is refused unless its SHA-256 is `build.runner_sha256` or
+`build.helper_sha256`), and puts each binary on `alpine:3.24` (pinned by digest) with upstream's packages, files and config, from its base images'
 Dockerfiles at the release's `RUNNER_IMAGES_VERSION` (`build.base_images`), without docker-machine (the
 Kubernetes executor never runs it). There is no container runtime: Alpine's static `apk` installs the packages into
 the root file system, unprivileged and without their scripts (the script does what those would: `/etc/gitconfig`'s
@@ -418,9 +418,9 @@ cluster's.
 - **Checked in the gates.** `gates.yaml`'s full builds both images whenever their recipe (the script, or
   `pin.yaml`'s `build:`, `runner:` or `helper:`) differs from the main a land is on, so a new digest is proven on the
   build job's machine before it lands; the nightly scan builds them too.
-- **One release with tacplus-dev/cloud.** `gitlab-runner/fetch.sh` (the `validate` job) refuses a `build:` whose
-  version, commit or runner SHA-256 is not cloud's `stacks/ci/main.tf` runner block on main. A runner bump in either
-  repository names the other's issue.
+- **The only GitLab Runner pin.** `build:` is ours alone: tacplus-dev/cloud#113 retired cloud's runner manager and
+  its pins, so nothing there builds or runs GitLab Runner and `validate` no longer reads cloud (#65).
+  `gitlab-runner/fetch.sh` (the `validate` job) refuses a `build:` whose version is not the chart's appVersion.
 
 **A bump** (a new GitLab Runner release, a newer `alpine:3.24`, or a package Alpine has replaced: Alpine keeps only
 each package's latest build, so the build stops being reproducible when one changes, and says which): change
@@ -442,8 +442,9 @@ pool exists. The three infrastructure pipelines keep their tags and move by the 
 
 ### The infra runner
 
-tacplus-dev/cloud#11 removes every standalone runner VM (Jody: the only VMs are Kubernetes nodes). Three pipelines
-ran on those VMs with no in-cluster runner to move to: tacplus-dev/cloud's (tag `cloud`), this one (`cluster`) and
+tacplus-dev/cloud#11 removed every standalone runner VM (Jody: the only VMs are Kubernetes nodes), and
+tacplus-dev/cloud#113 the `cluster` and `deploy` pools and their manager: they are gone. Three pipelines ran on those
+VMs with no in-cluster runner to move to: tacplus-dev/cloud's (tag `cloud`), this one (`cluster`) and
 fleet-seatrials' deploy (`deploy`). They hold the most powerful credentials we have (WIF to the projects, and
 cluster-admin on `dev`), so they share no runner with the agents' `control` jobs or the builds, as the VM pools kept
 them apart (the hub's decision under Jody's act-on-recommendations rule, 2026-11-16; #25). `infra`
@@ -460,16 +461,15 @@ them apart (the hub's decision under Jody's act-on-recommendations rule, 2026-11
   pod off the metadata server); each job federates its own GitLab `id_token` through WIF, as it did on the VMs.
 - **its token** the Secret Manager version `gitlab-runner-infra` (version 1), which tacplus-dev/cloud's `dev` stack
   makes beside `gitlab-runner-build` and `gitlab-runner-control`, readable by `cluster-admin-pipeline` only. Cloud's
-  `gitlab` stack registers the runner (paused) and writes that version itself, as it keeps the VM runners' tokens
+  `gitlab` stack registers the runner (paused) and writes that version itself, as it kept the VM runners' tokens
   (cloud#64, the hub's scope): nothing else registers it, and the token never leaves that pipeline.
 
-**The switch-over** (the hub, once a pipeline on main has applied `infra` and `apply` has written its token): in
-one step, unpause `infra` and pause the VM runners that carry `cloud`, `cluster` and `deploy` (tacplus-dev/cloud's
-`cluster` and `deploy` pools), so no job is taken twice and none is left without a runner. The step is a commit to
+**The switch-over** is done (tacplus-dev/cloud#66): in one step the hub unpaused `infra` and paused the VM runners
+that carried `cloud`, `cluster` and `deploy` (tacplus-dev/cloud's `cluster` and `deploy` pools), by a commit to
 tacplus-dev/cloud's `gitlab` stack (`infra`'s `paused = false`), not a change in GitLab's settings, which that stack's
-next apply would revert (cloud#64); then one cloud and one
-cluster pipeline run green on `infra`; then tacplus-dev/cloud#11 removes the VMs. A new tag or a new pipeline on
-`infra` is a pull request here (its file and the policy), not a registration change.
+next apply would revert (cloud#64); one cloud and one cluster pipeline then ran green on `infra`, and
+tacplus-dev/cloud#113 deleted those pools. A new tag or a new pipeline on `infra` is a pull request here (its file and
+the policy), not a registration change.
 
 **Risk recorded:** this pipeline then runs inside the cluster it manages, and tacplus-dev/cloud's inside the cluster
 it makes. If the cluster is lost, neither has a runner to rebuild it with. The way back is a GitLab-hosted arm64 runner
