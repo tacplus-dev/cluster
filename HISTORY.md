@@ -61,3 +61,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-27 looper issue Alpine rebuilt expat (libexpat 2.11.0-r0, 3 CVEs) and zstd: runner-images no longer reproduces pin.yaml's runner and helper digests, failing main's nightly gates (#63)
 - 2026-11-27 looper issue Drop the one-release check against tacplus-dev/cloud's runner block: cloud retires its runner manager (cloud#113) (#65)
 - 2026-11-27 looper issue Drop the looper pool from the control runner's capacity and tolerations: cloud deletes the pool (cloud#114 step 1) (#64)
+- 2026-11-27 looper issue Job image and build.lock to build:20261126-57a6521: the zstd fix (CVE-2026-124851), so main's security gate is clean (#66)
