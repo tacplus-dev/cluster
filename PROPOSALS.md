@@ -34,14 +34,6 @@ the looper then marks it `promoted` or `declined` here with the date.
   in cloud is then best followed at once by this repository's issue for it; reading the value from a file both
   repositories share (the hub's decision allowed either) would make it one change, at the price of a render that
   reads another repository.
-- **The looper pool's daemonsets, measured** (2026-11-23, #47): `gitlab-runner/pool.yaml`'s `looper.daemonsets`
-  (400m and 1Gi a node) is an estimate, the normal pool's whole reserve per node, which also holds kube-system's
-  Deployments; `control`'s `concurrent` (17 since #53: 3060m of its 3500m on 2 looper nodes) follows from it. Once a
-  looper node is up, `kubectl describe node -l looper=true` (Allocated resources, less the `ci` pods) gives the real
-  figure; a smaller one gives `control` more slots. The issue's own estimate was about 18: it counted a report pod at
-  550m, where `control`'s defaults (a report's, tacplus-dev/looper#165) are 200m with the helper since #53. If looper pods ask
-  more than their defaults in practice (`KUBERNETES_CPU_REQUEST`), the jobs beyond the room pend for 15 minutes and
-  fail; the remedy is larger defaults in `control.yaml`, which the count follows.
 - **The looper's `.control` on the kick runner** (2026-11-19, #36): `gitlab-runner/runners/kick.yaml` (tags
   `arm64, kick`, `concurrent` 2, the normal pool; tacplus-dev/cloud#81 registered it and wrote `gitlab-runner-kick`
   version 1) takes no job until tacplus-dev/looper#197 tags its `.control` jobs (the kicker and the plan) `arm64, kick`,
@@ -348,15 +340,6 @@ the looper then marks it `promoted` or `declined` here with the date.
   deploymentproxy's release) and a render or test comparing the two would say so. The fleet pins the operator by
   commit (fleet-seatrials `images/pins.yaml`), and two deployments may run different ones: which commit the cluster
   follows is a decision. Links: #59, tacplus-dev/fleet-seatrials#76, tacplus-dev/fleet-seatrials#78.
-- **The looper pool out of control's capacity, toleration and policy** (2026-11-26, #64; tacplus-dev/cloud#114 step
-  1): cloud deletes the `looper` pool, and `control`'s `concurrent` (17) still counts its 2 nodes, so the overflow would
-  pend until `poll_timeout = 900` and fail. First, here: drop `pool.yaml`'s `looper:` block, `control.yaml`'s toleration,
-  preferred affinity and `poll_timeout` reason, `render.sh`'s looper room (a missing block already counts 0 nodes, but
-  the code is dead), and `ci/policy.sh`'s exception for `control`: no runner or workload tolerates or selects `looper`
-  (the key-less `Exists` check stays, for the spot taint). `control` then gets the normal pool's room alone, 2 by
-  today's formula; counting that the managers share its `concurrent` (at most 4 of its jobs at 250m) would give 6, a
-  change to the count Jody decides. Supersedes #61 and, once built, the looper daemonsets entry above. Links: #64,
-  tacplus-dev/cloud#114, #61, #47.
 - **No one-release check against tacplus-dev/cloud's runner block** (2026-11-26, #65): `gitlab-runner/fetch.sh
   --check` (the `validate` job) reads `stacks/ci/main.tf` on cloud's main and refuses a `build:` whose version, commit
   or runner SHA-256 is not its `runner` block. tacplus-dev/cloud#113 deletes that block with the runner pools and their
@@ -367,8 +350,35 @@ the looper then marks it `promoted` or `declined` here with the date.
   and `tests/ci_test.sh`, and put The infra runner section in the past tense. It lands before cloud#113, which waits
   on it. Open: whether it waits if cloud keeps its build pool's manager (cloud#113's Q1 option b). Links: #65,
   tacplus-dev/cloud#113.
+- **control's concurrent by its worst-case mix** (2026-11-26, #64): `render.sh` holds the room of
+  `managers.count` managers (4 x 250m) apart and gives `control` the rest at a report's 200m, 1 since the looper pool
+  went (and `nightly`'s manager, #46). But GitLab's `concurrent` caps all of `control`'s jobs, managers included, so at most `concurrent` pods run:
+  the tight count is the largest `c` whose worst mix fits (`min(c, managers)` managers at 250m, the rest at 200m), 5 in
+  today's 1390m. A change to the counting contract, Jody's; moot if `control` itself goes (tacplus-dev/cloud#114 step
+  3), and so is `managers` if the managers moved to the looper VMs with the reports (then `managers.count: 0` gives
+  `control` 6). If `control` jobs queue in a busy hour, this or a measured reserve (above) widens it. Links: #64, #53.
 
 ## Promoted / declined
+- **The looper pool out of control's capacity, toleration and policy** (2026-11-26, #64; tacplus-dev/cloud#114 step
+  1): cloud deletes the `looper` pool, and `control`'s `concurrent` (17) still counts its 2 nodes, so the overflow would
+  pend until `poll_timeout = 900` and fail. First, here: drop `pool.yaml`'s `looper:` block, `control.yaml`'s toleration,
+  preferred affinity and `poll_timeout` reason, `render.sh`'s looper room (a missing block already counts 0 nodes, but
+  the code is dead), and `ci/policy.sh`'s exception for `control`: no runner or workload tolerates or selects `looper`
+  (the key-less `Exists` check stays, for the spot taint). `control` then gets the normal pool's room alone, 2 by
+  today's formula; counting that the managers share its `concurrent` (at most 4 of its jobs at 250m) would give 6, a
+  change to the count Jody decides. Supersedes #61 and, once built, the looper daemonsets entry above. Links: #64,
+  tacplus-dev/cloud#114, #61, #47.
+  **Promoted** 2026-11-26: Jody, on #64 (the ROADMAP links it); built in #64 as proposed: `concurrent` 1 by today's
+  formula (2 before `nightly`'s manager, #46; the worst-case mix is Open, above), GitLab's default `poll_timeout`, a `looper` block in `pool.yaml` refused.
+- **The looper pool's daemonsets, measured** (2026-11-23, #47): `gitlab-runner/pool.yaml`'s `looper.daemonsets`
+  (400m and 1Gi a node) is an estimate, the normal pool's whole reserve per node, which also holds kube-system's
+  Deployments; `control`'s `concurrent` (17 since #53: 3060m of its 3500m on 2 looper nodes) follows from it. Once a
+  looper node is up, `kubectl describe node -l looper=true` (Allocated resources, less the `ci` pods) gives the real
+  figure; a smaller one gives `control` more slots. The issue's own estimate was about 18: it counted a report pod at
+  550m, where `control`'s defaults (a report's, tacplus-dev/looper#165) are 200m with the helper since #53. If looper pods ask
+  more than their defaults in practice (`KUBERNETES_CPU_REQUEST`), the jobs beyond the room pend for 15 minutes and
+  fail; the remedy is larger defaults in `control.yaml`, which the count follows.
+  **Declined** 2026-11-26: moot; the looper pool is gone (#64; tacplus-dev/cloud#114).
 - **The security job fails only on what ships** (2026-11-23, #55; tacplus-dev/looper#225): `ci/security.sh` fails
   on an advisory in CI tooling as on one in what the cluster runs, so a new kubectl or scanner advisory stops every
   land. Each finding gets a `scope` from the scan that made it: `tooling` for govulncheck on `bin/` and Trivy on IMAGE,

@@ -23,7 +23,7 @@ by Jody 2026-11-02).
     each grant within `fleet-deploy`, in `tac-<deployment>` only (deploymentproxy binds it in the tenant namespaces).
 - **CI in the cluster** (the namespace `ci`): GitLab Runner with the Kubernetes executor, one runner for builds
   (spot pool), one, `build-report`, for report builds a land's build preempts (spot pool, #42), one, `nightly`, for the nightly
-  security fan-out, between the two (spot pool, #46), one for control work (normal pool, its overflow on the looper pool, #47), one, `kick`, for the looper's kicker and plan alone (normal pool,
+  security fan-out, between the two (spot pool, #46), one for control work (normal pool, #36), one, `kick`, for the looper's kicker and plan alone (normal pool,
   #36), one, `build-light`, for tacplus-dev/build's pending, plan and report jobs (normal pool, #51) and one, `infra`, for the cloud, cluster and deploy pipelines (normal pool, protected refs only), registered to the tacplus-dev group ([CI in the cluster](#ci-in-the-cluster)).
 - **Cluster-scoped objects a fleet's chart needs** (CRDs, ClusterRoles), and only from here. None yet: the render
   has no place for them until a fleet needs one (PROPOSALS.md).
@@ -210,8 +210,8 @@ Before the first pipeline:
    and a pull request moving `tacplus.token` to it. Until every runner's version is readable, `apply` fails after
    applying the rest, saying `runner-tokens: Secret Manager refused <version>`.
 8. **The pools:** the spot pool labelled `spot=true` and tainted `spot=true:NoSchedule` (tacplus-dev/cloud#7's
-   answer; tacplus-dev/cloud's `dev` stack makes them so), the looper pool (on demand, autoscaling 0 to 2) labelled
-   `looper=true` and tainted `looper=true:NoSchedule` (tacplus-dev/cloud#95), the normal pool neither; Workload Identity on the cluster and its pools (`GKE_METADATA`), and NetworkPolicy enforced (Dataplane V2, as
+   answer; tacplus-dev/cloud's `dev` stack makes them so), the normal pool neither, and no other pool: the looper
+   pool goes (tacplus-dev/cloud#114 step 1, once #64 is on the cluster), and nothing here tolerates it; Workload Identity on the cluster and its pools (`GKE_METADATA`), and NetworkPolicy enforced (Dataplane V2, as
    tacplus-dev/cloud's `dev` cluster has), for the `ci` namespace's NetworkPolicy to hold.
 
 9. **Our runner images' registry** (#21): tacplus-dev/cloud's `dev` stack applied with `ci-images`
@@ -275,8 +275,8 @@ The chart is pinned by the SHA-256 of its archive, and the runner, helper and de
 | `build` | `arm64`, `build` | the spot pool only: node selector `spot=true`, toleration `spot=true:NoSchedule` | CPU 1 / 3, memory 4Gi / 8Gi | CPU 3500m, memory 12Gi (a c4a-standard-4) |
 | `build-report` | `arm64`, `build-report` (tacplus-dev/build's report builds: every build but a manager's land, `BUILD_REPORT_TAGS`; #42) | as `build`, at the PriorityClass `build-report`: a land's build preempts them | as `build` | as `build` |
 | `nightly` | `arm64`, `build-nightly` (tacplus-dev/build's nightly, its security fan-out above all: `BUILD_NIGHTLY_TAGS`; #46) | as `build`, at the PriorityClass `build-nightly`: it preempts a report build, a land's build preempts it | as `build` | as `build` (a nightly's CodeQL asks 3500m / 12Gi, tacplus-dev/looper#189) |
-| `control` | `arm64`, `control` (the looper's reports, managers, scans) | at the PriorityClass `control-job`: `infra`'s and `kick`'s jobs preempt them (#49); the normal pool, its overflow on the looper pool (#47): a toleration `looper=true:NoSchedule` and a preferred node affinity for nodes without `looper=true`; no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 150m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
-| `infra` | `cloud`, `cluster`, `deploy` (tacplus-dev/cloud's, this pipeline, fleet-seatrials' deploy), **protected refs only** | the normal pool only: as `control`, without the looper toleration | CPU 500m / 1500m, memory 1Gi / 4Gi | CPU 1500m, memory 4Gi |
+| `control` | `arm64`, `control` (the looper's reports, managers, scans) | at the PriorityClass `control-job`: `infra`'s and `kick`'s jobs preempt them (#49); the normal pool only (#64: its overflow onto the looper pool, #47, is gone with the pool); no spot toleration, a required node affinity refusing `spot=true` and `cloud.google.com/gke-spot=true` | CPU 150m / 1, memory 512Mi / 2Gi | CPU 1500m, memory 4Gi |
+| `infra` | `cloud`, `cluster`, `deploy` (tacplus-dev/cloud's, this pipeline, fleet-seatrials' deploy), **protected refs only** | the normal pool only, as `control` | CPU 500m / 1500m, memory 1Gi / 4Gi | CPU 1500m, memory 4Gi |
 | `kick` | `arm64`, `kick` (the looper's kicker and plan, its `.control` jobs; #36) | the normal pool only, as `infra` | CPU 50m / 1, memory 256Mi / 2Gi (the looper's `.control` requests, #39) | CPU 1500m, memory 4Gi |
 | `build-light` | `arm64`, `build-light` (tacplus-dev/build's `pending`, `plan`, `report-pass` and `report-fail`: `looper-build` in the looper image, seconds to a minute; #51), never `build`, which would bring the gates and security jobs here | the normal pool only, as `infra` | as `kick` | as `kick` |
 
@@ -295,12 +295,10 @@ room for (`concurrent: pool`, #36), which `render.sh` counts from `gitlab-runner
 allocatable, a reserve for kube-system and the deployments' pods) less every runner manager, deploymentproxy and
 `infra`'s, `kick`'s and `build-light`'s jobs at their full concurrent, by each job pod's default requests (job and
 helper) in CPU and memory (1390m: `build-report`'s manager took 50m, #42, `build-light`'s manager and four jobs
-450m, #51, and `nightly`'s manager 50m, #46), plus the looper pool's room at its max nodes less each node's daemonsets (#47: 2 x (1930m - 400m)), less
-the room of the looper's managers, which ask more than a report (#53: `managers`, 4 x 250m): 3450m, 17 jobs of 200m,
-CPU the bound. Its jobs fill the
-normal nodes first; the ones that do not fit pend, which is what makes the cluster autoscaler add a looper node, and
-it removes the node once its jobs end, back to 0; a job waits up to 15 minutes (`poll_timeout`) for its pod to start.
-The render refuses runners the pool cannot hold. `control`'s defaults are a report's
+450m, #51, and `nightly`'s manager 50m, #46), less the room of the looper's managers, which ask more than a report
+(#53: `managers`, 4 x 250m): 390m, 1 job of 200m, CPU the bound. The looper pool its overflow once scaled up (#47) is
+gone (#64; tacplus-dev/cloud#114), so nothing beyond the normal pool counts, and the render refuses a `looper` block in
+`pool.yaml`; a job waits GitLab's default `poll_timeout` (3 minutes) for its pod to start. The render refuses runners the pool cannot hold. `control`'s defaults are a report's
 (tacplus-dev/looper#165; 150m, the recap's p90 of 139m and ~8%, #53), the kind most of its jobs are; the managers,
 which ask more, have the room `managers` holds; any other job that raises its own is not counted. A larger pool, or a measured reserve, is a change to `gitlab-runner/pool.yaml`, and the count follows.
 
@@ -344,8 +342,8 @@ above -10, both preempting and neither the default, `build-nightly` the `nightly
 runner's jobs at its own class. The hub's decision on #46 (2026-11-26): interim, until the spot pool goes with the
 merge train (tacplus-dev/cloud#114) and the nightly checks move with the release builds.
 
-**The infra pipelines before the looper's reports** (#49). `control`'s jobs fill the normal pool first and only their
-overflow scales the looper pool up (#47), so on 2026-11-23 tacplus-dev/cloud's pipelines 3100887560 and 3101379440
+**The infra pipelines before the looper's reports** (#49). `control`'s jobs filled the normal pool first and only their
+overflow scaled the looper pool up (#47, a pool gone since #64), so on 2026-11-23 tacplus-dev/cloud's pipelines 3100887560 and 3101379440
 (`infra`, protected refs) had five jobs time out Pending (`0/8 nodes are available: 3 Insufficient cpu`) behind
 report pods: `pool.yaml` counts `infra`'s and `kick`'s full concurrent, but the scheduler holds no room for them.
 `control`'s jobs run at the PriorityClass `control-job`: value -1, below `infra`'s and `kick`'s jobs (0, theirs set
@@ -354,7 +352,7 @@ the normal pool is full, the scheduler evicts a `control` job for an `infra` or 
 job fails `runner_system_failure`, which the looper's CI files retry (twice: tacplus-dev/looper's
 `ci/tacplus-dev.gitlab-ci.yml`, `.control`; `ci/instance.gitlab-ci.yml`), its pod Pending again until there is room. Below 0 rather than `infra` and `kick` above it: a class above 0
 that preempts would evict deploymentproxy's or a deployment's pods (0) as readily as a report's. Its value stays at or
-above the autoscaler's expendable cutoff (-10), so `control`'s overflow still scales the looper pool up; `ci/policy.sh`
+above the autoscaler's expendable cutoff (-10); `ci/policy.sh`
 keeps it so, never preempting, `control`'s jobs at it and no other runner's.
 
 - **No privileged pod, no host path, no Docker socket.** Image builds use rootless BuildKit in the build job's own
@@ -383,8 +381,8 @@ keeps it so, never preempting, `control`'s jobs at it and no other runner's.
 
 `ci/policy.sh` checks all of it on the render (each runner's `config.toml` included): the pinned images, the
 namespace-scoped RBAC, the absence of privileged pods, host paths and the Docker socket, that build pods land
-only on the tainted spot pool and other jobs never, that only `control`'s jobs tolerate the looper pool's taint, and
-prefer the normal pool, and no other workload does (#47), that no runner takes a VM runner's tag, and that the cloud,
+only on the tainted spot pool and other jobs never, that no runner's jobs and no workload tolerate, select or name the
+gone looper pool (#64) and no workload tolerates every taint, that no runner takes a VM runner's tag, and that the cloud,
 cluster and deploy pipelines' tags are `infra`'s alone, which takes no other and is protected refs only;
 `tests/policy_test.sh` breaks each rule and `tests/render_test.sh` checks the render.
 

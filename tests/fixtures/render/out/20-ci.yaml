@@ -61,8 +61,8 @@ description: Report builds in ci (tacplus-dev/cluster), preempted by a land's bu
 # control's jobs' priority (gitlab-runner/runners/control.yaml's priority_class_name, #49): below infra's and kick's
 # jobs (0, theirs set none), which preempt them when the normal pool is full, so a cloud or cluster apply never waits
 # Pending behind the looper's reports; below deploymentproxy's and the deployments' pods too, which a CI job never
-# evicts. Preempting nothing themselves; at or above the cluster autoscaler's expendable cutoff (-10), so their pending
-# pods still scale the looper pool up. Never the cluster's default.
+# evicts. Preempting nothing themselves; at or above the cluster autoscaler's expendable cutoff (-10), never expendable
+# to it. Never the cluster's default.
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
@@ -1375,7 +1375,7 @@ spec:
           operator: Equal
           value: arm64
 ---
-# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 17, the normal pool's room and the looper pool's at its max nodes (gitlab-runner/pool.yaml): GitLab Runner's chart 0.95.0.
+# The runner control (gitlab-runner/runners/control.yaml), tags arm64, control, concurrent 1, the normal pool's room (gitlab-runner/pool.yaml): GitLab Runner's chart 0.95.0.
 # Source: gitlab-runner/templates/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -1451,7 +1451,7 @@ data:
       --working-directory=/home/gitlab-runner
   config.toml: |
     shutdown_timeout = 0
-    concurrent = 17
+    concurrent = 1
     check_interval = 3
     log_level = "info"
   config.template.toml: |
@@ -1469,8 +1469,6 @@ data:
         allow_privilege_escalation = false
         # Below infra's and kick's jobs, which preempt it (#49).
         priority_class_name = "control-job"
-        # A looper node from 0 takes minutes to come up (#47).
-        poll_timeout = 900
         cpu_request = "150m"
         cpu_limit = "1"
         memory_request = "512Mi"
@@ -1490,19 +1488,10 @@ data:
           "tacplus.dev/ci-runner" = "control"
         [runners.kubernetes.node_selector]
           "kubernetes.io/arch" = "arm64"
-        # The looper pool's taint (#47): its jobs alone tolerate it, and prefer the normal pool (below).
         [runners.kubernetes.node_tolerations]
           "kubernetes.io/arch=arm64" = "NoSchedule"
-          "looper=true" = "NoSchedule"
         [runners.kubernetes.affinity]
           [runners.kubernetes.affinity.node_affinity]
-            [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution]]
-              weight = 100
-              [runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference]
-                [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference.match_expressions]]
-                  key = "looper"
-                  operator = "NotIn"
-                  values = ["true"]
             [runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution]
               [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms]]
                 [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]
@@ -1669,7 +1658,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: 55f45476829d7ae0f2fac59d656364979e6e1abbaf8bbae35f9829ba0678fa56
+        checksum/configmap: c7413d136eda35f52bb800daac6a99ec9567fd0454ce9c9c72942448179bf090
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
