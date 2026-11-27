@@ -235,7 +235,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -430,7 +430,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build-light
       annotations:
-        checksum/configmap: d483bf01d85cd8de31e04b0ac35a964c079f69de5747dbae8e9585e141905a87
+        checksum/configmap: 69211c4e317bb000205cd04c478cf8cf5237fb1003b286699e4b050f0637c51b
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build-light"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build-light/versions/1"
@@ -447,7 +447,7 @@ spec:
       serviceAccountName: "gitlab-runner-build-light"
       containers:
         - name: gitlab-runner-build-light
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:4d5682a889538fb1ed72e8a8f7c09e61581b69569c6879d846b6f4f8d15e4e2b
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false
@@ -642,7 +642,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -840,7 +840,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build-report
       annotations:
-        checksum/configmap: ee764904bbbdb358108ec42b6df9c03a8c3b013d55034039d824df43e818ba54
+        checksum/configmap: 4fa9bd27ab9d007ec6c1106afbec97cc641bcd9068fcbf4e2876ad05e7590187
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build-report"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build-report/versions/1"
@@ -857,7 +857,7 @@ spec:
       serviceAccountName: "gitlab-runner-build-report"
       containers:
         - name: gitlab-runner-build-report
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:4d5682a889538fb1ed72e8a8f7c09e61581b69569c6879d846b6f4f8d15e4e2b
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false
@@ -1052,7 +1052,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -1250,7 +1250,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build
       annotations:
-        checksum/configmap: e4489ee031589f8245a99a01e050640f1a8211776b65d9172c865f4701e3ce2e
+        checksum/configmap: 826ea8e990d9a90ed4792fb435e0bf5d5620f1121b714ae06bb3acd9f2990389
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build/versions/1"
@@ -1267,7 +1267,7 @@ spec:
       serviceAccountName: "gitlab-runner-build"
       containers:
         - name: gitlab-runner-build
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:4d5682a889538fb1ed72e8a8f7c09e61581b69569c6879d846b6f4f8d15e4e2b
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false
@@ -1462,7 +1462,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -1669,7 +1669,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: 54ecb62505e2d98655f0f3ef80acb37bd43878b96ec1cf7e63cbd8de9226afd7
+        checksum/configmap: 55f45476829d7ae0f2fac59d656364979e6e1abbaf8bbae35f9829ba0678fa56
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
@@ -1686,7 +1686,7 @@ spec:
       serviceAccountName: "gitlab-runner-control"
       containers:
         - name: gitlab-runner-control
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:4d5682a889538fb1ed72e8a8f7c09e61581b69569c6879d846b6f4f8d15e4e2b
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false
@@ -1881,7 +1881,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -2076,7 +2076,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: infra
       annotations:
-        checksum/configmap: 4d460a81cd8fda3877cfec5e9aaafb19ab866002f977da3635facf87832a89f9
+        checksum/configmap: 15119137dc0dce1485775f292593bf0a01182ccf2c552b15c910b930e82e231b
         tacplus.dev/runner-protected: "true"
         tacplus.dev/runner-tags: "cloud,cluster,deploy"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-infra/versions/1"
@@ -2093,7 +2093,7 @@ spec:
       serviceAccountName: "gitlab-runner-infra"
       containers:
         - name: gitlab-runner-infra
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:4d5682a889538fb1ed72e8a8f7c09e61581b69569c6879d846b6f4f8d15e4e2b
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false
@@ -2288,7 +2288,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -2483,7 +2483,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: kick
       annotations:
-        checksum/configmap: f755081525285e801b33afbbd6a3def35ac7644e151d138b54d9c7b3726076cc
+        checksum/configmap: 75aaed9d5353c2218301d2b084f85ab01f159549a625ea7f743453ed22f48904
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,kick"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-kick/versions/1"
@@ -2500,7 +2500,7 @@ spec:
       serviceAccountName: "gitlab-runner-kick"
       containers:
         - name: gitlab-runner-kick
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:4d5682a889538fb1ed72e8a8f7c09e61581b69569c6879d846b6f4f8d15e4e2b
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false
@@ -2695,7 +2695,7 @@ data:
       [runners.kubernetes]
         namespace = "ci"
         image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
-        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c"
+        helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
         privileged = false
@@ -2893,7 +2893,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: nightly
       annotations:
-        checksum/configmap: af3ddab30b473bd6821532f197bd8933b87f8db02d91ba98fcea8db1e7aa0202
+        checksum/configmap: efbb17ba427423b450d14604566d9484adf1a718043232729aa15900c93125da
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build-nightly"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-nightly/versions/1"
@@ -2910,7 +2910,7 @@ spec:
       serviceAccountName: "gitlab-runner-nightly"
       containers:
         - name: gitlab-runner-nightly
-          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
+          image: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:4d5682a889538fb1ed72e8a8f7c09e61581b69569c6879d846b6f4f8d15e4e2b
           imagePullPolicy: "IfNotPresent"
           securityContext:
             allowPrivilegeEscalation: false

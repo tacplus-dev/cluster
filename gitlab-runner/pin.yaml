@@ -13,9 +13,9 @@ chart:
   index: https://charts.gitlab.io/index.yaml
   digest: sha256:7407579039f4d18339e2a1d66da2f99c01c35478299e7078ba599724f933c1f8
 # The runner manager (the chart's Deployment): the chart's appVersion, its alpine variant, our build (build: below).
-runner: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:2da9546a9ba4a372144db3b33015a3496a72ddd03d3d42819e7284be1a0833d6
+runner: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner:alpine-v19.6.0@sha256:4d5682a889538fb1ed72e8a8f7c09e61581b69569c6879d846b6f4f8d15e4e2b
 # The helper container of every job pod (clones, caches, artifacts), the same version, our build.
-helper: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:659d1ac1408dabb5fddc0508c82ab59119bd549839cb37669adaa004578fd92c
+helper: us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a
 # The runner and helper images' recipe (ci/runner-images.sh, #21): GitLab Runner's release (the chart's appVersion),
 # built with go1.27.4 and the fixed modules, on alpine:3.24, into tacplus-dev/cloud's registry ci-images (its dev
 # stack; cluster-admin-pipeline its only writer, the cluster's nodes its readers). One release with tacplus-dev/cloud
