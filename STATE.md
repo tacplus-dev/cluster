@@ -27,7 +27,8 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-26 by th
   images by digest, `gitlab-runner/`, rendered by `helm template`, helm v4.3.1 pinned in `ci/tools.sh`); the runner
   and helper images our own build since #21 (`ci/runner-images.sh`: 19.6.0 at `9e4c6b50` with go1.27.4 and otel v1.47.0,
   each fixed module only raised, to x/net v0.62.0, go-jose v4.1.6 and compress v1.20.2 at least (19.6.0's own
-  compress v1.20.3 stays), the runner binary SHA-256-identical to tacplus-dev/cloud's; on `alpine:3.24`,
+  compress v1.20.3 stays), `pin.yaml`'s `build:` the only GitLab Runner pin (#65: `validate` no longer checks it
+  against tacplus-dev/cloud's runner block, which cloud#113 retires); on `alpine:3.24`,
   no docker-machine; reproducible, refused unless the pinned digest; the job `runner-images` pushes them on main to
   cloud's `ci-images`, the security job scans its OCI layouts, the gates build them when their recipe changes) as five
   runners, `build` (tags `arm64, build`, jobs on the spot pool only; its `concurrent` the spot pool's room, #41:
