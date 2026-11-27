@@ -1,10 +1,10 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-26 by the looper (#64).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-27 by the looper (#66).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line); `build.lock` and `gitlab-runner/pin.yaml`'s
-  `job:` pin its rebuild 20261123-57a6521 by that dated tag, never the moving `build:2.6` (#54).
+  `job:` pin its rebuild 20261126-57a6521 by that dated tag (#66), never the moving `build:2.6` (#54).
 - **Target (#7):** tacplus-dev/cloud's cluster `dev` (us-central1-a) in the project `tacplus-dev` (seabeam.net), as
   `cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com`; seatrials' deploy account and the runners' token
   secrets (`gitlab-runner-build`, `gitlab-runner-control`, version 1; `gitlab-runner-infra`, #25, made and
@@ -140,8 +140,8 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   (x/net idna) and GO-2026-6975 (otel baggage) in kubectl (main's pipeline 3106261843 failed at `security` on them). Every Go tool `ci/tools.sh` builds, Trivy too since #21,
   is built with go1.27.4. deploymentproxy
   0.2.2's image (#22): only GO-2026-6859 (Trivy's CVE-2026-97054, its go1.27.3), with no severity, so not failing the
-  policy (2026-11-15). The CI image `build:2.6` (its rebuild 20261123-57a6521 since #54, by its dated tag, also `gitlab-runner/pin.yaml`'s `job:`, #12): only
-  GO-2026-5932 in its gh and docker-buildx, in its entry, and no HIGH or CRITICAL with a fixed version (Trivy, linux/arm64, 2026-11-23); 2.6.13's 159 HIGH Debian findings with a fix (krb5,
+  policy (2026-11-15). The CI image `build:2.6` (its rebuild 20261126-57a6521 since #66, by its dated tag (#54), also `gitlab-runner/pin.yaml`'s `job:`, #12): only
+  GO-2026-5932 in its gh and docker-buildx, in its entry, and no HIGH or CRITICAL with a fixed version (Trivy, linux/arm64, 2026-11-27); libzstd's CVE-2026-124851 in 20261123-57a6521 (#54's) went with the move to 20261126-57a6521, with no exception on main (#66); 2.6.13's 159 HIGH Debian findings with a fix (krb5,
   linux-libc-dev, ...) and docker-buildx's containerd CVE-2026-95839 (its entry gone) went with the move to that rebuild (#48); #15's CVE-2026-78661 entry went when its gh got x/net v0.62.0 (tacplus-dev/tacplus#350, #32); 2.6.10's six linux-libc-dev CVEs went with the move to 2.6.12 (#24), and #16's zlib1g
   exceptions with 2.6.10, which had the fix. #8's 7 Debian CVEs in `build:2.5` went with the move to 2.6. The job has not run in GitLab yet (no runner).
   Trivy's config checks (looper-scan's nightly, on the tree): KSV-0109 accepted until 2026-12-31 on GitLab Runner chart
