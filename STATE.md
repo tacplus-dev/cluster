@@ -1,6 +1,6 @@
 # State: cluster
 
-Overwritten to stay current (loopers and agents). Last updated: 2026-11-26 by the looper (#46).
+Overwritten to stay current (loopers and agents). Last updated: 2026-11-26 by the looper (#64).
 
 - **Version / line:** unreleased (main); no tacplus floor (shell and yq, no tacplus build). CI image
   `ghcr.io/tacplus-dev/tacplus/build:2.6` (#12; tacplus' latest line); `build.lock` and `gitlab-runner/pin.yaml`'s
@@ -39,7 +39,7 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-26 by th
   `arm64, build-report`, tacplus-dev/build's report builds, `build`'s jobs at the PriorityClass `build-report`, -1,
   `preemptionPolicy: Never`, so a land's build (0) preempts them when the spot pool is full; the policy keeps the class
   in -10 to -1, never preempting, `build-report` its runner's tag alone, and every other runner's jobs at no class but `control`'s), `control` (`arm64, control`, #13;
-  no VM runner's tag, the policy refuses one; the normal pool, its overflow on the looper pool, #47; its jobs at the
+  no VM runner's tag, the policy refuses one; the normal pool only, #64; its jobs at the
   PriorityClass `control-job`, -1, `preemptionPolicy: Never`, so `infra`'s and `kick`'s jobs (0) preempt them when the
   normal pool is full, #49: cloud's pipelines 3100887560 and 3101379440 timed out Pending behind reports; the policy
   keeps the class as `build-report`'s, `control`'s jobs at it and no other runner's) and `infra` (#25, for cloud#11: `cloud, cluster, deploy`,
@@ -52,11 +52,11 @@ Overwritten to stay current (loopers and agents). Last updated: 2026-11-26 by th
   50m/256Mi; the policy keeps `build-light` its tag alone and it on `arm64, build-light` only, never `build`); every runner manager at the PriorityClass
   `ci-runner-manager`, above the jobs and preempting them (#39: `kick`'s manager stayed Pending while `control`'s old
   manager's jobs ran beside the new one's after an apply), per-runner requests, limits and ceilings; `control`'s `concurrent` the normal pool's room (#36: `concurrent: pool`,
-  `gitlab-runner/pool.yaml`, 1440m beside `kick`'s 2 and `build-light`'s 4 (#51)) plus
-  the looper pool's at its max nodes (#47, tacplus-dev/cloud#95: 2 c4a-standard-2 from 0, less an estimated 400m/1Gi
-  of daemonsets a node, PROPOSALS.md), less the looper's managers' room (#53: `managers`, 4 x 250m/256Mi): 17 at 200m,
-  CPU the bound; `control`'s jobs alone tolerate `looper=true:NoSchedule`, preferring the
-  normal pool, and the policy refuses the taint's toleration anywhere else; its default CPU request a report's 150m
+  `gitlab-runner/pool.yaml`, 1390m beside `kick`'s 2, `build-light`'s 4 (#51) and `nightly`'s manager (#46)), less
+  the looper's managers' room (#53: `managers`, 4 x 250m/256Mi): 1 at 200m, CPU the bound, GitLab's default
+  `poll_timeout`; the looper pool is out of it (#64, for tacplus-dev/cloud#114 step 1: no overflow, no toleration or
+  affinity; the render refuses a `looper` block in `pool.yaml`, the policy any runner's or workload's `looper`
+  toleration, selector or affinity, and a workload tolerating every taint); its default CPU request a report's 150m
   (#53: the recap's p90 139m; looper-dispatch asks it, and a manager 250m, once tacplus-dev/looper#229 lands; until
   then a manager asks 50m); the pool's reserve, kube-system and the
   deployments' pods, CPU from looper#165's evidence and memory an estimate, not measured on the nodes, PROPOSALS.md), the
@@ -108,9 +108,10 @@ root without a writable emptyDir where GitLab Runner writes); a way back with no
   online, but every cluster apply since b1fca16 failed on its first rollout's stale `ProgressDeadlineExceeded` (#58,
   pipeline 3108203363) until #58's restart; it takes build's light jobs once tacplus-dev/looper#224 tags them `arm64, build-light` (and cloud
   bumps its copy); #51's done-when (`gitlab-runner-build-light` running in `ci`, its runner online) is unverified.
-  #47 (`control` 33, 30 since #51, its overflow on the looper pool) reaches the cluster when the hub re-pins to a commit with it, once
-  cloud's `dev` has applied the looper pool (tacplus-dev/cloud#95); its done-when (a looper node up in a busy hour,
-  back to 0 after) is unverified. #49 (`control`'s jobs at `control-job`, preempted by `infra`'s and `kick`'s) reaches
+  #64 (`control` 1, from 17: the looper pool out of its room, toleration and affinity) reaches the cluster when the hub
+  re-pins to a commit with it and applies; that must come before tacplus-dev/cloud#114 deletes the `looper` pool, or
+  `control`'s overflow pends and fails. Its done-when (`concurrent = 1` in the `gitlab-runner-control` ConfigMap on the
+  cluster) is unverified; #47's overflow onto the pool is superseded by it. #49 (`control`'s jobs at `control-job`, preempted by `infra`'s and `kick`'s) reaches
   the cluster when the hub re-pins to a commit with it; its done-when (a cloud pipeline's jobs starting within a minute
   while `control` runs at its full concurrent) is unverified. Whether this project's nightly schedule 4547285 is on is not recorded: the hub's
   closing comments do not say, and no looper has a GitLab token to see it. The `ci` NetworkPolicy holds only where
