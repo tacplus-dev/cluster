@@ -13,9 +13,11 @@
 #   KSTUB/stuck/<ns>.<deployment>  a deployment whose last rollout exceeded its progress deadline: rollout status fails
 #                        on it at once, as kubectl's does, until a rollout restart
 #
-# It answers what the pipeline's scripts ask: config current-context, auth can-i/whoami, get namespace(s) -o json
-# [-l KEY[=VALUE]], diff -f (through KUBECTL_EXTERNAL_DIFF), apply -f, delete namespace, and with -n NAMESPACE, get
-# deployment NAME -o jsonpath (its Progressing condition's reason), rollout restart and rollout status.
+# It answers what the pipeline's scripts ask: config current-context, auth can-i/whoami (can-i VERB RESOURCE.GROUP
+# --as system:serviceaccount:NS:NAME by the live ClusterRoleBindings and ClusterRoles), get namespace(s) -o json
+# [-l KEY[=VALUE]], get clusterrolebinding NAME -o json, diff -f (through KUBECTL_EXTERNAL_DIFF), apply -f, delete
+# namespace, delete clusterrolebinding, and with -n NAMESPACE, get deployment NAME -o jsonpath (its Progressing
+# condition's reason), rollout restart and rollout status.
 set -uo pipefail
 k=${KSTUB:?KSTUB is not set}
 echo "kubectl $*" >> "$k/log"
@@ -23,6 +25,7 @@ mkdir -p "$k/ns" "$k/live"
 
 file() { local a; for a in "$@"; do [ "${prev:-}" = -f ] && echo "$a"; prev=$a; done; }
 selector() { local a prev=; for a in "$@"; do [ "$prev" = -l ] && echo "$a"; prev=$a; done; }
+as() { local a prev=; for a in "$@"; do [ "$prev" = --as ] && echo "$a"; prev=$a; done; }
 ns_json() { # ns_json NAME
   jq -n --arg n "$1" --argjson l "$(cat "$k/ns/$1")" '{metadata: {name: $n, labels: $l}}'
 }
@@ -54,7 +57,25 @@ fi
 
 case "$1 ${2:-}" in
   "config current-context") cat "$k/context" ;;
-  "auth can-i") if [ "$(cat "$k/grant" 2>/dev/null)" = yes ]; then echo yes; else echo no; exit 1; fi ;;
+  "auth can-i")
+    who=$(as "$@")
+    if [ -z "$who" ]; then
+      if [ "$(cat "$k/grant" 2>/dev/null)" = yes ]; then echo yes; else echo no; exit 1; fi
+    else
+      # A service account may when a live ClusterRoleBinding binds it to a live ClusterRole granting VERB on the
+      # resource.
+      sa=${who#system:serviceaccount:} res=$4 group=
+      [[ $res == *.* ]] && group=${res#*.} res=${res%%.*}
+      for b in "$k"/live/rbac.authorization.k8s.io.v1.ClusterRoleBinding..*; do
+        [ -e "$b" ] || continue
+        role=$(NS=${sa%%:*} N=${sa#*:} yq 'select(.roleRef.kind == "ClusterRole" and ([.subjects[] | select(.kind == "ServiceAccount" and .namespace == strenv(NS) and .name == strenv(N))] | length > 0)) | .roleRef.name' "$b")
+        r=$k/live/rbac.authorization.k8s.io.v1.ClusterRole..$role
+        [ -n "$role" ] && [ -e "$r" ] &&
+          [ "$(G=$group R=$res V=$3 yq '[.rules[] | select((.apiGroups | any_c(. == strenv(G))) and (.resources | any_c(. == strenv(R))) and (.verbs | any_c(. == strenv(V))))] | length' "$r")" != 0 ] &&
+          { echo yes; exit 0; }
+      done
+      echo no; exit 1
+    fi ;;
   "auth whoami") echo "cluster-admin-pipeline@tacplus-dev.iam.gserviceaccount.com" ;;
   "get namespaces")
     sel=$(selector "$@")
@@ -64,6 +85,13 @@ case "$1 ${2:-}" in
       else jq -e --arg key "$sel" 'has($key)' "$k/ns/$n" >/dev/null && ns_json "$n"
       fi || true
     done | jq -s '{items: .}' ;;
+  "get clusterrolebinding")
+    b=$k/live/rbac.authorization.k8s.io.v1.ClusterRoleBinding..$3
+    [ -e "$b" ] || { echo "Error from server (NotFound): clusterrolebindings.rbac.authorization.k8s.io \"$3\" not found" >&2; exit 1; }
+    yq -o=json "$b" ;;
+  "delete clusterrolebinding")
+    rm -f "$k/live/rbac.authorization.k8s.io.v1.ClusterRoleBinding..$3"
+    echo "clusterrolebinding.rbac.authorization.k8s.io \"$3\" deleted" ;;
   "get namespace")
     [ -e "$k/ns/$3" ] || { echo "Error from server (NotFound): namespaces \"$3\" not found" >&2; exit 1; }
     ns_json "$3" ;;

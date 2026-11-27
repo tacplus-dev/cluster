@@ -20,19 +20,30 @@ by Jody 2026-11-02).
   - the fleet `operator` service account's binding, if it has one (`operator` is optional: test-idp has none);
   - the operator's own Role and RoleBinding (`deployment-operator`, #59), if it has one: with `deployment` set the
     operator's chart renders none and leaves them to this pipeline. Its chart's Role (`helm/templates/role.yaml`),
-    each grant within `fleet-deploy`, in `tac-<deployment>` only (deploymentproxy binds it in the tenant namespaces).
+    each grant within `fleet-deploy`, in `tac-<deployment>` only (deploymentproxy binds it in the tenant namespaces);
+  - kernel's TokenReview right (#67): the ClusterRoleBinding `tac-<deployment>-kernel-tokenreview` of the service
+    account `kernel` of `tac-<deployment>`, and only it, to the ClusterRole `kernel-tokenreview`
+    (`out/06-kernel-tokenreview.yaml`, one for every deployment), which may create `tokenreviews`
+    (`authentication.k8s.io`) and nothing else. Kernel verifies its workloads' service-account tokens with the
+    TokenReview API, which is cluster-scoped, so the deployment's operator, holding no cluster-wide right, renders
+    none (tacplus-dev/operator#3). Not the built-in `system:auth-delegator`, which also grants
+    `subjectaccessreviews`: kernel never calls them. `ci/policy.sh` refuses any other ClusterRole or
+    ClusterRoleBinding in a deployment's file, and any other rule in the ClusterRole; `apply` checks, once applied,
+    that `kubectl auth can-i create tokenreviews.authentication.k8s.io --as system:serviceaccount:tac-<deployment>:kernel`
+    answers yes, and fails if not.
 - **CI in the cluster** (the namespace `ci`): GitLab Runner with the Kubernetes executor, one runner for builds
   (spot pool), one, `build-report`, for report builds a land's build preempts (spot pool, #42), one, `nightly`, for the nightly
   security fan-out, between the two (spot pool, #46), one for control work (normal pool, #36), one, `kick`, for the looper's kicker and plan alone (normal pool,
   #36), one, `build-light`, for tacplus-dev/build's pending, plan and report jobs (normal pool, #51) and one, `infra`, for the cloud, cluster and deploy pipelines (normal pool, protected refs only), registered to the tacplus-dev group ([CI in the cluster](#ci-in-the-cluster)).
-- **Cluster-scoped objects a fleet's chart needs** (CRDs, ClusterRoles), and only from here. None yet: the render
-  has no place for them until a fleet needs one (PROPOSALS.md).
+- **Cluster-scoped objects a fleet's chart needs** (CRDs, ClusterRoles), and only from here. One so far, kernel's
+  TokenReview right (above, #67); the render has no general place for others until a fleet needs one (PROPOSALS.md).
 
 The fleet deploy account's Role (`fleet-deploy`) is what a fleet's helm release needs inside `tac-<deployment>`:
 its ConfigMaps, Secrets (helm's release state), Services, ServiceAccounts, PVCs, Deployments, StatefulSets, Jobs,
 CronJobs, NetworkPolicies, PodDisruptionBudgets, Roles, RoleBindings and Leases; pods read and deleted, events, logs
 and quotas read; its `TenantNamespace`s read, never written (#59: a fleet's apply names one deploymentproxy has not
-made Ready; only the operator's account creates them). Nothing cluster-scoped, no `*`, no quota or limit changes, no exec, attach or port-forward
+made Ready; only the operator's account creates them). Nothing cluster-scoped (kernel's TokenReview binding is
+this pipeline's, not the deploy account's), no `*`, no quota or limit changes, no exec, attach or port-forward
 (`ci/policy.sh` refuses any render that breaks that). GKE names the Google account by its email, so the binding's
 subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 
@@ -48,7 +59,7 @@ subject is the User `<account>@<project>.iam.gserviceaccount.com`.
 | `gitlab-runner/release/` | The chart as fetched (`gitlab-runner/fetch.sh`), with its `SHA256SUMS`. Never edited. |
 | `gitlab-runner/values.yaml` | The chart's values every runner shares: the runner manager's pod, its Role in `ci`, its placement. |
 | `gitlab-runner/runners/<runner>.yaml` | One runner each (`build`, `build-light`, `build-report`, `control`, `infra`, `kick`, `nightly`): its tags, whether it takes protected refs only, its token's Secret Manager version, its jobs' `config.toml`. |
-| `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/05-storage.yaml` (the default StorageClass, Hyperdisk Balanced: what C4A nodes attach), `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
+| `render.sh` | The render: `out/00-deploymentproxy.yaml`, `out/05-storage.yaml` (the default StorageClass, Hyperdisk Balanced: what C4A nodes attach), `out/06-kernel-tokenreview.yaml` (kernel's TokenReview ClusterRole, #67), `out/10-deployment-<name>.yaml` for each entry, `out/20-ci.yaml`. |
 | `ci/gitlab-project.gitlab-ci.yml` | The GitLab project's `.gitlab-ci.yml`, with `CLUSTER_COMMIT` set (`ci/pin.sh`). |
 | `ci/*.sh` | The jobs' scripts: `runner-images`, `policy`, `validate`, `security`, `plan`, `apply` (with `runner-tokens`), `delete-deployment`, `drift`; `rollback` (the way back without a runner: Rolling back, below); `lib.sh` (credentials); `tools.sh` (the pinned tools). |
 | `build.lock`, `gates.yaml` | The build image by digest (the CI image), and the gates run in it (How a change reaches the cluster, below). |
@@ -142,10 +153,11 @@ job, and a deletion pipeline has no `apply`.
 3. That pipeline runs `render`, `validate` and `plan`, and has the manual job `DELETE deployment: removes
    tac-<DELETE_DEPLOYMENT> and every tenant namespace (data loss)`, in the protected environment `cluster`. With
    `DELETE_CONFIRM` missing or different, it has no such job. Jody plays it: it deletes `tac-<name>`, then whatever
-   tenant namespace of it deploymentproxy left.
+   tenant namespace of it deploymentproxy left, then its kernel's ClusterRoleBinding `tac-<name>-kernel-tokenreview`
+   (#67; the ClusterRole, every deployment's, stays).
 
-`ci/delete-deployment.sh` checks again that `DELETE_CONFIRM` is `DELETE_DEPLOYMENT`, and refuses a namespace not
-labelled as that deployment's. Never set either variable as a project or group variable.
+`ci/delete-deployment.sh` checks again that `DELETE_CONFIRM` is `DELETE_DEPLOYMENT`, and refuses a namespace, or a
+ClusterRoleBinding of that name, not labelled as that deployment's, before it deletes anything. Never set either variable as a project or group variable.
 
 ### Bumping deploymentproxy
 

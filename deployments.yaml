@@ -1,7 +1,7 @@
 # The deployments on the cluster `dev`, one entry each (README, Adding a deployment). For each, the pipeline
 # applies the namespace tac-<name> labelled tacplus.dev/deployment=<name>, deploymentproxy's Role and the operator's
-# own (deployment-operator) for its operator account if it has one, and its deploy account's Role and RoleBinding in
-# tac-<name> only (render.sh).
+# own (deployment-operator) for its operator account if it has one, its deploy account's Role and RoleBinding in
+# tac-<name> only, and its service account kernel's TokenReview right (tac-<name>-kernel-tokenreview, #67; render.sh).
 #
 #   name           the deployment: at most 16 characters of [a-z0-9-], starting with a letter
 #   deployAccount  the Google service account the fleet's pipeline deploys as

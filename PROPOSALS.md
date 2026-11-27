@@ -106,6 +106,11 @@ the looper then marks it `promoted` or `declined` here with the date.
 - **Cluster-scoped objects for fleets' charts** (2026-11-02, #1): the README says they come only from here, but
   the render has no place for them yet. When a fleet needs one (the operator chart's ClusterRoles move out of it
   in tacplus-dev/operator#3), add a reviewed directory of them, with a policy of its own.
+- **Kernel's TokenReview binding only where a kernel runs** (2026-11-27, #67): every deployment's file binds
+  `tac-<name>`'s service account `kernel` to `kernel-tokenreview`, `test-idp` too, which runs no kernel: its deploy
+  account, which may create service accounts in `tac-test-idp`, could make a `kernel` there that may create
+  TokenReviews (a right `system:auth-delegator` gives widely, but still one it needs not). A `kernel: false` field in
+  `deployments.yaml` (or binding only with an `operator`) would leave it out; the issue asked for every deployment.
 - **`plan` on merge requests** (2026-11-02, #1): a merge request gets `render` and `validate` only, since WIF
   admits protected main alone. With the read-only identity above, a binding for merge request pipelines would show
   the plan before the merge.

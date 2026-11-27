@@ -1,5 +1,5 @@
-# The deployment beta-2 (deployments.yaml): its namespace, its operator's Roles (deploymentproxy's, its own) and its
-# deploy account's Role, in tac-beta-2 only. Rendered by render.sh; never edited.
+# The deployment beta-2 (deployments.yaml): its namespace, its operator's Roles (deploymentproxy's, its own), its
+# deploy account's Role, in tac-beta-2 only, and its kernel's TokenReview right. Rendered by render.sh; never edited.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -154,3 +154,19 @@ subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: User
     name: beta-deploy@example-project.iam.gserviceaccount.com
+---
+# Kernel's TokenReview right (06-kernel-tokenreview.yaml, #67), to its service account in tac-beta-2 alone.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tac-beta-2-kernel-tokenreview
+  labels:
+    tacplus.dev/deployment: beta-2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kernel-tokenreview
+subjects:
+  - kind: ServiceAccount
+    name: kernel
+    namespace: tac-beta-2

@@ -7,11 +7,14 @@
 #   OUT/00-deploymentproxy.yaml     deploymentproxy's release (deploymentproxy/release, checked against its
 #                                   SHA256SUMS), its image pinned by digest (deploymentproxy/pin.yaml), each
 #                                   deployment's own quota merged into its config
-#   OUT/10-deployment-<name>.yaml   per entry of DEPLOYMENTS: the namespace tac-<name> labelled
+#   OUT/06-kernel-tokenreview.yaml  the ClusterRole kernel-tokenreview: create tokenreviews, nothing else (#67)
+#   OUT/10-deployment-<name>.yaml  per entry of DEPLOYMENTS: the namespace tac-<name> labelled
 #                                   tacplus.dev/deployment=<name>, deploymentproxy's per-deployment Role for its
 #                                   operator account (config/deployment-namespace) and the operator's own Role
 #                                   and RoleBinding (deployment-operator, #59) unless it has none, and the
-#                                   deploy account's Role and RoleBinding (fleet-deploy), in tac-<name> only
+#                                   deploy account's Role and RoleBinding (fleet-deploy), in tac-<name> only, and
+#                                   the ClusterRoleBinding tac-<name>-kernel-tokenreview of its service account
+#                                   kernel to kernel-tokenreview (#67)
 #   OUT/20-ci.yaml                  CI in the cluster (README, CI in the cluster): the namespace ci, the jobs' service
 #                                   account ci-job (no token), the runner managers' PriorityClass ci-runner-manager
 #                                   (above their jobs, #39), a land's build's jobs' build, the nightly's
@@ -276,6 +279,25 @@ allowVolumeExpansion: true
 reclaimPolicy: Delete
 STORAGE
 
+# Kernel's TokenReview right (#67): the one ClusterRole each deployment's kernel is bound to, below.
+cat > "$out/06-kernel-tokenreview.yaml" <<'TOKENREVIEW'
+# Kernel's TokenReview right, bound per deployment to tac-<name>'s service account kernel (10-deployment-<name>.yaml).
+# Rendered by render.sh; never edited.
+#
+# Kernel verifies a workload's projected service-account token with the TokenReview API, which is cluster-scoped, so
+# a deployment's operator, holding no cluster-wide right, renders no ClusterRole for it (tacplus-dev/operator#3): this
+# pipeline grants it. Create tokenreviews and nothing else: not system:auth-delegator, which also grants
+# subjectaccessreviews, which kernel never calls.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kernel-tokenreview
+rules:
+  - apiGroups: [authentication.k8s.io]
+    resources: [tokenreviews]
+    verbs: [create]
+TOKENREVIEW
+
 # Each deployment.
 for ((i = 0; i < n; i++)); do
   e=".deployments[$i]"
@@ -286,12 +308,12 @@ for ((i = 0; i < n; i++)); do
   ns=tac-$name
   {
     if [ -n "$operator" ]; then
-      echo "# The deployment $name (deployments.yaml): its namespace, its operator's Roles (deploymentproxy's, its own) and its"
+      echo "# The deployment $name (deployments.yaml): its namespace, its operator's Roles (deploymentproxy's, its own), its"
     else
-      echo "# The deployment $name (deployments.yaml), without an operator: its namespace and its"
+      echo "# The deployment $name (deployments.yaml), without an operator: its namespace, its"
     fi
     cat <<EOF
-# deploy account's Role, in $ns only. Rendered by render.sh; never edited.
+# deploy account's Role, in $ns only, and its kernel's TokenReview right. Rendered by render.sh; never edited.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -429,6 +451,22 @@ subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: User
     name: $account
+---
+# Kernel's TokenReview right (06-kernel-tokenreview.yaml, #67), to its service account in $ns alone.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: $ns-kernel-tokenreview
+  labels:
+    tacplus.dev/deployment: $name
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kernel-tokenreview
+subjects:
+  - kind: ServiceAccount
+    name: kernel
+    namespace: $ns
 EOF
   } > "$out/10-deployment-$name.yaml"
   ! grep -q '\${' "$out/10-deployment-$name.yaml" || die "$name: a variable is left in the render"

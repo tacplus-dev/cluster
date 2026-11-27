@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Tests render.sh against fixtures: tests/fixtures/render/deployments.yaml renders to exactly
-# tests/fixtures/render/out/ (one file for deploymentproxy, one per deployment, one for ci); the images are pinned by
+# tests/fixtures/render/out/ (one file for deploymentproxy, the storage, kernel's TokenReview ClusterRole, one per
+# deployment, one for ci); kernel's ClusterRole creates tokenreviews and nothing else, and each deployment binds it
+# to its own service account kernel alone, nothing naming system:auth-delegator (#67); the images are pinned by
 # digest (deploymentproxy's, and the runners' and their jobs' in ci); deploymentproxy runs as its image's user,
 # named, and with a CPU limit, the rest of its Deployment the release's; ci's RBAC is in ci only; build jobs select and
 # tolerate the spot pool and control and infra jobs never; each runner's jobs have HOME on an emptyDir;
@@ -55,8 +57,8 @@ if "$here/render.sh" "$fixtures/deployments.yaml" "$work/out" > "$work/log" 2>&1
 else
   fail "render.sh failed on the fixture: $(cat "$work/log")"
 fi
-[ "$(ls "$work/out" 2>/dev/null | tr '\n' ' ')" = "00-deploymentproxy.yaml 05-storage.yaml 10-deployment-alpha.yaml 10-deployment-beta-2.yaml 20-ci.yaml " ] &&
-  ok "one file for deploymentproxy, one per deployment, one for ci" || fail "the files are: $(ls "$work/out" 2>/dev/null | tr '\n' ' ')"
+[ "$(ls "$work/out" 2>/dev/null | tr '\n' ' ')" = "00-deploymentproxy.yaml 05-storage.yaml 06-kernel-tokenreview.yaml 10-deployment-alpha.yaml 10-deployment-beta-2.yaml 20-ci.yaml " ] &&
+  ok "one file for deploymentproxy, the storage, kernel's TokenReview right, one per deployment, one for ci" || fail "the files are: $(ls "$work/out" 2>/dev/null | tr '\n' ' ')"
 
 dp=$work/out/00-deploymentproxy.yaml
 image=$(yq 'select(.kind == "Deployment") | .spec.template.spec.containers[0].image' "$dp")
@@ -254,7 +256,7 @@ diff <(yq 'select(.kind == "ConfigMap")' "$work/removed/00-deploymentproxy.yaml"
   ok "with every quota the default, the ConfigMap is the release's" || fail "the default quota changed the release's ConfigMap"
 
 # A removed entry renders nothing for it, and the rest as before.
-[ "$(ls "$work/removed" | tr '\n' ' ')" = "00-deploymentproxy.yaml 05-storage.yaml 10-deployment-alpha.yaml 20-ci.yaml " ] &&
+[ "$(ls "$work/removed" | tr '\n' ' ')" = "00-deploymentproxy.yaml 05-storage.yaml 06-kernel-tokenreview.yaml 10-deployment-alpha.yaml 20-ci.yaml " ] &&
   cmp -s "$work/removed/10-deployment-alpha.yaml" "$fixtures/out/10-deployment-alpha.yaml" &&
   ! grep -q beta "$work/removed/"* &&
   ok "a removed entry renders nothing for it" || fail "a removed entry: $(ls "$work/removed" | tr '\n' ' ')"
@@ -270,7 +272,7 @@ ns=$(yq 'select(.kind == "Namespace") | .metadata.labels."tacplus.dev/deployment
 objects() { yq -N '.kind + " " + (.metadata.namespace // "") + " " + .metadata.name' "$1" 2>/dev/null | tr '\n' ','; }
 # #59: a deployment with an operator has the operator's own Role in tac-<name> (the operator's chart renders none
 # with `deployment` set), bound to its operator account there only; the deploy account reads its TenantNamespaces.
-[ "$(objects "$work/real/10-deployment-seatrials.yaml")" = "Namespace  tac-seatrials,Role tac-seatrials deploymentproxy-tenantnamespaces,RoleBinding tac-seatrials deploymentproxy-tenantnamespaces,Role tac-seatrials deployment-operator,RoleBinding tac-seatrials deployment-operator,Role tac-seatrials fleet-deploy,RoleBinding tac-seatrials fleet-deploy," ] &&
+[ "$(objects "$work/real/10-deployment-seatrials.yaml")" = "Namespace  tac-seatrials,Role tac-seatrials deploymentproxy-tenantnamespaces,RoleBinding tac-seatrials deploymentproxy-tenantnamespaces,Role tac-seatrials deployment-operator,RoleBinding tac-seatrials deployment-operator,Role tac-seatrials fleet-deploy,RoleBinding tac-seatrials fleet-deploy,ClusterRoleBinding  tac-seatrials-kernel-tokenreview," ] &&
   [ "$(yq -o=json -I=0 'select(.kind == "RoleBinding" and .metadata.name == "deployment-operator") | .subjects' "$work/real/10-deployment-seatrials.yaml")" = '[{"kind":"ServiceAccount","name":"operator","namespace":"tac-seatrials"}]' ] &&
   ok "seatrials: the operator's Role, bound to tac-seatrials/operator" ||
   fail "seatrials renders: $(objects "$work/real/10-deployment-seatrials.yaml")"
@@ -294,20 +296,35 @@ for d in alpha beta-2; do
     ok "$d: the deploy account reads its TenantNamespaces, and only reads them" ||
     fail "$d: fleet-deploy on tenantnamespaces: $(grants "$f" fleet-deploy | grep tenantnamespaces | tr '\n' ',')"
 done
-[ "$(objects "$work/real/10-deployment-test-idp.yaml")" = "Namespace  tac-test-idp,Role tac-test-idp fleet-deploy,RoleBinding tac-test-idp fleet-deploy," ] &&
+[ "$(objects "$work/real/10-deployment-test-idp.yaml")" = "Namespace  tac-test-idp,Role tac-test-idp fleet-deploy,RoleBinding tac-test-idp fleet-deploy,ClusterRoleBinding  tac-test-idp-kernel-tokenreview," ] &&
   [ "$(yq 'select(.kind == "RoleBinding") | .subjects[0].name' "$work/real/10-deployment-test-idp.yaml")" = test-idp-deploy@tacplus-dev.iam.gserviceaccount.com ] &&
-  ok "test-idp: its namespace and the deploy Role only, bound to test-idp-deploy" ||
+  ok "test-idp: its namespace, the deploy Role, bound to test-idp-deploy, and its kernel's TokenReview binding only" ||
   fail "test-idp renders: $(objects "$work/real/10-deployment-test-idp.yaml")"
+
+# Kernel's TokenReview right (#67): one ClusterRole of this repository's, creating tokenreviews and nothing else (not
+# system:auth-delegator, which also grants subjectaccessreviews), and per deployment one ClusterRoleBinding named for
+# it, its only subject tac-<name>'s service account kernel (the operator renders neither: tacplus-dev/operator#3).
+tr=$work/out/06-kernel-tokenreview.yaml
+[ "$(yq ea -o=json -I=0 '[.] | map({"kind": .kind, "name": .metadata.name, "rules": .rules})' "$tr")" = \
+  '[{"kind":"ClusterRole","name":"kernel-tokenreview","rules":[{"apiGroups":["authentication.k8s.io"],"resources":["tokenreviews"],"verbs":["create"]}]}]' ] &&
+  ok "kernel's TokenReview ClusterRole creates tokenreviews, and nothing else" || fail "06-kernel-tokenreview.yaml: $(cat "$tr")"
+for d in alpha beta-2; do
+  [ "$(yq ea -o=json -I=0 '[select(.kind == "ClusterRoleBinding")] | map([.metadata.name, .metadata.labels."tacplus.dev/deployment", .roleRef, .subjects])' "$work/out/10-deployment-$d.yaml")" = \
+    "[[\"tac-$d-kernel-tokenreview\",\"$d\",{\"apiGroup\":\"rbac.authorization.k8s.io\",\"kind\":\"ClusterRole\",\"name\":\"kernel-tokenreview\"},[{\"kind\":\"ServiceAccount\",\"name\":\"kernel\",\"namespace\":\"tac-$d\"}]]]" ] &&
+    ok "$d: kernel-tokenreview bound to tac-$d/kernel alone" || fail "$d: the ClusterRoleBindings: $(yq 'select(.kind == "ClusterRoleBinding")' "$work/out/10-deployment-$d.yaml")"
+done
+! cat "$work/out"/*.yaml "$work/real"/*.yaml | grep -v '^ *#' | grep -q -e system:auth-delegator -e subjectaccessreviews &&
+  ok "no render names system:auth-delegator or subjectaccessreviews" || fail "a render names system:auth-delegator or subjectaccessreviews"
 
 # A deployment without an operator: its namespace and the deploy account's Role only, no deploymentproxy Role nor
 # operator binding; the rest of it as with one, and it passes ci/policy.sh.
 if "$here/render.sh" "$fixtures/no-operator.yaml" "$work/no-operator" > "$work/log" 2>&1; then
   g=$work/no-operator/10-deployment-gamma.yaml
-  [ "$(objects "$g")" = "Namespace  tac-gamma,Role tac-gamma fleet-deploy,RoleBinding tac-gamma fleet-deploy," ] &&
-    ! grep -q -e ServiceAccount -e deployment-operator "$g" &&
+  [ "$(objects "$g")" = "Namespace  tac-gamma,Role tac-gamma fleet-deploy,RoleBinding tac-gamma fleet-deploy,ClusterRoleBinding  tac-gamma-kernel-tokenreview," ] &&
+    ! grep -q -e deployment-operator -e deploymentproxy-tenantnamespaces "$g" &&
     diff <(yq 'select(.kind != "Namespace")' "$g") \
-         <(yq 'select(.metadata.name == "fleet-deploy")' "$fixtures/out/10-deployment-alpha.yaml" | sed 's/tac-alpha/tac-gamma/; s/alpha-deploy/gamma-deploy/') >/dev/null &&
-    ok "no operator: the namespace and the deploy Role only" || fail "no operator renders: $(objects "$g")"
+         <(yq 'select(.metadata.name == "fleet-deploy" or .kind == "ClusterRoleBinding")' "$fixtures/out/10-deployment-alpha.yaml" | sed 's/tac-alpha/tac-gamma/g; s/alpha-deploy/gamma-deploy/; s/deployment: alpha$/deployment: gamma/') >/dev/null &&
+    ok "no operator: the namespace, the deploy Role and kernel's TokenReview binding only" || fail "no operator renders: $(objects "$g")"
   "$here/ci/policy.sh" "$work/no-operator" > "$work/policy" 2>&1 &&
     ok "no operator: passes ci/policy.sh" || fail "no operator: ci/policy.sh: $(cat "$work/policy")"
 else

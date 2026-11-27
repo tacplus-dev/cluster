@@ -7,14 +7,17 @@
 # and GitHub (tests/stub/curl):
 #
 #   - with no cluster grant, plan says "no cluster grant yet" and exits 3; on another context it refuses;
-#   - on an empty cluster, plan lists every unit as added (ci too); apply applies it; the plan after is empty;
+#   - on an empty cluster, plan lists every unit as added (ci and kernel's TokenReview right too); apply applies it,
+#     and checks that each deployment's kernel may create tokenreviews, failing when one may not (#67); the plan
+#     after is empty;
 #   - the runners' tokens: apply fails without them in Secret Manager, saying so; it writes each, by its version, into
 #     its runner's Secret in ci; it refuses a version that holds no runner token; it prints none;
 #   - a runner an earlier rollout left past its progress deadline: apply restarts it, and it alone (#58);
 #   - a changed render is a change, by object, with its diff;
 #   - a removed entry: plan lists it as removed and kept; apply runs no delete and no prune, and the namespace stays;
 #   - delete-deployment refuses no name, no DELETE_CONFIRM or one that differs, a bad name, a listed deployment, an
-#     unlabelled namespace; it deletes the deployment's namespace and its tenant namespaces, and nothing else;
+#     unlabelled namespace; it deletes the deployment's namespace, its tenant namespaces and its kernel's
+#     ClusterRoleBinding, and nothing else (no other deployment's binding, none it does not label its own);
 #   - drift: its token minted every night, saying through which key, so a refused key fails it even in sync; nothing
 #     filed when in sync; an issue when it differs; a comment for a new drift; nothing for the same one; it never
 #     applies.
@@ -78,6 +81,8 @@ if run plan env PLAN_SUMMARY="$work/summary" "$here/ci/plan.sh" "$work/out"; the
     grep -qx 'beta-2: add rbac.authorization.k8s.io.v1.Role.tac-beta-2.fleet-deploy' "$work/summary" &&
     grep -q '^plan: alpha: add rbac.authorization.k8s.io.v1.RoleBinding.tac-alpha.fleet-deploy$' "$work/plan" &&
     grep -qx 'storage: add storage.k8s.io.v1.StorageClass..hyperdisk-balanced' "$work/summary" &&
+    grep -qx 'tokenreview: add rbac.authorization.k8s.io.v1.ClusterRole..kernel-tokenreview' "$work/summary" &&
+    grep -qx 'alpha: add rbac.authorization.k8s.io.v1.ClusterRoleBinding..tac-alpha-kernel-tokenreview' "$work/summary" &&
     grep -qx 'ci: add v1.Namespace..ci' "$work/summary" &&
     grep -qx 'ci: add apps.v1.Deployment.ci.gitlab-runner-build' "$work/summary" &&
     grep -qx 'ci: add rbac.authorization.k8s.io.v1.Role.ci.gitlab-runner-control' "$work/summary" &&
@@ -95,10 +100,20 @@ run apply "$here/ci/apply.sh" "$work/out" && fail "apply without the runners' to
 mv "$work/sm.away" "$SMSTUB"
 : > "$KSTUB/log"
 run apply "$here/ci/apply.sh" "$work/out" && grep -q 'apply: done' "$work/apply" &&
-  [ "$(grep -c "^kubectl apply --server-side --field-manager=tacplus-cluster --force-conflicts -f $work/out/" "$KSTUB/log")" = 5 ] &&
+  [ "$(grep -c "^kubectl apply --server-side --field-manager=tacplus-cluster --force-conflicts -f $work/out/" "$KSTUB/log")" = 6 ] &&
   grep -qx 'kubectl -n ci rollout status deployment/gitlab-runner-control --timeout=5m' "$KSTUB/log" &&
   [ -f "$KSTUB/live/storage.k8s.io.v1.StorageClass..hyperdisk-balanced" ] &&
-  ok "apply applies the five files server-side and waits for the runners" || fail "apply: $(cat "$work/apply" "$KSTUB/log")"
+  [ -f "$KSTUB/live/rbac.authorization.k8s.io.v1.ClusterRole..kernel-tokenreview" ] &&
+  ok "apply applies the six files server-side and waits for the runners" || fail "apply: $(cat "$work/apply" "$KSTUB/log")"
+# #67: after the apply, each deployment's kernel may create tokenreviews, as the API server answers it.
+for d in alpha beta-2; do
+  grep -qx "kubectl auth can-i create tokenreviews.authentication.k8s.io --as system:serviceaccount:tac-$d:kernel" "$KSTUB/log" &&
+    grep -qx "apply: tac-$d's kernel may create tokenreviews" "$work/apply" &&
+    ok "apply: tac-$d's kernel may create tokenreviews" || fail "apply: tac-$d's kernel's TokenReview right: $(cat "$work/apply")"
+done
+[ "$(kubectl auth can-i create tokenreviews.authentication.k8s.io --as system:serviceaccount:tac-alpha:operator)" = no ] &&
+  [ "$(kubectl auth can-i create subjectaccessreviews.authorization.k8s.io --as system:serviceaccount:tac-alpha:kernel)" = no ] &&
+  ok "only kernel may create tokenreviews, and nothing more" || fail "the stub's can-i grants more than kernel's tokenreviews"
 # Each runner's token, from Secret Manager by its version, in the Secret its pods mount, and printed nowhere.
 s=$KSTUB/live/v1.Secret.ci.gitlab-runner-build
 [ -f "$s" ] && [ "$(yq '.data."runner-token"' "$s" | base64 -d)" = glrt-stubbuild_t0ken ] &&
@@ -126,6 +141,13 @@ run apply "$here/ci/apply.sh" "$work/out" && grep -q 'apply: done' "$work/apply"
   ok "a runner stuck at ProgressDeadlineExceeded from an earlier apply is restarted, and the apply passes" ||
   fail "a stuck runner: $(cat "$work/apply" "$KSTUB/log")"
 rm -rf "$KSTUB/stuck"
+# A kernel that may not create tokenreviews once applied fails the apply, naming its binding (#67).
+cp -R "$work/out" "$work/no-tokenreview"
+yq -i '(select(.kind == "ClusterRoleBinding") | .subjects[0].name) = "operator"' "$work/no-tokenreview/10-deployment-beta-2.yaml"
+run apply "$here/ci/apply.sh" "$work/no-tokenreview" && fail "apply with tac-beta-2's kernel unbound succeeded" ||
+  { grep -q "apply: tac-beta-2's kernel may not create tokenreviews.authentication.k8s.io: its ClusterRoleBinding tac-beta-2-kernel-tokenreview" "$work/apply" &&
+    ok "apply fails when a deployment's kernel may not create tokenreviews" || fail "an unbound kernel: $(cat "$work/apply")"; }
+"$here/ci/apply.sh" "$work/out" >/dev/null 2>&1 || fail "the apply after the unbound kernel"
 
 # A changed render: one change, with its diff.
 cp -R "$work/out" "$work/changed"
@@ -174,12 +196,28 @@ if run delete env DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2 "$here/ci/delet
   [ "$left" = "ci deploymentproxy kube-system letsencrypt tac-alpha tac-alpha-b7654321 tac-other " ] &&
     grep -qx 'kubectl delete namespace tac-beta-2 --wait=true --timeout=15m' "$KSTUB/log" &&
     grep -qx 'kubectl delete namespace tac-beta-2-a1234567 --wait=true --timeout=15m' "$KSTUB/log" &&
-    ok "delete-deployment deletes tac-beta-2 and its tenant namespace, and nothing else" ||
+    grep -qx 'kubectl delete clusterrolebinding tac-beta-2-kernel-tokenreview --wait=true' "$KSTUB/log" &&
+    [ ! -e "$KSTUB/live/rbac.authorization.k8s.io.v1.ClusterRoleBinding..tac-beta-2-kernel-tokenreview" ] &&
+    [ -e "$KSTUB/live/rbac.authorization.k8s.io.v1.ClusterRoleBinding..tac-alpha-kernel-tokenreview" ] &&
+    [ -e "$KSTUB/live/rbac.authorization.k8s.io.v1.ClusterRole..kernel-tokenreview" ] &&
+    [ "$(grep -c '^kubectl delete' "$KSTUB/log")" = 3 ] &&
+    ok "delete-deployment deletes tac-beta-2, its tenant namespace and its kernel's binding, and nothing else" ||
     fail "delete-deployment left [$left]: $(cat "$KSTUB/log")"
 else
   fail "delete-deployment beta-2: $(cat "$work/delete")"
 fi
 rm -f "$KSTUB/keep-tenants" "$KSTUB/ns/tac-other" "$KSTUB/ns/tac-alpha-b7654321"
+# A ClusterRoleBinding of that name that is not the deployment's own label is refused, and kept.
+yq '.metadata.labels."tacplus.dev/deployment" = "alpha"' "$work/out/10-deployment-beta-2.yaml" | yq 'select(.kind == "ClusterRoleBinding")' \
+  > "$KSTUB/live/rbac.authorization.k8s.io.v1.ClusterRoleBinding..tac-beta-2-kernel-tokenreview"
+echo '{"tacplus.dev/deployment": "beta-2"}' > "$KSTUB/ns/tac-beta-2"
+: > "$KSTUB/log"
+run delete env DELETE_DEPLOYMENT=beta-2 DELETE_CONFIRM=beta-2 "$here/ci/delete-deployment.sh" "$fixtures/removed.yaml" && fail "delete-deployment deleted a binding labelled another's" ||
+  { grep -q 'the ClusterRoleBinding tac-beta-2-kernel-tokenreview is labelled tacplus.dev/deployment=\[alpha\], not beta-2' "$work/delete" &&
+    ! grep -q '^kubectl delete' "$KSTUB/log" && [ -e "$KSTUB/ns/tac-beta-2" ] &&
+    [ -e "$KSTUB/live/rbac.authorization.k8s.io.v1.ClusterRoleBinding..tac-beta-2-kernel-tokenreview" ] &&
+    ok "delete-deployment refuses a ClusterRoleBinding of that name labelled another deployment's, deleting nothing" || fail "a binding labelled another's: $(cat "$work/delete")"; }
+rm -f "$KSTUB/live/rbac.authorization.k8s.io.v1.ClusterRoleBinding..tac-beta-2-kernel-tokenreview" "$KSTUB/ns/tac-beta-2"
 
 # drift, against stub gcloud, KMS and GitHub (tests/stub/curl keeps GitHub's issues in $GSTUB).
 export GSTUB=$work/g GCP_ID_TOKEN=id-token GCP_WIF_PROVIDER=projects/1/locations/global/workloadIdentityPools/p/providers/g \

@@ -13,7 +13,12 @@
 #                               TenantNamespaces; deploymentproxy's Role deploymentproxy-tenantnamespaces and its
 #                               operator's RoleBinding both, or neither (a deployment without an operator); the
 #                               operator's own Role deployment-operator and its RoleBinding both, only with
-#                               deploymentproxy's, each grant within fleet-deploy (#59).
+#                               deploymentproxy's, each grant within fleet-deploy (#59). Its one cluster binding,
+#                               always: the ClusterRoleBinding tac-<name>-kernel-tokenreview of the ClusterRole
+#                               kernel-tokenreview to tac-<name>'s service account kernel alone (#67); no ClusterRole,
+#                               no other ClusterRoleBinding.
+#   06-kernel-tokenreview.yaml  one object: the ClusterRole kernel-tokenreview, create tokenreviews and nothing else
+#                               (not system:auth-delegator's subjectaccessreviews; #67)
 #   05-storage.yaml             one object: the default StorageClass hyperdisk-balanced (pd.csi.storage.gke.io)
 #   00-deploymentproxy.yaml     namespaced objects only in deploymentproxy; cluster-scoped, only the Namespace
 #                               deploymentproxy, CRDs, ClusterRoles and ClusterRoleBindings.
@@ -266,6 +271,11 @@ for b in "${files[@]##*/}"; do
         "StorageClass|hyperdisk-balanced|pd.csi.storage.gke.io|hyperdisk-balanced|true" ] ||
         breach "$b: not the one StorageClass hyperdisk-balanced (pd.csi.storage.gke.io, type hyperdisk-balanced, the default)"
       ;;
+    06-kernel-tokenreview.yaml)
+      # One object: kernel's TokenReview right, as render.sh writes it, every field (#67).
+      [ "$(yq ea -o=json -I=0 '[.]' "$f")" = '[{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"name":"kernel-tokenreview"},"rules":[{"apiGroups":["authentication.k8s.io"],"resources":["tokenreviews"],"verbs":["create"]}]}]' ] ||
+        breach "$b: not the one ClusterRole kernel-tokenreview (create authentication.k8s.io/tokenreviews, nothing else)"
+      ;;
     10-deployment-*.yaml)
       d=${b#10-deployment-}; d=${d%.yaml}; tns=tac-$d
       while IFS='|' read -r i kind ns name; do
@@ -298,11 +308,21 @@ for b in "${files[@]##*/}"; do
               esac
             done < <(yq ea -N "select(document_index == $i) | .subjects[] | [.kind, .name, .namespace // \"\"] | join(\"|\")" "$f")
             ;;
-          *) breach "$b: $kind $name: a deployment holds only its Namespace, Roles and RoleBindings" ;;
+          ClusterRoleBinding)
+            # Kernel's TokenReview right (#67), and no other cluster binding.
+            [ "$name" = "$tns-kernel-tokenreview" ] ||
+              breach "$b: the ClusterRoleBinding $name, not $tns-kernel-tokenreview: a deployment's one cluster binding is its kernel's TokenReview right"
+            ref=$(yq ea "select(document_index == $i) | [.roleRef.apiGroup, .roleRef.kind, .roleRef.name] | join(\"/\")" "$f")
+            [ "$ref" = rbac.authorization.k8s.io/ClusterRole/kernel-tokenreview ] ||
+              breach "$b: the ClusterRoleBinding $name binds [$ref], not the ClusterRole kernel-tokenreview"
+            [ "$(yq ea -o=json -I=0 "select(document_index == $i) | .subjects" "$f")" = "[{\"kind\":\"ServiceAccount\",\"name\":\"kernel\",\"namespace\":\"$tns\"}]" ] ||
+              breach "$b: the ClusterRoleBinding $name: its subjects are not $tns's service account kernel alone" ;;
+          *) breach "$b: $kind $name: a deployment holds only its Namespace, Roles and RoleBindings, and its kernel's TokenReview binding" ;;
         esac
       done < <(yq -N '[document_index, .kind, .metadata.namespace // "", .metadata.name] | join("|")' "$f")
       has "$f" Role fleet-deploy || breach "$b: no Role fleet-deploy"
       has "$f" RoleBinding fleet-deploy || breach "$b: no RoleBinding fleet-deploy"
+      has "$f" ClusterRoleBinding "$tns-kernel-tokenreview" || breach "$b: no ClusterRoleBinding $tns-kernel-tokenreview (kernel's TokenReview right, #67)"
       if has "$f" Role deploymentproxy-tenantnamespaces; then
         has "$f" RoleBinding deploymentproxy-tenantnamespaces || breach "$b: the Role deploymentproxy-tenantnamespaces without its RoleBinding"
       else

@@ -1,0 +1,15 @@
+# Kernel's TokenReview right, bound per deployment to tac-<name>'s service account kernel (10-deployment-<name>.yaml).
+# Rendered by render.sh; never edited.
+#
+# Kernel verifies a workload's projected service-account token with the TokenReview API, which is cluster-scoped, so
+# a deployment's operator, holding no cluster-wide right, renders no ClusterRole for it (tacplus-dev/operator#3): this
+# pipeline grants it. Create tokenreviews and nothing else: not system:auth-delegator, which also grants
+# subjectaccessreviews, which kernel never calls.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kernel-tokenreview
+rules:
+  - apiGroups: [authentication.k8s.io]
+    resources: [tokenreviews]
+    verbs: [create]

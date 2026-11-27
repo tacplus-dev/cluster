@@ -9,7 +9,10 @@
 # namespace; an unlabelled namespace; no deploy Role or binding; deploymentproxy's Role without its operator binding
 # or the binding without the Role; the operator's Role deployment-operator without its binding, the binding without
 # it, either without deploymentproxy's Role, or granting what fleet-deploy does not; fleet-deploy granting more than
-# get, list and watch on TenantNamespaces (#59) (a deployment without an operator has none of them, and keeps the rules). In ci's file: privileged jobs or runners, a host path, the Docker socket, an
+# get, list and watch on TenantNamespaces (#59) (a deployment without an operator has none of them, and keeps the rules);
+# kernel's TokenReview binding (#67) missing, named otherwise, bound to another ClusterRole (system:auth-delegator,
+# cluster-admin), or with any subject but tac-<name>'s kernel alone; the ClusterRole in a deployment's file; and its
+# file holding anything but the ClusterRole kernel-tokenreview creating tokenreviews. In ci's file: privileged jobs or runners, a host path, the Docker socket, an
 # added capability, host networking, an image by tag only; build jobs off the spot pool or as root, control jobs
 # tolerating spot, landing on a spot node, Unconfined or escalating privilege; any runner's jobs tolerating the
 # looper taint, selecting a looper node or naming it in a node affinity, a runner manager or deploymentproxy tolerating
@@ -98,6 +101,32 @@ breach "the operator's Role beyond fleet-deploy" "(select(.kind == \"Role\" and 
 breach "the deploy account writing TenantNamespaces" "$role += [{\"apiGroups\": [\"deploymentproxy.tacplus.dev\"], \"resources\": [\"tenantnamespaces\"], \"verbs\": [\"create\"]}]" "the Role fleet-deploy grants create on deploymentproxy.tacplus.dev/tenantnamespaces"
 breach "no deploy Role" 'del(select(.kind == "Role" and .metadata.name == "fleet-deploy"))' "no Role fleet-deploy"
 breach "no deploy binding" 'del(select(.kind == "RoleBinding" and .metadata.name == "fleet-deploy"))' "no RoleBinding fleet-deploy"
+# Kernel's TokenReview binding (#67): the deployment's one cluster binding, named for it, of kernel-tokenreview to
+# its kernel alone.
+crb='(select(.kind == "ClusterRoleBinding"))'
+breach "no kernel TokenReview binding" "del($crb)" "no ClusterRoleBinding tac-alpha-kernel-tokenreview"
+breach "a cluster binding named otherwise" "$crb.metadata.name = \"tac-alpha-admin\"" "the ClusterRoleBinding tac-alpha-admin, not tac-alpha-kernel-tokenreview"
+breach "kernel bound to system:auth-delegator" "$crb.roleRef.name = \"system:auth-delegator\"" "binds \[rbac.authorization.k8s.io/ClusterRole/system:auth-delegator\], not the ClusterRole kernel-tokenreview"
+breach "kernel bound to cluster-admin" "$crb.roleRef.name = \"cluster-admin\"" "not the ClusterRole kernel-tokenreview"
+breach "a second subject" "$crb.subjects += [{\"kind\": \"ServiceAccount\", \"name\": \"operator\", \"namespace\": \"tac-alpha\"}]" "its subjects are not tac-alpha's service account kernel alone"
+breach "another account of tac-alpha" "$crb.subjects[0].name = \"operator\"" "its subjects are not tac-alpha's service account kernel alone"
+breach "another namespace's kernel" "$crb.subjects[0].namespace = \"tac-beta-2\"" "its subjects are not tac-alpha's service account kernel alone"
+breach "a Group bound cluster-wide" "$crb.subjects = [{\"apiGroup\": \"rbac.authorization.k8s.io\", \"kind\": \"Group\", \"name\": \"system:authenticated\"}]" "its subjects are not tac-alpha's service account kernel alone"
+breach "the ClusterRole in a deployment's file" '(select(.kind == "Role" and .metadata.name == "fleet-deploy")) |= (.kind = "ClusterRole" | .metadata.name = "kernel-tokenreview" | del(.metadata.namespace))' "ClusterRole kernel-tokenreview: a deployment holds only"
+
+# Kernel's TokenReview ClusterRole: the one object of its file, creating tokenreviews and nothing else.
+for bad in '.rules[0].verbs += ["get"]' '.rules += [{"apiGroups": ["authorization.k8s.io"], "resources": ["subjectaccessreviews"], "verbs": ["create"]}]' \
+    '.rules[0].resources = ["*"]' '.aggregationRule = {"clusterRoleSelectors": [{"matchLabels": {"a": "b"}}]}' '.metadata.name = "system:auth-delegator"' \
+    '.kind = "ClusterRoleBinding"'; do
+  rm -rf "$work/bad" && cp -R "$work/good" "$work/bad"
+  yq -i "$bad" "$work/bad/06-kernel-tokenreview.yaml"
+  ! "$here/ci/policy.sh" "$work/bad" > "$work/log" 2>&1 && grep -q '06-kernel-tokenreview.yaml: not the one ClusterRole kernel-tokenreview' "$work/log" &&
+    ok "breach: the TokenReview ClusterRole changed by $bad" || fail "the TokenReview ClusterRole changed by $bad: $(cat "$work/log")"
+done
+rm -rf "$work/bad" && cp -R "$work/good" "$work/bad"
+printf -- '---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: extra\nrules: []\n' >> "$work/bad/06-kernel-tokenreview.yaml"
+! "$here/ci/policy.sh" "$work/bad" > "$work/log" 2>&1 && grep -q '06-kernel-tokenreview.yaml: not the one ClusterRole kernel-tokenreview' "$work/log" &&
+  ok "breach: a second ClusterRole beside kernel's" || fail "a second ClusterRole in 06-kernel-tokenreview.yaml: $(cat "$work/log")"
 
 # A deployment without an operator: neither deploymentproxy's Role nor the operator's, nor their bindings, keeps the
 # rules.

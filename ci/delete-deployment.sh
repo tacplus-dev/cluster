@@ -4,7 +4,8 @@
 #
 # Deletes one deployment from the cluster `dev`, with its tenants' data (the deletion job, Jody's only, in a
 # deletion pipeline: README, Deleting a deployment): the namespace tac-<name>, then whatever tenant namespace of it deploymentproxy has not deleted already
-# (labelled deploymentproxy.tacplus.dev/deployment=<name>). It refuses a deployment deployments.yaml still lists
+# (labelled deploymentproxy.tacplus.dev/deployment=<name>), then its kernel's ClusterRoleBinding
+# tac-<name>-kernel-tokenreview (#67). It refuses that binding too when it is not labelled tacplus.dev/deployment=<name>. It refuses a deployment deployments.yaml still lists
 # (remove the entry and apply first, or the next apply recreates it), a DELETE_CONFIRM that is not the same name
 # (the pipeline shows the job only then: this is the second guard), and a namespace that is not that deployment's
 # (no tacplus.dev/deployment=<name> label). Nothing else is ever deleted.
@@ -30,6 +31,14 @@ ns=tac-$d
 json=$(kubectl get namespace "$ns" -o json 2>/dev/null) || die "there is no namespace $ns"
 label=$(jq -r '.metadata.labels["tacplus.dev/deployment"] // ""' <<<"$json")
 [ "$label" = "$d" ] || die "$ns is labelled tacplus.dev/deployment=[$label], not $d: not a deployment namespace, not deleted"
+# Its kernel's TokenReview right (#67), cluster-scoped, so it goes with no namespace: deleted last, if it is $d's.
+crb=$ns-kernel-tokenreview
+if json=$(kubectl get clusterrolebinding "$crb" -o json 2>/dev/null); then
+  label=$(jq -r '.metadata.labels["tacplus.dev/deployment"] // ""' <<<"$json")
+  [ "$label" = "$d" ] || die "the ClusterRoleBinding $crb is labelled tacplus.dev/deployment=[$label], not $d: not $d's, nothing deleted"
+else
+  crb=
+fi
 
 tenants() {
   kubectl get namespaces -l "deploymentproxy.tacplus.dev/deployment=$d" -o json |
@@ -43,4 +52,5 @@ if [ -n "$left" ]; then
   kubectl delete namespace $left --wait=true --timeout=15m
 fi
 [ -z "$(tenants)" ] || die "tenant namespaces of $d are still there: $(tenants | tr '\n' ' ')"
+[ -z "$crb" ] || kubectl delete clusterrolebinding "$crb" --wait=true
 echo "delete-deployment: $d deleted"

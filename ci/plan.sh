@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # What an apply of the render OUT would change on the cluster `dev`, and nothing else: `kubectl diff`
-# (server-side, as ci/apply.sh applies) of each file of the render, then a summary per unit (deploymentproxy, each
-# deployment, and ci) of what is added, changed or removed. A unit whose namespace does not exist yet is all added,
+# (server-side, as ci/apply.sh applies) of each file of the render, then a summary per unit (deploymentproxy, the
+# storage, kernel's TokenReview ClusterRole, each deployment, and ci) of what is added, changed or removed. A unit whose namespace does not exist yet is all added,
 # listed from the render (the server cannot diff objects in a namespace it does not have). A namespace labelled
 # tacplus.dev/deployment whose entry is gone is listed as removed from deployments.yaml: the apply keeps it, only
 # delete-deployment deletes it.
@@ -31,6 +31,7 @@ for f in "$out"/*.yaml; do
   case $b in
     00-deploymentproxy) unit=deploymentproxy ;;
     05-storage) unit=storage ;;
+    06-kernel-tokenreview) unit=tokenreview ;;
     10-deployment-*) unit=${b#10-deployment-}; rendered+=("$unit") ;;
     20-ci) unit=ci ;;
     *) echo "plan: $f is not a file render.sh writes" >&2; exit 1 ;;
