@@ -92,7 +92,7 @@ Until the hub's steps below are done, `plan` stops with `kube: no cluster grant 
    `gates.yaml`'s `full`: `ci/tools.sh`, the render, `ci/validate.sh out` and `ci/checks.sh`). They run in the image
    `build.lock` pins by digest, the CI image, with no Docker: tacplus-dev/build builds a commit only from that pin
    (looper#71). To move it, change `build.lock` and `gitlab-runner/pin.yaml`'s `job:` together, of the CI file's
-   line, by a tag that names only that digest: a rebuild's dated tag (`build:20261123-57a6521`) or a patch tag
+   line, by a tag that names only that digest: a rebuild's dated tag (`build:20261126-57a6521`) or a patch tag
    (`build:2.6.N`), never the line's tag `build:2.6`, which tacplus moves on every rebuild (#54; `tests/ci_test.sh`
    refuses either): a new digest is a change like any other, landed on the full gates.
 2. Once it is merged, a merge request in the GitLab project setting `.gitlab-ci.yml` to `ci/pin.sh <commit>`'s

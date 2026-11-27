@@ -35,8 +35,9 @@
 # x/net v0.62.0 since build 2.6.3 (tacplus-dev/tacplus#350), so #15's CVE-2026-78661 entry is gone (#32). Build
 # 2.6's rebuild 20261123-ef62327 (#48), on current Debian 13 (trixie-security), has the fix of every HIGH Debian
 # finding of 2.6.13 (krb5, linux-libc-dev, ...) and no containerd finding in docker-buildx, so the CI image's
-# CVE-2026-95839 entry is gone too. Its rebuild 20261123-57a6521 (#54, the pin since), with the docker CLI on go1.27.4
-# (tacplus-dev/tacplus#901), has no HIGH or CRITICAL finding with a fixed version (Trivy, linux/arm64, 2026-11-23).
+# CVE-2026-95839 entry is gone too. Its rebuild 20261123-57a6521 (#54), with the docker CLI on go1.27.4
+# (tacplus-dev/tacplus#901), had libzstd's CVE-2026-124851 (HIGH, fixed); its rebuild 20261126-57a6521 (#66, the pin
+# since) has no HIGH or CRITICAL finding with a fixed version (Trivy, linux/arm64, 2026-11-27): no entry for it.
 #
 # Trivy's config checks (looper-scan's nightly, on the tree): KSV-0109 is a false positive on GitLab Runner chart
 # 0.94.3's entrypoint ConfigMap, which names the secret files it reads and holds no secret (#30); its two KSV-01010
