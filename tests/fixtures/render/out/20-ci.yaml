@@ -234,7 +234,7 @@ data:
       environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
-        image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
+        image = "ghcr.io/tacplus-dev/tacplus/build:20261126-57a6521@sha256:cd01058d9001c4257df43581fca0976fd939f1350b6a71da882d40319b21c5de"
         helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
@@ -430,7 +430,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build-light
       annotations:
-        checksum/configmap: 69211c4e317bb000205cd04c478cf8cf5237fb1003b286699e4b050f0637c51b
+        checksum/configmap: 590e5a8b5377dc7ee82579d841e69504dce1ee8c0fb2eeff1f08ba2f6885dc43
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build-light"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build-light/versions/1"
@@ -641,7 +641,7 @@ data:
       environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
-        image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
+        image = "ghcr.io/tacplus-dev/tacplus/build:20261126-57a6521@sha256:cd01058d9001c4257df43581fca0976fd939f1350b6a71da882d40319b21c5de"
         helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
@@ -840,7 +840,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build-report
       annotations:
-        checksum/configmap: 4fa9bd27ab9d007ec6c1106afbec97cc641bcd9068fcbf4e2876ad05e7590187
+        checksum/configmap: 73316f35eeae9b504dd9da013f0d4df0b664cb622fef9e815c24eba61cb83b01
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build-report"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build-report/versions/1"
@@ -1051,7 +1051,7 @@ data:
       environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
-        image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
+        image = "ghcr.io/tacplus-dev/tacplus/build:20261126-57a6521@sha256:cd01058d9001c4257df43581fca0976fd939f1350b6a71da882d40319b21c5de"
         helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
@@ -1250,7 +1250,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: build
       annotations:
-        checksum/configmap: 826ea8e990d9a90ed4792fb435e0bf5d5620f1121b714ae06bb3acd9f2990389
+        checksum/configmap: 9fd0017e9ceaf7ef585359d5a198ec3c54627278ae30d1d4749d3bd3f6dec141
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-build/versions/1"
@@ -1461,7 +1461,7 @@ data:
       environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
-        image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
+        image = "ghcr.io/tacplus-dev/tacplus/build:20261126-57a6521@sha256:cd01058d9001c4257df43581fca0976fd939f1350b6a71da882d40319b21c5de"
         helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
@@ -1658,7 +1658,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: control
       annotations:
-        checksum/configmap: c7413d136eda35f52bb800daac6a99ec9567fd0454ce9c9c72942448179bf090
+        checksum/configmap: 7262f8523b842be573504eb947aa9f6657048cd493ee5745a5825c6dac17572a
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,control"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-control/versions/1"
@@ -1869,7 +1869,7 @@ data:
       environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
-        image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
+        image = "ghcr.io/tacplus-dev/tacplus/build:20261126-57a6521@sha256:cd01058d9001c4257df43581fca0976fd939f1350b6a71da882d40319b21c5de"
         helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
@@ -2065,7 +2065,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: infra
       annotations:
-        checksum/configmap: 15119137dc0dce1485775f292593bf0a01182ccf2c552b15c910b930e82e231b
+        checksum/configmap: de7e8a094ec09eb0806a727d78ae93b6a8ba7e59b7a6fa82e33a26402f209e8a
         tacplus.dev/runner-protected: "true"
         tacplus.dev/runner-tags: "cloud,cluster,deploy"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-infra/versions/1"
@@ -2276,7 +2276,7 @@ data:
       environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
-        image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
+        image = "ghcr.io/tacplus-dev/tacplus/build:20261126-57a6521@sha256:cd01058d9001c4257df43581fca0976fd939f1350b6a71da882d40319b21c5de"
         helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
@@ -2472,7 +2472,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: kick
       annotations:
-        checksum/configmap: 75aaed9d5353c2218301d2b084f85ab01f159549a625ea7f743453ed22f48904
+        checksum/configmap: 6d7817cbd7bb81c67d652c6246bf3ccb9026d72a58c20f0ec0350c2427502b67
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,kick"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-kick/versions/1"
@@ -2683,7 +2683,7 @@ data:
       environment = ["HOME=/tmp/home"]
       [runners.kubernetes]
         namespace = "ci"
-        image = "ghcr.io/tacplus-dev/tacplus/build:20261123-57a6521@sha256:72fcd0448dc768bc3fc709c14b17acbc3470e94cf5b03b7d65520cae07e6f121"
+        image = "ghcr.io/tacplus-dev/tacplus/build:20261126-57a6521@sha256:cd01058d9001c4257df43581fca0976fd939f1350b6a71da882d40319b21c5de"
         helper_image = "us-central1-docker.pkg.dev/tacplus-dev/ci-images/gitlab-runner-helper:v19.6.0@sha256:0e8cbfd16127200c3c2a5050507a2e924e5896b6a57b7f0bfadd4be567888e1a"
         service_account = "ci-job"
         automount_service_account_token = false
@@ -2882,7 +2882,7 @@ spec:
         heritage: "Helm"
         tacplus.dev/ci-runner: nightly
       annotations:
-        checksum/configmap: efbb17ba427423b450d14604566d9484adf1a718043232729aa15900c93125da
+        checksum/configmap: 0c11892e719cab8a39b13c86981ed9988b1ca67b3735d817f5b8d9a58b59749c
         tacplus.dev/runner-protected: "false"
         tacplus.dev/runner-tags: "arm64,build-nightly"
         tacplus.dev/runner-token: "projects/tacplus-dev/secrets/gitlab-runner-nightly/versions/1"
