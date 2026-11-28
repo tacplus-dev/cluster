@@ -12,6 +12,7 @@ files:
   - config/manager/namespace.yaml
   - config/crd/tenantnamespaces.yaml
   - config/rbac/service_account.yaml
+  - config/rbac/tenant_reader_cluster_role.yaml
   - config/rbac/cluster_role.yaml
   - config/rbac/cluster_role_binding.yaml
   - config/manager/configmap.yaml

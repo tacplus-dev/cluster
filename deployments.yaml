@@ -4,7 +4,8 @@
 # tac-<name> only, and its service account kernel's TokenReview right (tac-<name>-kernel-tokenreview, #67; render.sh).
 #
 #   name           the deployment: at most 16 characters of [a-z0-9-], starting with a letter
-#   deployAccount  the Google service account the fleet's pipeline deploys as
+#   deployAccount  the Google service account the fleet's pipeline deploys as; with an operator, also its tenant
+#                  namespaces' reader (pods, their logs, events: deploymentproxy's readers.deployments.<name>)
 #   operator       the service account of the deployment's operator, in tac-<name>, that asks deploymentproxy for
 #                  tenant namespaces; optional: without one, no deploymentproxy Role, no operator Role and no
 #                  operator binding

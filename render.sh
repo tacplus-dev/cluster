@@ -6,7 +6,8 @@
 #
 #   OUT/00-deploymentproxy.yaml     deploymentproxy's release (deploymentproxy/release, checked against its
 #                                   SHA256SUMS), its image pinned by digest (deploymentproxy/pin.yaml), each
-#                                   deployment's own quota merged into its config
+#                                   deployment's own quota merged into its config, and, for each deployment with
+#                                   an operator, its deploy account as its tenant namespaces' reader
 #   OUT/06-kernel-tokenreview.yaml  the ClusterRole kernel-tokenreview: create tokenreviews, nothing else (#67)
 #   OUT/10-deployment-<name>.yaml  per entry of DEPLOYMENTS: the namespace tac-<name> labelled
 #                                   tacplus.dev/deployment=<name>, deploymentproxy's per-deployment Role for its
@@ -251,6 +252,10 @@ upstream=$(yq 'select(.kind == "Deployment") | .spec.template.spec.containers[0]
 [ "$upstream" = "ghcr.io/tacplus-dev/deploymentproxy:$line" ] ||
   die "the release's Deployment runs $upstream, not the line $line that pin.yaml pins"
 quotas=$(yq -o=json -I=0 '[.deployments[] | select((.quota // {}) | length > 0) | {(.name): .quota}] | .[] as $q ireduce ({}; . * $q)' "$deployments")
+# Each deployment with an operator reads its tenant namespaces (pods, their logs, events) as its deploy account
+# (fleet-seatrials#85): deploymentproxy binds readers.deployments.<name> there. GKE names a Google service account by
+# its email, the User subject fleet-deploy's RoleBinding names too.
+readers=$(yq -o=json -I=0 '[.deployments[] | select(has("operator")) | {(.name): [{"kind": "User", "name": .deployAccount}]}] | .[] as $r ireduce ({}; . * $r)' "$deployments")
 {
   first=1
   while read -r f; do
@@ -265,8 +270,10 @@ quotas=$(yq -o=json -I=0 '[.deployments[] | select((.quota // {}) | length > 0) 
           .spec.template.spec.securityContext.runAsUser = 65532 | .spec.template.spec.securityContext.runAsGroup = 65532 |
           .spec.template.spec.containers[0].resources.limits.cpu = "500m"' "$release/$f" ;;
       config/manager/configmap.yaml)
-        if [ "$quotas" = '{}' ]; then cat "$release/$f"
-        else Q=$quotas yq '.data."config.yaml" |= (from_yaml | .quota.deployments = (strenv(Q) | from_json | ... style="") | to_yaml)' "$release/$f"; fi ;;
+        if [ "$quotas" = '{}' ] && [ "$readers" = '{}' ]; then cat "$release/$f"
+        else Q=$quotas R=$readers yq '.data."config.yaml" |= (from_yaml |
+          (.quota.deployments = (strenv(Q) | from_json | ... style="")) |
+          (.readers.deployments = (strenv(R) | from_json | ... style="")) | to_yaml)' "$release/$f"; fi ;;
       *) cat "$release/$f" ;;
     esac
   done < <(yq '.files[]' "$pin")

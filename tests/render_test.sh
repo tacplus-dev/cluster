@@ -28,8 +28,9 @@
 # their largest job, its ceilings (gitlab-runner/spot-pool.yaml, #41: one a node, 8), counted per node, the nightly's
 # fixed at half of it (4, #46), and a spot pool without room for one, a fixed concurrent beyond its room, or a quantity
 # it cannot read, refused;
-# a deployment's own quota reaches deploymentproxy's config and the default leaves the release's ConfigMap as it
-# is; deployments.yaml itself renders and passes ci/policy.sh, test-idp with its namespace and deploy Role only; a
+# a deployment's own quota reaches deploymentproxy's config and the default adds nothing to the release's
+# ConfigMap; each deployment with an operator has its deploy account as its tenant namespaces' reader there, and
+# one without adds none (fleet-seatrials#85); deployments.yaml itself renders and passes ci/policy.sh, test-idp with its namespace and deploy Role only; a
 # deployment with an operator has the operator's Role in its namespace, bound to its operator account, each grant
 # within fleet-deploy, and the deploy account reads (only reads) its TenantNamespaces (#59); a
 # deployment without an operator has no deploymentproxy Role and no operator binding; a removed entry renders
@@ -77,6 +78,10 @@ diff <(yq 'select(.kind == "Deployment") | del(.spec.template.spec.securityConte
 quota=$(yq 'select(.kind == "ConfigMap") | .data."config.yaml" | from_yaml | .quota.deployments | to_json(0)' "$dp")
 [ "$quota" = '{"beta-2":{"pods":"20","requests.cpu":"2"}}' ] &&
   ok "beta-2's quota reaches deploymentproxy's config, alpha's default adds nothing" || fail "quota.deployments is $quota"
+# fleet-seatrials#85: each deployment with an operator reads its tenant namespaces as its deploy account, a User.
+readers=$(yq 'select(.kind == "ConfigMap") | .data."config.yaml" | from_yaml | .readers.deployments | to_json(0)' "$dp")
+[ "$readers" = '{"alpha":[{"kind":"User","name":"alpha-deploy@example-project.iam.gserviceaccount.com"}],"beta-2":[{"kind":"User","name":"beta-deploy@example-project.iam.gserviceaccount.com"}]}' ] &&
+  ok "each deployment's deploy account is its tenant namespaces' reader in deploymentproxy's config" || fail "readers.deployments is $readers"
 
 # ci: every image by digest, gitlab-runner/pin.yaml's; the runners' RBAC in ci only; build jobs on the spot pool only.
 ci=$work/out/20-ci.yaml
@@ -254,11 +259,12 @@ done
 ! grep -q 'glrt-[A-Za-z0-9_]' "$ci" && [ "$(yq ea '[select(.kind == "Secret")] | length' "$ci")" = 0 ] &&
   ok "no token and no Secret in the render" || fail "the render holds a token or a Secret"
 
-# The default quota leaves the release's ConfigMap as it is.
+# The default quota adds nothing to the release's ConfigMap: alpha's reader is all it adds.
 "$here/render.sh" "$fixtures/removed.yaml" "$work/removed" > "$work/log" 2>&1 || fail "render.sh failed on removed.yaml: $(cat "$work/log")"
-diff <(yq 'select(.kind == "ConfigMap")' "$work/removed/00-deploymentproxy.yaml") \
-     <(yq '.' "$here/deploymentproxy/release/config/manager/configmap.yaml") >/dev/null &&
-  ok "with every quota the default, the ConfigMap is the release's" || fail "the default quota changed the release's ConfigMap"
+diff <(yq 'select(.kind == "ConfigMap") | .data."config.yaml" |= (from_yaml | del(.readers.deployments.alpha) | to_yaml)' "$work/removed/00-deploymentproxy.yaml") \
+     <(yq '.data."config.yaml" |= (from_yaml | to_yaml)' "$here/deploymentproxy/release/config/manager/configmap.yaml") >/dev/null &&
+  [ "$(yq 'select(.kind == "ConfigMap") | .data."config.yaml" | from_yaml | .readers.deployments | keys | join(" ")' "$work/removed/00-deploymentproxy.yaml")" = alpha ] &&
+  ok "with every quota the default, the ConfigMap is the release's and alpha's reader" || fail "the default quota changed the release's ConfigMap"
 
 # A removed entry renders nothing for it, and the rest as before.
 [ "$(ls "$work/removed" | tr '\n' ' ')" = "00-deploymentproxy.yaml 05-storage.yaml 06-kernel-tokenreview.yaml 10-deployment-alpha.yaml 20-ci.yaml " ] &&
@@ -330,6 +336,9 @@ if "$here/render.sh" "$fixtures/no-operator.yaml" "$work/no-operator" > "$work/l
     diff <(yq 'select(.kind != "Namespace")' "$g") \
          <(yq 'select(.metadata.name == "fleet-deploy" or .kind == "ClusterRoleBinding")' "$fixtures/out/10-deployment-alpha.yaml" | sed 's/tac-alpha/tac-gamma/g; s/alpha-deploy/gamma-deploy/; s/deployment: alpha$/deployment: gamma/') >/dev/null &&
     ok "no operator: the namespace, the deploy Role and kernel's TokenReview binding only" || fail "no operator renders: $(objects "$g")"
+  diff <(yq 'select(.kind == "ConfigMap")' "$work/no-operator/00-deploymentproxy.yaml") \
+       <(yq '.' "$here/deploymentproxy/release/config/manager/configmap.yaml") >/dev/null &&
+    ok "no operator, the default quota: no reader, the ConfigMap is the release's" || fail "no operator: the ConfigMap is not the release's"
   "$here/ci/policy.sh" "$work/no-operator" > "$work/policy" 2>&1 &&
     ok "no operator: passes ci/policy.sh" || fail "no operator: ci/policy.sh: $(cat "$work/policy")"
 else

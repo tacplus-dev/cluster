@@ -21,6 +21,11 @@ by Jody 2026-11-02).
   - the operator's own Role and RoleBinding (`deployment-operator`, #59), if it has one: with `deployment` set the
     operator's chart renders none and leaves them to this pipeline. Its chart's Role (`helm/templates/role.yaml`),
     each grant within `fleet-deploy`, in `tac-<deployment>` only (deploymentproxy binds it in the tenant namespaces);
+  - its deploy account as the reader of its tenant namespaces, if it has an operator: deploymentproxy's config
+    `readers.deployments.<deployment>`, the `User` its email names (GKE's name for a Google service account, as in
+    `fleet-deploy`'s RoleBinding), which deploymentproxy binds in each tenant namespace to its read-only ClusterRole
+    `deploymentproxy-tenant-reader` (`pods`, `pods/log`, `events`: get, list, watch), so that the fleet's pipeline
+    can see its tenants come up (fleet-seatrials#85);
   - kernel's TokenReview right (#67): the ClusterRoleBinding `tac-<deployment>-kernel-tokenreview` of the service
     account `kernel` of `tac-<deployment>`, and only it, to the ClusterRole `kernel-tokenreview`
     (`out/06-kernel-tokenreview.yaml`, one for every deployment), which may create `tokenreviews`
