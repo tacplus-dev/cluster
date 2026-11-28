@@ -38,4 +38,4 @@ build:
     helper: [ca-certificates=20261020-r0, curl=8.23.0-r0, git=2.54.1-r0, git-lfs=3.7.1-r2, busybox=1.37.0-r31, zlib=1.4-r0, pcre2=10.49-r0, bash=5.3.9-r1, miniperl=5.42.3-r0, coreutils=9.11-r0, dumb-init=1.2.5-r4]
 # A job's image when its job names none: the tacplus build image the pipelines already run, build.lock's, by a
 # rebuild's dated tag (or a patch tag): never a line tag like build:2.6, which tacplus moves (#54).
-job: ghcr.io/tacplus-dev/tacplus/build:20261126-57a6521@sha256:cd01058d9001c4257df43581fca0976fd939f1350b6a71da882d40319b21c5de
+job: ghcr.io/tacplus-dev/tacplus/build:20261128-7319ce5@sha256:a8343d291153d0faa20e83e22a765704dc7caa03d1569919e9d44a163ad88239
