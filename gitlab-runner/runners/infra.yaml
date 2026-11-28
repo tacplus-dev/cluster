@@ -1,6 +1,6 @@
 # The infra runner (#25, for tacplus-dev/cloud#11): the three infrastructure pipelines' jobs, tacplus-dev/cloud's
 # (tag `cloud`), tacplus-dev/cluster's (`cluster`) and fleet-seatrials' deploy (`deploy`), each a pod on the normal
-# pool, as control's are. They hold the most powerful credentials we have (WIF to the projects, and cluster-admin on
+# pool, its overflow on the looper pool, as control's are (#68). They hold the most powerful credentials we have (WIF to the projects, and cluster-admin on
 # this cluster), so they share no runner with the agents' jobs (control) or the builds (build): this runner takes
 # those three tags and no other (ci/policy.sh refuses any other runner holding one of them, and this one holding any
 # else), and GitLab gives it jobs of protected refs only (tacplus.protected: `ref_protected` at its registration,
@@ -36,7 +36,8 @@ runners:
         automount_service_account_token = false
         privileged = false
         allow_privilege_escalation = false
-        poll_timeout = 600
+        # An overflow node from 0 takes minutes to come up (as control's, #47).
+        poll_timeout = 900
         cpu_request = "500m"
         cpu_limit = "1500m"
         memory_request = "1Gi"
@@ -56,10 +57,21 @@ runners:
           "tacplus.dev/ci-runner" = "infra"
         [runners.kubernetes.node_selector]
           "kubernetes.io/arch" = "arm64"
+        # The overflow pool's taint (tacplus-dev/cloud: the looper pool, from 0 to 2): its jobs tolerate it, as
+        # control's do, and prefer the normal pool (below). On 2026-11-27 cloud's test and policy jobs timed out
+        # Pending on the 3 normal nodes ("Insufficient cpu") beside seatrials' pods, with nowhere to overflow.
         [runners.kubernetes.node_tolerations]
           "kubernetes.io/arch=arm64" = "NoSchedule"
+          "looper=true" = "NoSchedule"
         [runners.kubernetes.affinity]
           [runners.kubernetes.affinity.node_affinity]
+            [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution]]
+              weight = 100
+              [runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference]
+                [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference.match_expressions]]
+                  key = "looper"
+                  operator = "NotIn"
+                  values = ["true"]
             [runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution]
               [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms]]
                 [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]

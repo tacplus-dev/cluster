@@ -1,12 +1,13 @@
-# The normal pool, as the runners' concurrency counts it (#36): render.sh gives the runner whose file says
-# `concurrent: pool` (control) as many jobs as the pool has room for, by their pods' requests, once it has counted this
+# The normal pool, and the looper pool its overflow scales up, as the runners' concurrency counts them (#36, #47):
+# render.sh gives the runner whose file says `concurrent: pool` (control) as many jobs as the pools have room for, by their pods' requests, once it has counted this
 # reserve, every runner manager (gitlab-runner/values.yaml's resources), deploymentproxy (its release's requests)
 # and every other normal-pool runner's jobs at its full concurrent (infra's and kick's); and it refuses runners the pool cannot
 # hold. A job's pod counts as its runner's default requests, the job's container and the helper's: a job raising its
 # own (KUBERNETES_CPU_REQUEST) is not counted, so a runner's defaults are its largest kind's (control: a report's,
-# tacplus-dev/looper#165). Bin-packing is not counted: the jobs' pods are small beside a node. There is no other pool
-# for its jobs to overflow onto: the looper pool is gone (#64; tacplus-dev/cloud#114), and render.sh refuses a
-# `looper:` block here.
+# tacplus-dev/looper#165). Bin-packing is not counted: the jobs' pods are small beside a node. Its jobs, which tolerate
+# the looper pool's taint and prefer the normal pool (as infra's do, #68, counted above on the normal pool), fill the normal nodes first; the rest pend, and the
+# cluster autoscaler adds looper nodes for them, up to its max, and removes them once they are empty: so the looper
+# pool counts at its max nodes, less only each node's daemonsets, and only for a runner whose jobs tolerate its taint.
 #
 #   nodes        the pool's nodes: tacplus-dev/cloud's stacks/dev, cluster.normal (3 x c4a-standard-2, fixed, no
 #                autoscaling)
@@ -27,8 +28,24 @@ reserved:
   cpu: 1200m
   memory: 3Gi
 #
+#   looper       the looper pool (tacplus-dev/cloud#95; tacplus-dev/roadmap decisions/cluster-node-pools-2026-11-03.md,
+#                addendum 2026-11-22): tacplus-dev/cloud's stacks/dev, cluster.looper (c4a-standard-2, on demand,
+#                autoscaling 0 to max_nodes, label looper=true, taint looper=true:NoSchedule); a larger max_nodes is
+#                Jody's yes there first, then here. Its allocatable is a c4a-standard-2's, as above; daemonsets what
+#                each node runs before any job (GKE's kube-system DaemonSets: logging, metrics, the CSI driver,
+#                Dataplane V2, the metadata server), an estimate, unmeasured: the normal pool's whole reserve per node
+#                (1200m / 3, 3Gi / 3), which holds kube-system's Deployments too, bounds it from above (PROPOSALS.md).
+looper:
+  max_nodes: 2
+  allocatable:
+    cpu: 1930m
+    memory: 6Gi
+  daemonsets:
+    cpu: 400m
+    memory: 1Gi
+#
 #   managers     the looper's managers (#53): control's jobs, but each at its own requests, above control's defaults
-#                (a report's), which count its slots; count of them at once, held in the pool's room before control's
+#                (a report's), which count its slots; count of them at once, held in the pools' room before control's
 #                slots (tacplus-dev/looper#229, looper-dispatch: a manager asks 250m and 256Mi, above the recap's p90 of
 #                210m on 2026-11-23, tacplus-dev/roadmap suggestions/recap/2026-11-23.md). Without it, none.
 managers:

@@ -1,10 +1,11 @@
 # The control runner: the tacplus-dev group's jobs tagged `arm64, control` (the looper's reports, managers and scans,
-# once they move here: tacplus-dev/looper#84; its kicker and plan have kick of their own, #36), each a pod on the normal
-# pool. Its tags are its own, never
+# once they move here: tacplus-dev/looper#84; its kicker and plan have kick of their own, #36), each a pod on the normal pool,
+# its overflow on the looper pool (#47). Its tags are its own, never
 # the VM runners' (`autoscale`, `autoscale-16`, `gce`: ci/policy.sh): GitLab gives a job to whichever runner holding
-# its tags asks first (#13). It tolerates no spot taint and refuses a spot node by its label or GKE's; its runner
-# manager tolerates none either. The looper pool its overflow once scaled up (#47) is gone (#64; tacplus-dev/cloud#114):
-# its concurrent is the normal pool's room alone, so a job never pends for a node. No privilege,
+# its tags asks first (#13). It tolerates no spot taint and refuses a spot node by its label or GKE's. Its jobs and infra's
+# (#68) alone tolerate the looper pool's taint (looper=true:NoSchedule; tacplus-dev/cloud#95), and prefer nodes without its label:
+# they fill the always-on normal nodes first, the overflow pends until the cluster autoscaler adds a looper node (0 to
+# 2), and once those jobs end the nodes empty and scale back to 0. Its runner manager tolerates neither. No privilege,
 # no privilege escalation, no host path, no Docker socket; agents never build (a build is a job of its own, on the
 # build runner). A job may raise its requests and limits up to the *_overwrite_max_allowed ceilings, which fit a
 # c4a-standard-2 (2 CPUs, 8 GB) beside the platform; it may not move its pod, its namespace or its account.
@@ -15,7 +16,8 @@
 # pipelines 3100887560 and 3101379440, 2026-11-23). The evicted job fails runner_system_failure, which the looper's
 # CI files retry (tacplus-dev/looper ci/tacplus-dev.gitlab-ci.yml's .control, ci/instance.gitlab-ci.yml).
 #
-# Its concurrent is the normal pool's room (#36, #64: `pool`, gitlab-runner/pool.yaml), counted by its default requests,
+# Its concurrent is the normal pool's room and the looper pool's at its max nodes (#36, #47: `pool`,
+# gitlab-runner/pool.yaml), counted by its default requests,
 # which are a report's (150m and 512Mi: tacplus-dev/looper#165; the recap's p90 139m and ~8% over it, #53; the kicker and
 # the plan ask less; a manager more, held apart as gitlab-runner/pool.yaml's managers): render.sh gives it as many jobs
 # as the pool holds beside infra's and kick's at their full concurrent and the managers' room, and refuses runners
@@ -45,6 +47,8 @@ runners:
         allow_privilege_escalation = false
         # Below infra's and kick's jobs, which preempt it (#49).
         priority_class_name = "control-job"
+        # A looper node from 0 takes minutes to come up (#47).
+        poll_timeout = 900
         cpu_request = "150m"
         cpu_limit = "1"
         memory_request = "512Mi"
@@ -64,10 +68,19 @@ runners:
           "tacplus.dev/ci-runner" = "control"
         [runners.kubernetes.node_selector]
           "kubernetes.io/arch" = "arm64"
+        # The looper pool's taint (#47): its jobs and infra's (#68) alone tolerate it, and prefer the normal pool (below).
         [runners.kubernetes.node_tolerations]
           "kubernetes.io/arch=arm64" = "NoSchedule"
+          "looper=true" = "NoSchedule"
         [runners.kubernetes.affinity]
           [runners.kubernetes.affinity.node_affinity]
+            [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution]]
+              weight = 100
+              [runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference]
+                [[runners.kubernetes.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution.preference.match_expressions]]
+                  key = "looper"
+                  operator = "NotIn"
+                  values = ["true"]
             [runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution]
               [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms]]
                 [[runners.kubernetes.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms.match_expressions]]

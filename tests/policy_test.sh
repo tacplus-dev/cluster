@@ -14,9 +14,9 @@
 # cluster-admin), or with any subject but tac-<name>'s kernel alone; the ClusterRole in a deployment's file; and its
 # file holding anything but the ClusterRole kernel-tokenreview creating tokenreviews. In ci's file: privileged jobs or runners, a host path, the Docker socket, an
 # added capability, host networking, an image by tag only; build jobs off the spot pool or as root, control jobs
-# tolerating spot, landing on a spot node, Unconfined or escalating privilege; any runner's jobs tolerating the
-# looper taint, selecting a looper node or naming it in a node affinity, a runner manager or deploymentproxy tolerating
-# it, the pool being gone (#64; tacplus-dev/cloud#114), or tolerating every taint, spot's among them; a job allowed to override its
+# tolerating spot, landing on a spot node, Unconfined or escalating privilege; any runner's jobs but control's and
+# infra's tolerating the looper taint, theirs selecting a looper node or not preferring the normal pool, a runner
+# manager or deploymentproxy tolerating it (#47, #68), or tolerating every taint, spot's among them; a job allowed to override its
 # placement, a job's token, no resource ceiling; build taking other tags; a VM runner's tag (autoscale,
 # autoscale-16, gce) on any runner; an infra pipeline's tag (cloud, cluster, deploy) on build or control, infra
 # taking any other tag, or not protected refs only (#25); kick taking a tag but arm64 and kick, or not kick, and kick
@@ -142,10 +142,10 @@ yq -i '(select(.kind == "ConfigMap") | .metadata.namespace) = "letsencrypt"' "$w
   ! "$here/ci/policy.sh" "$work/bad" >/dev/null 2>&1 &&
   ok "breach: deploymentproxy's object in another namespace" || fail "deploymentproxy's object in letsencrypt: $(cat "$work/log")"
 
-# No workload tolerates the looper pool's taint: the pool is gone (#64; tacplus-dev/cloud#114).
+# No workload tolerates the looper pool's taint (#47): only control's and infra's jobs run there.
 rm -rf "$work/bad" && cp -R "$work/good" "$work/bad"
 yq -i '(select(.kind == "Deployment") | .spec.template.spec.tolerations) += [{"key": "looper", "operator": "Equal", "value": "true", "effect": "NoSchedule"}]' "$work/bad/00-deploymentproxy.yaml"
-! "$here/ci/policy.sh" "$work/bad" > "$work/log" 2>&1 && grep -q '00-deploymentproxy.yaml: the Deployment .* tolerates the looper taint: the looper pool is gone' "$work/log" &&
+! "$here/ci/policy.sh" "$work/bad" > "$work/log" 2>&1 && grep -q '00-deploymentproxy.yaml: the Deployment .* tolerates the looper taint' "$work/log" &&
   ok "breach: deploymentproxy on the looper pool" || fail "deploymentproxy tolerating the looper taint: $(cat "$work/log")"
 
 # ci's file (CI in the cluster): breach_ci WHAT YQ WANT [DOCUMENT], as breach on 20-ci.yaml, DOCUMENT added to it.
@@ -174,11 +174,10 @@ breach_ci "build jobs not tolerating spot" "$(toml build '\"spot=true\" = \"NoSc
 breach_ci "build jobs as root" "$(toml build 'run_as_non_root = true' 'run_as_non_root = false')" "gitlab-runner-build: its build jobs may run as root"
 breach_ci "control jobs tolerating spot" "$(toml control '\\[runners.kubernetes.node_tolerations\\]' '[runners.kubernetes.node_tolerations]\n      \"spot=true\" = \"NoSchedule\"')" "gitlab-runner-control: its jobs tolerate the spot taint (spot=true)"
 breach_ci "control jobs that may land on spot" "$(toml control 'key = \"spot\"' 'key = \"pool\"')" "gitlab-runner-control: its jobs may land on a spot node"
-breach_ci "infra jobs tolerating the looper pool" "$(toml infra '\\[runners.kubernetes.node_tolerations\\]' '[runners.kubernetes.node_tolerations]\n      \"looper=true\" = \"NoSchedule\"')" "gitlab-runner-infra: its jobs tolerate the looper taint (looper=true)"
+breach_ci "infra jobs filling the looper pool first" "$(toml infra 'key = \"looper\"' 'key = \"pool\"')" "gitlab-runner-infra: its jobs tolerate the looper taint but do not prefer the normal pool"
 breach_ci "build jobs tolerating the looper pool" "$(toml build '\"spot=true\" = \"NoSchedule\"' '\"spot=true\" = \"NoSchedule\"\n      \"looper=true\" = \"NoSchedule\"')" "gitlab-runner-build: its jobs tolerate the looper taint (looper=true)"
-breach_ci "control jobs tolerating the looper pool" "$(toml control '\\[runners.kubernetes.node_tolerations\\]' '[runners.kubernetes.node_tolerations]\n      \"looper=true\" = \"NoSchedule\"')" "gitlab-runner-control: its jobs tolerate the looper taint (looper=true): the looper pool is gone (tacplus-dev/cloud#114)"
-breach_ci "control jobs selecting the looper pool" "$(toml control '\"kubernetes.io/arch\" = \"arm64\"\n' '\"kubernetes.io/arch\" = \"arm64\"\n      \"looper\" = \"true\"\n')" "gitlab-runner-control: its jobs select a looper node: the looper pool is gone"
-breach_ci "control jobs preferring against the looper pool" "$(toml control 'key = \"spot\"' 'key = \"looper\"')" "gitlab-runner-control: its jobs name looper in a node affinity: the looper pool is gone"
+breach_ci "control jobs selecting the looper pool" "$(toml control '\"kubernetes.io/arch\" = \"arm64\"\n' '\"kubernetes.io/arch\" = \"arm64\"\n      \"looper\" = \"true\"\n')" "gitlab-runner-control: its jobs select a looper node"
+breach_ci "control jobs filling the looper pool first" "$(toml control 'key = \"looper\"' 'key = \"pool\"')" "gitlab-runner-control: its jobs tolerate the looper taint but do not prefer the normal pool"
 breach_ci "control jobs Unconfined" "$(toml control 'type = \"RuntimeDefault\"' 'type = \"Unconfined\"')" "gitlab-runner-control: its jobs are Unconfined (pod_security_context.seccomp_profile.type)"
 breach_ci "control jobs escalating privilege" "$(toml control 'privileged = false\n    allow_privilege_escalation = false' 'privileged = false')" "gitlab-runner-control: its jobs may escalate privilege"
 breach_ci "a job moving its pod" "$(toml control 'privileged = false' 'privileged = false\n    node_selector_overwrite_allowed = \".*\"')" "a job may override what node_selector_overwrite_allowed allows"
@@ -279,7 +278,7 @@ breach_ci "control's priority preempting" "$cc.preemptionPolicy) = \"PreemptLowe
 breach_ci "control's priority infra's" "$cc.value) = 0" "the PriorityClass control-job's value \[0\] is not below the jobs' (0) and at or above the autoscaler's expendable cutoff (-10)"
 breach_ci "control's priority expendable" "$cc.value) = -11" "the PriorityClass control-job's value \[-11\] is not below"
 breach_ci "a runner manager on spot" "$(deployment control '.spec.tolerations') += [{\"key\": \"spot\", \"operator\": \"Exists\"}]" "Deployment gitlab-runner-control tolerates spot"
-breach_ci "a runner manager on the looper pool" "$(deployment kick '.spec.tolerations') += [{\"key\": \"looper\", \"operator\": \"Exists\"}]" "the Deployment gitlab-runner-kick tolerates the looper taint: the looper pool is gone"
+breach_ci "a runner manager on the looper pool" "$(deployment kick '.spec.tolerations') += [{\"key\": \"looper\", \"operator\": \"Exists\"}]" "the Deployment gitlab-runner-kick tolerates the looper taint"
 breach_ci "a runner manager tolerating every taint" "$(deployment kick '.spec.tolerations') += [{\"operator\": \"Exists\"}]" "the Deployment gitlab-runner-kick tolerates every taint (a toleration with no key, operator Exists): the spot pool's among them"
 # Where the runner manager writes, on its read-only root filesystem (#37: no /tmp failed every job at once).
 mounts=$(deployment control '.spec.containers[0].volumeMounts')

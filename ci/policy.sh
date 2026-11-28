@@ -39,8 +39,9 @@
 #                               bind or impersonate; a RoleBinding binds a Role to service accounts of ci. The
 #                               runners' pods and their jobs' pods (each runner's config.toml): images by digest, no
 #                               privileged container, host path, host namespace or Docker socket; build jobs only on
-#                               the spot pool, every other job never there; no runner's jobs and no workload in
-#                               any file tolerate, select or name the looper pool, which is gone (#64); the infra
+#                               the spot pool, every other job never there; control's and infra's jobs alone tolerate
+#                               the looper pool, preferring the normal pool, and no workload in any file does, nor
+#                               every taint (#47, #68); the infra
 #                               pipelines' tags (cloud, cluster,
 #                               deploy) on the runner infra alone, which takes no other and protected refs only;
 #                               kick (the looper's kicker and plan, #36) on the runner kick alone, which takes no
@@ -119,8 +120,8 @@ ci_runner_writes() {
 # a default and a ceiling for CPU and memory. A runner tagged build places its jobs on the spot pool only (its node
 # selector and the spot taint's toleration), takes no other tag but arm64, runs them non-root, and is the only one
 # whose build container may be Unconfined; any other runner's jobs never tolerate spot, refuse a spot node, and may
-# not escalate privilege. The looper pool is gone (#64; tacplus-dev/cloud#114): no runner's jobs tolerate its taint,
-# select its label or name it in a node affinity, dead config that would bring it back unnoticed. No runner takes a VM runner's tag (autoscale,
+# not escalate privilege. Only control's and infra's jobs tolerate the looper pool's taint (#47, #68), and then prefer the
+# normal pool, so they overflow there only when it is full; no runner's jobs select it. No runner takes a VM runner's tag (autoscale,
 # autoscale-16, gce): GitLab gives a job to whichever runner holding its tags asks first. The infra pipelines' tags (cloud, cluster, deploy: tacplus-dev/cloud's,
 # this one's and fleet-seatrials' deploy, which hold WIF to the projects and cluster-admin) are the runner infra's
 # alone (#25): no other runner takes one, infra takes no other tag (no agent's or build's job lands beside their
@@ -216,10 +217,16 @@ ci_runner() {
     ([$k | paths(. == "Unconfined") | map(tostring) | join(".")] as $u |
       ($u - (if $build or $report or $nightly then ["build_container_security_context.seccomp_profile.type", "build_container_security_context.app_armor_profile.type"] else [] end))[] |
       "its jobs are Unconfined (\(.))"),
-    (($k.node_tolerations // {}) | keys[] | select(startswith("looper")) | "its jobs tolerate the looper taint (\(.)): the looper pool is gone (tacplus-dev/cloud#114)"),
-    (select(($k.node_selector // {}) | has("looper")) | "its jobs select a looper node: the looper pool is gone"),
-    (select([$k.affinity // {} | .. | objects | select(has("key")) | .key] | any(. == "looper")) |
-      "its jobs name looper in a node affinity: the looper pool is gone"),
+    (select(($k.node_selector // {}) | has("looper")) | "its jobs select a looper node"),
+    (if $control or $infra then
+      (select((($k.node_tolerations // {}) | keys | any(startswith("looper"))) and
+          ([$k.affinity.node_affinity.preferred_during_scheduling_ignored_during_execution[]? | select(.weight > 0) | .preference |
+            any(.match_expressions[]?; .key == "looper" and .operator == "NotIn" and ((.values // []) | index("true") != null))] |
+            any | not)) |
+        "its jobs tolerate the looper taint but do not prefer the normal pool (a preferred node affinity looper NotIn [true]): they would fill the looper pool first and keep it from 0")
+    else
+      (($k.node_tolerations // {}) | keys[] | select(startswith("looper")) | "its jobs tolerate the looper taint (\(.)): only control\u0027s and infra\u0027s jobs overflow onto the looper pool")
+    end),
     if $build or $report or $nightly then
       (select($build and (($tags - ["arm64", "build"]) | length > 0)) | "takes build with other tags (\($tags | join(", "))): their jobs would run on spot"),
       (select(($k.node_selector // {}).spot != "true") | "its build jobs do not select the spot pool (node_selector spot = \"true\")"),
@@ -245,10 +252,12 @@ for b in "${files[@]##*/}"; do
   # Without comments, which yq would carry into the answers.
   f=$plain
   yq '... comments=""' "$out/$b" > "$f" || { breach "$b: not YAML"; continue; }
-  # The looper pool is gone (#64; tacplus-dev/cloud#114): no workload here tolerates its taint. Nor every taint (no
-  # key, operator Exists), the spot pool's among them, which the runner managers' check below reads by key alone.
+  # The looper pool (#47, #68; tacplus-dev/cloud#95), tainted looper=true:NoSchedule: only the control and infra
+  # runners' jobs land there (their config.toml: ci_runner), so it scales back to 0 when they end. No workload here
+  # tolerates it. Nor every taint (no key, operator Exists), the spot pool's among them, which the runner managers'
+  # check below reads by key alone.
   while IFS= read -r w; do
-    breach "$b: the $w tolerates the looper taint: the looper pool is gone (tacplus-dev/cloud#114)"
+    breach "$b: the $w tolerates the looper taint: only the control and infra runners' jobs run on the looper pool"
   done < <(yq -N 'select([.. | select(tag == "!!map" and has("tolerations")) | .tolerations[]? |
     select(.key == "looper")] | length > 0) | .kind + " " + .metadata.name' "$f")
   while IFS= read -r w; do

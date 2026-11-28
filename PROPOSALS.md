@@ -362,6 +362,13 @@ the looper then marks it `promoted` or `declined` here with the date.
   today's 1390m. A change to the counting contract, Jody's; moot if `control` itself goes (tacplus-dev/cloud#114 step
   3), and so is `managers` if the managers moved to the looper VMs with the reports (then `managers.count: 0` gives
   `control` 6). If `control` jobs queue in a busy hour, this or a measured reserve (above) widens it. Links: #64, #53.
+  Since #68 the looper pool is back and `control`'s count 17 again; the same overcount applies to its larger room.
+- **The looper pool back, counted once** (2026-11-28, #68; tacplus-dev/cloud 9a50d7e): the pool is back (0 to 2) and
+  `control`'s `concurrent` counts its whole room again (17), while `infra`'s jobs, which now overflow there too, are
+  counted at their full concurrent on the normal pool only. Their overflow and `control`'s share the 2 looper nodes,
+  so in a busy hour some of `control`'s 17 may pend the 15 minutes and fail (`infra`'s preempt them, #49). Counting
+  `infra`'s jobs once, wherever they land, or measuring the looper nodes' daemonsets (the declined #47 entry below,
+  live again: `kubectl describe node -l looper=true`) would tighten it. Links: #68, #47, #49, tacplus-dev/cloud#114.
 
 ## Promoted / declined
 - **The looper pool out of control's capacity, toleration and policy** (2026-11-26, #64; tacplus-dev/cloud#114 step
