@@ -369,6 +369,13 @@ the looper then marks it `promoted` or `declined` here with the date.
   so in a busy hour some of `control`'s 17 may pend the 15 minutes and fail (`infra`'s preempt them, #49). Counting
   `infra`'s jobs once, wherever they land, or measuring the looper nodes' daemonsets (the declined #47 entry below,
   live again: `kubectl describe node -l looper=true`) would tighten it. Links: #68, #47, #49, tacplus-dev/cloud#114.
+- **Blocked on: a closed issue cited as done, not read as stale** (2026-11-28, nightly scan): since #62 (6f4e99c)
+  STATE.md's **Blocked on** line cites tacplus-dev/cloud#100 as applied ("cloud's stacks with the `build-light`
+  runner's registration and token applied, tacplus-dev/cloud#100"), not as a blocker, yet the nightly's
+  `blocked-on.txt` (tacplus-dev/looper#132) lists every issue the line names, so it reads `CLOSED` and asks for a
+  stale-line issue every night, a repeat of #62. Either the line cites landed work by its commits (cloud 94a505d,
+  a7871d3) and keeps issue numbers for what it waits on, a rule for STATE.md's writers, or the looper's check reads
+  only the issues the line waits on (say, those not marked `applied`/`landed`). Links: #62, tacplus-dev/looper#132.
 
 ## Promoted / declined
 - **The looper pool out of control's capacity, toleration and policy** (2026-11-26, #64; tacplus-dev/cloud#114 step
