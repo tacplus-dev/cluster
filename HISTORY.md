@@ -63,3 +63,4 @@ Append-only: add entries at the end, never edit or remove one (CI enforces it). 
 - 2026-11-27 looper issue Drop the looper pool from the control runner's capacity and tolerations: cloud deletes the pool (cloud#114 step 1) (#64)
 - 2026-11-27 looper issue Job image and build.lock to build:20261126-57a6521: the zstd fix (CVE-2026-124851), so main's security gate is clean (#66)
 - 2026-11-27 looper issue Kernel may not review tokens: bind tac-<name>'s kernel service account to create tokenreviews (seatrials: every service's token exchange is refused, TokenReview HTTP 403) (#67)
+- 2026-11-28 looper issue Main needs the overflow pool back (cloud brought it back at 0..2) and the infra runner's jobs on it, as the pin branch has (#68)
